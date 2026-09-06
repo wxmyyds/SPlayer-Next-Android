@@ -12,6 +12,7 @@ const state = ref<QrLoginState>("waiting");
 const nickname = ref("");
 const avatarUrl = ref("");
 const refreshing = ref(false);
+const errorMsg = ref("");
 
 const tip = computed(() => {
   if (state.value === "expired") return t("login.qrTipExpired");
@@ -23,6 +24,7 @@ const tip = computed(() => {
 const refresh = async (): Promise<void> => {
   if (refreshing.value) return;
   refreshing.value = true;
+  errorMsg.value = "";
   pause();
   if (state.value !== "expired") qrUrl.value = "";
   nickname.value = "";
@@ -44,6 +46,9 @@ const refresh = async (): Promise<void> => {
     }
     state.value = "waiting";
     if (props.active) resume();
+  } catch (err) {
+    state.value = "expired";
+    errorMsg.value = err instanceof Error ? err.message : String(err);
   } finally {
     refreshing.value = false;
   }
@@ -51,18 +56,22 @@ const refresh = async (): Promise<void> => {
 
 const poll = async (): Promise<void> => {
   if (!key.value) return;
-  const result = await props.adapter.check(key.value);
-  state.value = result.state;
-  nickname.value = result.nickname ?? nickname.value;
-  avatarUrl.value = result.avatarUrl ?? avatarUrl.value;
-  if (result.state === "expired") {
-    pause();
-    await refresh();
-    return;
-  }
-  if (result.state === "success") {
-    pause();
-    emit("success");
+  try {
+    const result = await props.adapter.check(key.value);
+    state.value = result.state;
+    nickname.value = result.nickname ?? nickname.value;
+    avatarUrl.value = result.avatarUrl ?? avatarUrl.value;
+    if (result.state === "expired") {
+      pause();
+      await refresh();
+      return;
+    }
+    if (result.state === "success") {
+      pause();
+      emit("success");
+    }
+  } catch {
+    // 单次轮询失败不中断：下一拍继续
   }
 };
 
@@ -114,10 +123,12 @@ defineExpose({ pause, resume, refresh });
       </Transition>
       <div
         v-if="state === 'expired'"
-        class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/75 text-xs font-medium text-gray-700"
+        class="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/85 px-3 text-xs font-medium text-gray-700"
       >
-        <SLoading class="size-5" />
-        {{ t("login.qrTipExpired") }}
+        <span class="text-center">{{ errorMsg || t("login.qrTipExpired") }}</span>
+        <SButton variant="secondary" size="small" @click="refresh">
+          {{ t("common.retry") }}
+        </SButton>
       </div>
     </div>
     <div class="text-xs text-on-surface-variant">{{ tip }}</div>
