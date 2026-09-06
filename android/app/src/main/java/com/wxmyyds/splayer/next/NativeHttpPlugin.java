@@ -64,11 +64,7 @@ public class NativeHttpPlugin extends Plugin {
         java.util.Iterator<String> headerNames = headersObj.keys();
         while (headerNames.hasNext()) {
             String name = headerNames.next();
-            try {
-                builder.header(name, headersObj.getString(name, ""));
-            } catch (JSONException e) {
-                // 跳过非法头
-            }
+            builder.header(name, headersObj.getString(name, ""));
         }
         if ("GET".equals(method) || "HEAD".equals(method)) {
             builder.method(method, null);
