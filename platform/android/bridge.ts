@@ -9,9 +9,11 @@ import type {
 } from "@shared/types/player";
 import type {
   ConfigApi,
+  ExternalApiStatus,
   LocaleCode,
   McpAgentApp,
   McpClientConfigParams,
+  McpStatus,
   SystemConfig,
 } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
@@ -356,6 +358,46 @@ const cache: AndroidCacheApi = {
   },
 };
 
+/** 外部 API 服务桥接：形状与共享类型一致，Android 暂不启动服务 */
+const externalApi: {
+  restart: () => Promise<ExternalApiStatus>;
+  getStatus: () => Promise<ExternalApiStatus>;
+  onStatus: (callback: (status: ExternalApiStatus) => void) => () => void;
+} = {
+  restart: async () => ({
+    listening: false,
+    allowLan: false,
+    host: null,
+    port: null,
+    error: null,
+  }),
+  getStatus: async () => ({
+    listening: false,
+    allowLan: false,
+    host: null,
+    port: null,
+    error: null,
+  }),
+  onStatus: noopUnsubscribe,
+};
+
+/** MCP 服务桥接：形状与共享类型一致，Android 暂不启动服务 */
+const mcpApi: {
+  restart: () => Promise<McpStatus>;
+  getStatus: () => Promise<McpStatus>;
+  getClientConfigParams: () => Promise<McpClientConfigParams>;
+  detectAgents: () => Promise<McpAgentApp[]>;
+  injectAgentConfig: (agentId: string, params: McpClientConfigParams) => Promise<boolean>;
+  onStatus: (callback: (status: McpStatus) => void) => () => void;
+} = {
+  restart: async () => ({ listening: false, port: null, error: null }),
+  getStatus: async () => ({ listening: false, port: null, error: null }),
+  getClientConfigParams: async () => ({ port: 0, accessKey: "" }),
+  detectAgents: async () => [],
+  injectAgentConfig: async (_agentId: string, _params: McpClientConfigParams) => false,
+  onStatus: noopUnsubscribe,
+};
+
 const api = {
   config,
   player,
@@ -380,31 +422,8 @@ const api = {
   streaming,
   recognition: emptyApi<RecognitionApi>(),
   lastfm: emptyApi<LastfmApi>(),
-  externalApi: {
-    restart: async () => ({
-      listening: false,
-      allowLan: false,
-      host: null,
-      port: null,
-      error: null,
-    }),
-    getStatus: async () => ({
-      listening: false,
-      allowLan: false,
-      host: null,
-      port: null,
-      error: null,
-    }),
-    onStatus: noopUnsubscribe,
-  },
-  mcp: {
-    restart: async () => ({ listening: false, port: null, error: null }),
-    getStatus: async () => ({ listening: false, port: null, error: null }),
-    getClientConfigParams: async () => ({ port: 0, accessKey: "" }),
-    detectAgents: async (): Promise<McpAgentApp[]> => [],
-    injectAgentConfig: async (_agentId: string, _params: McpClientConfigParams) => false,
-    onStatus: noopUnsubscribe,
-  },
+  externalApi: externalApi,
+  mcp: mcpApi,
   aiModel: emptyApi<AiModelApi>(),
   update: {
     check: async (_manual: boolean) => {},
