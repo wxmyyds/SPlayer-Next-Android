@@ -83,15 +83,24 @@ const sidebarClass = computed(() => {
 });
 
 /** 主界面底部边距 */
-const mainMarginClass = computed(() =>
-  showPlayerBar.value && appearance.layoutMode !== "floating" ? "mb-20" : "",
+const mainMarginClass = computed(() => {
+  if (!showPlayerBar.value || appearance.layoutMode === "floating") return "";
+  // Android 下播放栏叠加底部手势安全区，主内容同步下移
+  return isAndroid ? "mb-[calc(5rem+env(safe-area-inset-bottom))]" : "mb-20";
+});
+
+/** 顶栏样式：Android 下避开状态栏安全区 */
+const headerClass = computed(() =>
+  isAndroid
+    ? "h-[calc(4rem+env(safe-area-inset-top))] shrink-0 flex items-center px-3 pt-[env(safe-area-inset-top)]"
+    : "h-16 shrink-0 flex items-center px-3",
 );
 
 /** 侧边栏样式：Android 下为覆盖式抽屉，桌面端为固定侧栏 */
 const asideClass = computed(() => {
   if (isAndroid) {
     return [
-      "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] bg-surface-panel overflow-y-auto",
+      "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] bg-surface-panel overflow-y-auto pt-[env(safe-area-inset-top)]",
       "shadow-2xl transition-transform duration-300",
       status.sidebarDrawerOpen ? "translate-x-0" : "-translate-x-full",
     ].join(" ");
@@ -123,11 +132,12 @@ const playerBarWrapperClass = computed(() => {
 const playerBarInnerClass = computed(() => {
   // 禁用底部播放栏交互
   const base = isPlayerExpanded.value ? "pointer-events-none" : "pointer-events-auto";
+  const safe = isAndroid ? " pb-[env(safe-area-inset-bottom)]" : "";
   switch (appearance.layoutMode) {
     case "floating":
-      return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10`;
+      return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10${safe}`;
     default:
-      return `${base} h-20 bg-surface-panel border-t border-t-solid border-t-primary/10`;
+      return `${base} h-20 bg-surface-panel border-t border-t-solid border-t-primary/10${safe}`;
   }
 });
 </script>
@@ -152,7 +162,7 @@ const playerBarInnerClass = computed(() => {
     <!-- 右侧主区域 -->
     <div class="flex-1 flex flex-col min-w-0" :class="mainMarginClass">
       <!-- 顶部导航 -->
-      <header class="h-16 shrink-0 flex items-center px-3">
+      <header :class="headerClass">
         <NavHeader />
       </header>
 

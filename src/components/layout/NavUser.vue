@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useUserStore } from "@/stores/user";
+import { isAndroid } from "@/utils/platform";
 import { dialog } from "@/composables/useDialog";
 import { toast } from "@/composables/useToast";
 import vipImg from "@/assets/images/vip.png";
@@ -91,7 +92,7 @@ const handleLogout = async (): Promise<void> => {
           />
           <IconLucideUserRound v-else class="size-4 text-on-surface-variant" />
         </span>
-        <span class="text-sm text-on-surface max-w-[7rem] truncate">
+        <span v-if="!isAndroid" class="text-sm text-on-surface max-w-[7rem] truncate">
           {{ user.profile?.nickname || t("login.unknownUser") }}
         </span>
         <img v-if="isVip" :src="vipImg" alt="VIP" class="h-4 shrink-0" />

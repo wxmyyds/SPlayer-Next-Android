@@ -5,6 +5,7 @@ import { getHotSearches, type HotSearchItem } from "@/apis/search/hot";
 import { getSearchSuggest, type SuggestData, type SuggestSimpleItem } from "@/apis/search/suggest";
 import { songsByIds as getNeteaseSongsByIds } from "@/apis/song/netease";
 import { formatCompact } from "@/utils/format";
+import { isAndroid } from "@/utils/platform";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { parseMusicLink, type LinkType } from "@/utils/link";
 import type { TrackSource } from "@shared/types/player";
@@ -276,11 +277,12 @@ onMounted(() => {
 
 <template>
   <!-- 搜索框触发器与听歌识曲 -->
-  <div class="flex items-center gap-2 shrink-0">
+  <div :class="isAndroid ? 'flex items-center gap-2 flex-1 min-w-0' : 'flex items-center gap-2 shrink-0'">
     <div
       role="button"
       :aria-label="t('nav.searchPlaceholder')"
-      class="app-no-drag w-60 h-10 px-4 cursor-pointer flex items-center gap-2 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
+      :class="isAndroid ? 'w-full' : 'w-60'"
+      class="app-no-drag h-10 px-4 cursor-pointer flex items-center gap-2 min-w-0 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
       @click="dialogOpen = true"
       @contextmenu.prevent="dialogOpen = true"
       @mousedown.prevent

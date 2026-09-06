@@ -73,6 +73,7 @@ const onMenuSelect = (key: string): void => {
         <template #icon><IconLucideMenu /></template>
       </SButton>
       <SButton
+        v-if="!isAndroid"
         class="app-no-drag shrink-0"
         variant="tertiary"
         circle
@@ -83,6 +84,7 @@ const onMenuSelect = (key: string): void => {
         <template #icon><IconLucideChevronLeft /></template>
       </SButton>
       <SButton
+        v-if="!isAndroid"
         class="app-no-drag shrink-0"
         variant="tertiary"
         circle
