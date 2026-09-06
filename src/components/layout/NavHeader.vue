@@ -117,7 +117,7 @@ const onMenuSelect = (key: string): void => {
     <!-- 中间 -->
     <div v-if="!isAndroid" class="flex-1 h-full min-w-4" />
     <!-- 右侧 -->
-    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+    <div :class="isAndroid ? 'flex items-center gap-2 shrink-0 ml-2' : 'flex items-center gap-2 sm:gap-3 shrink-0'">
       <NavUser />
       <SDropdownMenu :items="menuItems" @select="onMenuSelect">
         <template #trigger>

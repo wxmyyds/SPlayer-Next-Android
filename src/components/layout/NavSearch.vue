@@ -310,8 +310,8 @@ onMounted(() => {
     v-model:open="dialogOpen"
     :closable="false"
     :content-style="{ padding: 0 }"
-    width="560px"
-    top="12vh"
+    :width="isAndroid ? 'calc(100vw - 24px)' : '560px'"
+    :top="isAndroid ? '8vh' : '12vh'"
   >
     <div class="flex flex-col">
       <!-- 顶栏：输入框 -->
