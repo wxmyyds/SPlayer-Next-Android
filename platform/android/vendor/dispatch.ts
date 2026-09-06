@@ -5,6 +5,7 @@
  * 只是把主进程 IPC 句柄换成 renderer 内直接调用 vendor 实现。
  */
 
+import { registerPlugin } from "@capacitor/core";
 import { callNetease, clearNeteaseCookies, mergeNeteaseCookies } from "./netease";
 import { NeteaseRequestError } from "./netease/core/request";
 import { cookieToJson } from "./netease/core/cookie";
@@ -66,16 +67,36 @@ export const clearVendorSession = (platform: ApiPlatform): void => {
   if (platform === "kugou") clearKugouSession();
 };
 
+/** 应用内 WebView 官方登录插件（原生 LoginWebPlugin） */
+interface LoginWebPlugin {
+  open: (options: { url: string; watchCookie: string }) => Promise<{ cookies: Record<string, string> }>;
+}
+
+const LoginWeb = registerPlugin<LoginWebPlugin>("LoginWeb");
+
 /**
- * 打开官方网页登录（Android 暂不支持，各平台均走二维码/手动 Cookie 登录）
+ * 打开官方网页登录（仅网易，对标上游 openNeteaseLoginWindow）
  * @param platform 音源平台
- * @returns 固定返回失败
+ * @returns 成功 `{ ok: true }`；用户取消/失败 `{ ok: false, error }`
  */
-export const openVendorLoginWeb = (
+export const openVendorLoginWeb = async (
   platform: ApiPlatform,
 ): Promise<{ ok: true } | { ok: false; error: string }> => {
-  void platform;
-  return Promise.resolve({ ok: false, error: "unsupported" });
+  if (platform !== "netease") return { ok: false, error: "unsupported platform" };
+  try {
+    const ret = await LoginWeb.open({
+      url: "https://music.163.com/#/login",
+      watchCookie: "MUSIC_U",
+    });
+    if (!ret.cookies?.MUSIC_U) return { ok: false, error: "canceled" };
+    mergeNeteaseCookies(ret.cookies);
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("canceled")) return { ok: false, error: "canceled" };
+    coreLog.warn("[apis] openLoginWeb netease failed:", err);
+    return { ok: false, error: msg };
+  }
 };
 
 /**
