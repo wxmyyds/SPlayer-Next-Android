@@ -44,7 +44,13 @@ const getAudio = (): HTMLAudioElement => {
     el.addEventListener("play", () => emit({ type: "play" }));
     el.addEventListener("pause", () => emit({ type: "pause" }));
     el.addEventListener("ended", () => emit({ type: "ended" }));
-    el.addEventListener("error", () => emit({ type: "sourceError" }));
+    el.addEventListener("error", () => {
+      // 错误码进 logcat（adb 抓 console），定位断点用；事件形状保持与桌面一致
+      console.warn(
+        `[player] audio error code=${el.error?.code ?? -1} src=${el.src}`,
+      );
+      emit({ type: "sourceError" });
+    });
     el.addEventListener("seeked", () =>
       emit({ type: "seek", data: { position: Math.round(el.currentTime * 1000) } }),
     );
