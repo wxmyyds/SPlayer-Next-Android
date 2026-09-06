@@ -63,7 +63,7 @@ const handleSelect = (item: DropdownMenuItem): void => {
 /** 内容区域样式 */
 const contentClass = computed(() =>
   [
-    "z-300 min-w-32 rounded-lg shadow-lg p-1 text-sm data-[state=open]:animate-popover-in data-[state=closed]:animate-popover-out",
+    "z-300 min-w-32 max-w-[calc(100vw-24px)] rounded-lg shadow-lg p-1 text-sm data-[state=open]:animate-popover-in data-[state=closed]:animate-popover-out",
     props.cover
       ? "bg-black/55 backdrop-blur-xl backdrop-saturate-160 border border-solid border-white/10"
       : "bg-surface-bright",

@@ -42,6 +42,8 @@ const DESTROY_DELAY_MS = 180;
 
 const containerStyle = computed(() => ({
   width: props.width,
+  // 小屏钳制：桌面端视口远大于弹窗宽度，此行无影响
+  maxWidth: "calc(100vw - 24px)",
   height: props.height === "auto" ? undefined : props.height,
   maxHeight: props.height === "auto" ? "85vh" : undefined,
   top: props.top,
