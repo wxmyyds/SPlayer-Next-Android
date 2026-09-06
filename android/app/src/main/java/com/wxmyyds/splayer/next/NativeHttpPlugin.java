@@ -61,7 +61,9 @@ public class NativeHttpPlugin extends Plugin {
         String bodyStr = call.getString("body", null);
 
         Request.Builder builder = new Request.Builder().url(url);
-        for (String name : headersObj.keys()) {
+        java.util.Iterator<String> headerNames = headersObj.keys();
+        while (headerNames.hasNext()) {
+            String name = headerNames.next();
             try {
                 builder.header(name, headersObj.getString(name, ""));
             } catch (JSONException e) {
