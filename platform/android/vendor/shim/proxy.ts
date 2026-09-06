@@ -146,7 +146,17 @@ export const fetchWithProxy = async (
     body,
     redirect: init?.redirect ?? "follow",
   });
-  const bytes = b64ToBytes(res.bodyBase64);
+  let bytes = b64ToBytes(res.bodyBase64);
+  // 防御性解压：个别接口仍可能返回真 gzip（魔数 0x1f 0x8b）
+  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    try {
+      const ds = new DecompressionStream("gzip");
+      const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(ds);
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch {
+      // 假 gzip：保持原字节
+    }
+  }
   const textCache = new TextDecoder().decode(bytes.slice().buffer as ArrayBuffer);
   const owned = Uint8Array.from(bytes);
   return {

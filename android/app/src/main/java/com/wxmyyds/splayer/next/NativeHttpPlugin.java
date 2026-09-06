@@ -66,6 +66,9 @@ public class NativeHttpPlugin extends Plugin {
             String name = headerNames.next();
             builder.header(name, headersObj.getString(name, ""));
         }
+        // 网易/QQ 等服务器会返回 Content-Encoding: gzip 但 body 并非真 gzip；
+        // OkHttp 透明解压遇到假 gzip 会抛异常。强制 identity 关闭透明解压，原始字节交 JS 处理。
+        builder.header("Accept-Encoding", "identity");
         if ("GET".equals(method) || "HEAD".equals(method)) {
             builder.method(method, null);
         } else {
