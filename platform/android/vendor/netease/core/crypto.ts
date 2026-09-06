@@ -11,6 +11,7 @@ import {
   aesCbcEncrypt,
   aesEcbDecryptRaw,
   aesEcbEncryptRaw,
+  aesGcmEncrypt,
   b64Decode,
   b64Encode,
   hexDecode,
