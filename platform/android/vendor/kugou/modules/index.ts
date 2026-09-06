@@ -10,10 +10,12 @@ import type { KGModule } from "../core/types";
 import userDetail from "./user_detail";
 import { loginQrCheck, loginQrKey } from "./login_qr";
 import songUrl from "./song_url";
+import search from "./search";
 
 export const modules: Record<string, KGModule> = {
   user_detail: userDetail,
   login_qr_key: loginQrKey,
   login_qr_check: loginQrCheck,
   song_url: songUrl,
+  search,
 };

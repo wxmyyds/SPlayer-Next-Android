@@ -9,11 +9,13 @@ import type { QMModule } from "../core/types";
 
 import user_detail from "./user_detail";
 import song_url from "./song_url";
+import search from "./search";
 import { login_qr_key, login_qr_check } from "./login_qr";
 
 export const modules: Record<string, QMModule> = {
   user_detail,
   song_url,
+  search,
   login_qr_key,
   login_qr_check,
 };

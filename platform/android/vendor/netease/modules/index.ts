@@ -15,6 +15,12 @@ import logout from "./logout";
 import register_anonimous from "./register_anonimous";
 import song_url from "./song_url";
 import song_detail from "./song_detail";
+import search from "./search";
+import cloudsearch from "./cloudsearch";
+import search_suggest from "./search_suggest";
+import search_hot_detail from "./search_hot_detail";
+import lyric from "./lyric";
+import lyric_new from "./lyric_new";
 
 export const modules: Record<string, NeteaseModule> = {
   login_qr_key,
@@ -25,4 +31,10 @@ export const modules: Record<string, NeteaseModule> = {
   register_anonimous,
   song_url,
   song_detail,
+  search,
+  cloudsearch,
+  search_suggest,
+  search_hot_detail,
+  lyric,
+  lyric_new,
 };
