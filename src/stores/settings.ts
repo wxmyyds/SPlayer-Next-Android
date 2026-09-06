@@ -220,15 +220,6 @@ export const useSettingsStore = defineStore(
     /** 系统配置 - 传递主进程 */
     const system = reactive<SystemConfig>(structuredClone(defaultSystemConfig));
 
-    /** 桌面歌词窗口是否打开；由主进程广播 */
-    const isDesktopLyricOpen = ref(false);
-
-    /** 灵动岛窗口是否打开；由主进程广播 */
-    const isDynamicIslandOpen = ref(false);
-
-    /** 任务栏歌词窗口是否打开；由主进程广播 */
-    const isTaskbarLyricOpen = ref(false);
-
     /**
      * 深合并：嵌套对象原地 mutate，叶子值不变就不写
      * 避免浅 Object.assign 替换嵌套引用，导致依赖路径的 watcher 误触
@@ -261,55 +252,6 @@ export const useSettingsStore = defineStore(
         );
       } catch {}
     };
-
-    /** IPC 订阅取消回调集合 */
-    const unsubscribers: Array<() => void> = [
-      // 订阅桌面歌词配置变化：歌词窗口点锁定按钮等场景需要回流到主窗口设置页
-      window.api.desktopLyric.onConfigChange((next) => {
-        Object.assign(system.desktopLyric, next as object);
-      }),
-      // 订阅桌面歌词窗口开关状态
-      window.api.window.onDesktopLyricVisibilityChange((open) => {
-        isDesktopLyricOpen.value = open;
-      }),
-      // 订阅灵动岛配置变化
-      window.api.dynamicIsland.onConfigChange((next) => {
-        Object.assign(system.dynamicIsland, next as object);
-      }),
-      // 订阅灵动岛窗口开关状态
-      window.api.window.onDynamicIslandVisibilityChange((open) => {
-        isDynamicIslandOpen.value = open;
-      }),
-      // 订阅任务栏歌词窗口开关状态
-      window.api.window.onTaskbarLyricVisibilityChange((open) => {
-        isTaskbarLyricOpen.value = open;
-      }),
-    ];
-
-    onScopeDispose(() => {
-      for (const off of unsubscribers) off();
-      unsubscribers.length = 0;
-    });
-
-    // 拉取窗口初始开关状态
-    window.api.window
-      .isDesktopLyricOpen()
-      .then((open) => {
-        isDesktopLyricOpen.value = open;
-      })
-      .catch(() => {});
-    window.api.window
-      .isDynamicIslandOpen()
-      .then((open) => {
-        isDynamicIslandOpen.value = open;
-      })
-      .catch(() => {});
-    window.api.window
-      .isTaskbarLyricOpen()
-      .then((open) => {
-        isTaskbarLyricOpen.value = open;
-      })
-      .catch(() => {});
 
     /**
      * 写入后端配置并同步本地
@@ -346,9 +288,6 @@ export const useSettingsStore = defineStore(
       preset,
       lyric,
       system,
-      isDesktopLyricOpen,
-      isDynamicIslandOpen,
-      isTaskbarLyricOpen,
       syncSystem,
       setSystem,
       afterLocalChange,

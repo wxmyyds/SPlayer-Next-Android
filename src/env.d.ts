@@ -1,15 +1,22 @@
 /// <reference types="vite/client" />
 /// <reference types="unplugin-icons/types/vue" />
 
-declare const __APP_VERSION__: string;
-declare const __APP_REPO_URL__: string;
-declare const __APP_REPO_NAME__: string;
-declare const __APP_AUTHOR__: string;
-declare const __APP_HOMEPAGE__: string;
-declare const __APP_AUTHOR_URL__: string;
-declare const __COMMIT_HASH__: string;
-declare const __COMMIT_DATE__: string;
+import type { AndroidApi } from "@android/bridge";
 
-interface Window {
-  __splashStart?: number;
+declare global {
+  const __APP_VERSION__: string;
+  const __APP_REPO_URL__: string;
+  const __APP_REPO_NAME__: string;
+  const __APP_AUTHOR__: string;
+  const __APP_HOMEPAGE__: string;
+  const __APP_AUTHOR_URL__: string;
+  const __COMMIT_HASH__: string;
+  const __COMMIT_DATE__: string;
+
+  interface Window {
+    __splashStart?: number;
+    api: AndroidApi;
+  }
 }
+
+export {};

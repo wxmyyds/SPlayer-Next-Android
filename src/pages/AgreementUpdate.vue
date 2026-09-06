@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { useSettingsStore } from "@/stores/settings";
-import { useWindowControls } from "@/composables/useWindowControls";
 import { CURRENT_AGREEMENT_VERSION } from "@shared/constants/agreement";
 
 const router = useRouter();
 const settings = useSettingsStore();
-const { quit } = useWindowControls();
 
 const accepting = ref(false);
 
@@ -24,13 +22,9 @@ const onAccept = async (): Promise<void> => {
 
 <template>
   <div class="flex flex-col h-screen w-screen bg-app text-on-surface overflow-hidden">
-    <div class="app-drag-region h-16 shrink-0 flex items-center justify-end px-3">
-      <WindowControls direct-quit />
-    </div>
-
     <div class="flex-1 min-h-0 flex flex-col items-center px-8 pb-10">
       <div class="w-full max-w-2xl flex-1 min-h-0 flex flex-col">
-        <StepAgreement variant="update" :loading="accepting" @next="onAccept" @reject="quit" />
+        <StepAgreement variant="update" :loading="accepting" @next="onAccept" @reject="router.back()" />
       </div>
     </div>
   </div>

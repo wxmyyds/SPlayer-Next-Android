@@ -16,11 +16,8 @@ type FontDraftKey =
   | "lyricChinese"
   | "lyricJapanese"
   | "lyricKorean"
-  | "lyricLatin"
-  | "desktopLyric"
-  | "dynamicIsland"
-  | "taskbarLyric";
-type FontGroup = "general" | "appLyric" | "externalLyric";
+  | "lyricLatin";
+type FontGroup = "general" | "appLyric";
 type FontMode = "select" | "custom";
 
 interface FontDraft {
@@ -30,9 +27,6 @@ interface FontDraft {
   lyricJapanese: string;
   lyricKorean: string;
   lyricLatin: string;
-  desktopLyric: string;
-  dynamicIsland: string;
-  taskbarLyric: string;
 }
 
 interface FontTarget {
@@ -57,9 +51,6 @@ const draft = reactive<FontDraft>({
   lyricJapanese: "",
   lyricKorean: "",
   lyricLatin: "",
-  desktopLyric: "",
-  dynamicIsland: "",
-  taskbarLyric: "",
 });
 
 /** 字段定义 */
@@ -70,12 +61,9 @@ const TARGET_DEFS: Array<{ key: FontDraftKey; group: FontGroup }> = [
   { key: "lyricJapanese", group: "appLyric" },
   { key: "lyricKorean", group: "appLyric" },
   { key: "lyricLatin", group: "appLyric" },
-  { key: "desktopLyric", group: "externalLyric" },
-  { key: "dynamicIsland", group: "externalLyric" },
-  { key: "taskbarLyric", group: "externalLyric" },
 ];
 
-const GROUP_ORDER: FontGroup[] = ["general", "appLyric", "externalLyric"];
+const GROUP_ORDER: FontGroup[] = ["general", "appLyric"];
 
 /** 分组目标 */
 const groupedTargets = computed<Array<{ group: FontGroup; items: FontTarget[] }>>(() => {
@@ -137,9 +125,6 @@ const syncDraft = (): void => {
   draft.lyricJapanese = settings.lyric.fontFamilyJapanese;
   draft.lyricKorean = settings.lyric.fontFamilyKorean;
   draft.lyricLatin = settings.lyric.fontFamilyLatin;
-  draft.desktopLyric = settings.system.desktopLyric.fontFamily;
-  draft.dynamicIsland = settings.system.dynamicIsland.fontFamily;
-  draft.taskbarLyric = settings.system.taskbarLyric.fontFamily;
 };
 
 /** 打开字体配置 */
@@ -181,11 +166,6 @@ const handleSave = async (): Promise<void> => {
   settings.lyric.fontFamilyJapanese = draft.lyricJapanese;
   settings.lyric.fontFamilyKorean = draft.lyricKorean;
   settings.lyric.fontFamilyLatin = draft.lyricLatin;
-  await Promise.all([
-    settings.setSystem("desktopLyric.fontFamily", draft.desktopLyric),
-    settings.setSystem("dynamicIsland.fontFamily", draft.dynamicIsland),
-    settings.setSystem("taskbarLyric.fontFamily", draft.taskbarLyric),
-  ]);
   open.value = false;
 };
 </script>

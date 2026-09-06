@@ -1,7 +1,6 @@
 import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
 import { getByPath, setByPath } from "@shared/utils/path";
-import { virtualBindings } from "./virtualBindings";
 import { computed, type WritableComputedRef } from "vue";
 
 /**
@@ -19,12 +18,6 @@ export const useSettingModel = (binding: {
       set: (v) => setByPath(store, binding.path, v),
     });
   }
-  // 虚拟 binding
-  const virtual = virtualBindings[binding.path];
-  if (virtual) {
-    return computed({ get: virtual.get, set: virtual.set });
-  }
-
   const store = useSettingsStore();
 
   // system.* 路径需要走 IPC 持久化

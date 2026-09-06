@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useSettingsStore } from "@/stores/settings";
 import { CURRENT_AGREEMENT_VERSION } from "@shared/constants/agreement";
-import WindowControls from "@/components/layout/WindowControls.vue";
 import StepWelcome from "@/components/onboarding/StepWelcome.vue";
 import StepPreferences from "@/components/onboarding/StepPreferences.vue";
 import StepAgreement from "@/components/onboarding/StepAgreement.vue";
@@ -61,9 +60,6 @@ const complete = async (): Promise<void> => {
 
 <template>
   <div class="flex flex-col h-screen w-screen bg-app text-on-surface overflow-hidden">
-    <div class="app-drag-region h-16 shrink-0 flex items-center justify-end px-3">
-      <WindowControls direct-quit />
-    </div>
 
     <div class="flex-1 min-h-0 flex flex-col items-center px-8 py-6">
       <div class="w-full max-w-2xl flex-1 min-h-0 flex flex-col">

@@ -1,21 +1,25 @@
-import { Capacitor } from "@capacitor/core";
-import type { ElectronAPI } from "@electron-toolkit/preload";
 import { defaultHotkeyConfig } from "@shared/defaults/hotkeys";
 import { defaultSystemConfig } from "@shared/defaults/settings";
-import type { IpcResponse, PlayerApi, PlayerEvent, PlayerStatus } from "@shared/types/player";
-import type { ConfigApi, SystemConfig } from "@shared/types/settings";
+import type {
+  IpcResponse,
+  PlayerApi,
+  PlayerEvent,
+  PlayerStatus,
+  TrackSource,
+} from "@shared/types/player";
+import type {
+  ConfigApi,
+  LocaleCode,
+  McpAgentApp,
+  McpClientConfigParams,
+  SystemConfig,
+} from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { NowPlayingApi } from "@shared/types/nowPlaying";
 import type { PluginsApi } from "@shared/types/plugin";
 import type { ApisApi } from "@shared/types/apis";
 import type { LyricsApi } from "@shared/types/lyrics";
 import type { DownloadApi } from "@shared/types/download";
-import type {
-  WindowApi,
-  DesktopLyricApi,
-  DynamicIslandApi,
-  TaskbarLyricApi,
-} from "@shared/types/window";
 import type { HotkeyApi } from "@shared/types/hotkey";
 import type { StreamingApi } from "@shared/types/streaming";
 import type { RecognitionApi } from "@shared/types/recognition";
@@ -26,10 +30,10 @@ import type { CloudUploadApi } from "@shared/types/cloudUpload";
 import type { CommentsApi } from "@shared/types/comment";
 import type { AiModelApi } from "@shared/types/ai";
 import type { PlaylistApi } from "@shared/types/playlist";
-import type { OpenccApi } from "@shared/types/opencc";
+import type { CjkTransformMode, OpenccApi } from "@shared/types/opencc";
 
 const unsupported = "Android bridge capability is not implemented";
-const noopUnsubscribe = (): (() => void) => () => {};
+const noopUnsubscribe = (..._args: unknown[]): (() => void) => () => {};
 const ok = <T = void>(data?: T): IpcResponse<T> => ({
   success: true,
   ...(data === undefined ? {} : { data }),
@@ -109,20 +113,52 @@ const player: PlayerApi = {
   onEvent: (_callback: (event: PlayerEvent) => void) => noopUnsubscribe(),
 };
 
-const system = {
-  installType: "portable" as const,
-  platform: "android" as NodeJS.Platform,
+/** Android 系统桥接 API：与旧桌面 preload 的 system 形状兼容，均为无操作或空实现 */
+interface AndroidSystemApi {
+  installType: "portable";
+  platform: "android";
+  osInfo: { type: string; arch: string; release: string };
+  toggleDevTools: () => Promise<void>;
+  showInExplorer: (filePath: string) => Promise<void>;
+  openLogsDir: () => Promise<string>;
+  setLocale: (locale: LocaleCode) => void;
+  focusMainWindow: () => Promise<void>;
+  openSettings: (category?: string, highlight?: string) => Promise<void>;
+  onOpenSettings: (
+    callback: (payload: { category?: string; highlight?: string }) => void,
+  ) => () => void;
+  listFonts: () => Promise<string[]>;
+  fetchRemoteBytes: (url: string) => Promise<IpcResponse<Uint8Array | null>>;
+  saveFile: (
+    data: ArrayBuffer,
+    fileName: string,
+  ) => Promise<{ success: boolean; path?: string; error?: string }>;
+  relaunch: () => Promise<void>;
+  testNetworkProxy: () => Promise<boolean>;
+  onProtocolUrl: (callback: (url: string) => void) => () => void;
+  consumePendingProtocolUrl: () => Promise<string | null>;
+  onOpenFiles: (callback: (files: string[]) => void) => () => void;
+  consumePendingAudioFiles: () => Promise<string[]>;
+  getPathForFile: (file: File) => string;
+}
+
+const system: AndroidSystemApi = {
+  installType: "portable",
+  platform: "android",
   osInfo: { type: "Android", arch: "unknown", release: "unknown" },
   toggleDevTools: async () => {},
-  showInExplorer: async () => {},
+  showInExplorer: async (_filePath: string) => {},
   openLogsDir: async () => "",
-  setLocale: () => {},
+  setLocale: (_locale: LocaleCode) => {},
   focusMainWindow: async () => {},
-  openSettings: async () => {},
+  openSettings: async (_category?: string, _highlight?: string) => {},
   onOpenSettings: noopUnsubscribe,
   listFonts: async () => [],
-  fetchRemoteBytes: async () => fail<Buffer | null>(),
-  saveFile: async () => ({ success: false, error: unsupported }),
+  fetchRemoteBytes: async (_url: string) => fail<Uint8Array | null>(),
+  saveFile: async (_data: ArrayBuffer, _fileName: string) => ({
+    success: false,
+    error: unsupported,
+  }),
   relaunch: async () => {},
   testNetworkProxy: async () => false,
   onProtocolUrl: noopUnsubscribe,
@@ -207,57 +243,6 @@ const nowPlaying: NowPlayingApi = {
   onLyricOffsetChange: noopUnsubscribe,
 };
 
-const windowApi: WindowApi = {
-  toggleDesktopLyric: async () => false,
-  closeDesktopLyric: async () => {},
-  isDesktopLyricOpen: async () => false,
-  onDesktopLyricVisibilityChange: noopUnsubscribe,
-  toggleDynamicIsland: async () => false,
-  closeDynamicIsland: async () => {},
-  isDynamicIslandOpen: async () => false,
-  onDynamicIslandVisibilityChange: noopUnsubscribe,
-  toggleTaskbarLyric: async () => false,
-  closeTaskbarLyric: async () => {},
-  isTaskbarLyricOpen: async () => false,
-  onTaskbarLyricVisibilityChange: noopUnsubscribe,
-  minimize: () => {},
-  toggleMaximize: () => {},
-  isMaximized: async () => false,
-  onMaximizeChange: noopUnsubscribe,
-  toggleFullscreen: () => {},
-  isFullscreen: async () => false,
-  onFullscreenChange: noopUnsubscribe,
-  hide: () => {},
-  quit: () => {},
-};
-
-const desktopLyric: DesktopLyricApi = {
-  onConfigChange: noopUnsubscribe,
-  setHeight: async () => {},
-  setUnlockButtonBounds: () => {},
-  move: () => {},
-  saveState: () => {},
-  onCursorInside: noopUnsubscribe,
-};
-
-const dynamicIsland: DynamicIslandApi = {
-  onConfigChange: noopUnsubscribe,
-  move: () => {},
-  saveState: () => {},
-  resize: () => {},
-  setShape: () => {},
-  setHeight: () => {},
-  getMode: async () => "floating",
-  onModeChange: noopUnsubscribe,
-  onCursorInside: noopUnsubscribe,
-};
-
-const taskbarLyric: TaskbarLyricApi = {
-  onLayout: noopUnsubscribe,
-  onConfigChange: noopUnsubscribe,
-  setContentWidth: () => {},
-};
-
 const plugins: PluginsApi = {
   list: async () => [],
   install: async () => ({ ok: false, error: unsupported }),
@@ -338,16 +323,45 @@ const emptyApi = <T extends object>(extra: Partial<T> = {}): T =>
     },
   }) as T;
 
+/** Android 缓存桥接 API：与旧桌面 preload 的 cache 形状兼容，均为无操作或空实现 */
+interface AndroidCacheApi {
+  getStats: () => Promise<{ id: string; kind: "file" | "db"; path: string; size: number }[]>;
+  clear: (id: string) => Promise<void>;
+  clearAllByKind: (kind: "file" | "db") => Promise<void>;
+  getDir: () => Promise<string>;
+  pickDir: () => Promise<{ ok: boolean; dir: string; reason?: "canceled" | "notEmpty" }>;
+  resetDir: () => Promise<string>;
+  song: {
+    lookup: (cacheKey: string) => Promise<string | null>;
+    fetch: (
+      cacheKey: string,
+      source: TrackSource,
+      streamUrl: string,
+    ) => Promise<string | null>;
+    cancel: (cacheKey: string) => Promise<void>;
+  };
+}
+
+const cache: AndroidCacheApi = {
+  getStats: async () => [],
+  clear: async (_id: string) => {},
+  clearAllByKind: async (_kind: "file" | "db") => {},
+  getDir: async () => "",
+  pickDir: async () => ({ ok: false, dir: "", reason: "canceled" as const }),
+  resetDir: async () => "",
+  song: {
+    lookup: async (_cacheKey: string) => null,
+    fetch: async (_cacheKey: string, _source: TrackSource, _streamUrl: string) => null,
+    cancel: async (_cacheKey: string) => {},
+  },
+};
+
 const api = {
   config,
   player,
   system,
   library,
   playlist: emptyApi<PlaylistApi>(),
-  window: windowApi,
-  desktopLyric,
-  dynamicIsland,
-  taskbarLyric,
   nowPlaying,
   plugins,
   apis,
@@ -355,20 +369,12 @@ const api = {
   lyrics,
   opencc: {
     convert: async (text: string) => text,
-    convertBatch: async (texts: string[]) => texts,
+    convertBatch: async (texts: string[], _mode: CjkTransformMode) => texts,
   } satisfies OpenccApi,
   comments: emptyApi<CommentsApi>(),
   download: emptyApi<DownloadApi>(),
   theme: { pickBackgroundImage: async () => null, clearBackgroundImages: async () => {} },
-  cache: emptyApi({
-    getStats: async () => [],
-    clear: async () => {},
-    clearAllByKind: async () => {},
-    getDir: async () => "",
-    pickDir: async () => ({ ok: false, dir: "", reason: "canceled" as const }),
-    resetDir: async () => "",
-    song: { lookup: async () => null, fetch: async () => null, cancel: async () => {} },
-  }),
+  cache,
   stats,
   hotkey,
   streaming,
@@ -395,13 +401,13 @@ const api = {
     restart: async () => ({ listening: false, port: null, error: null }),
     getStatus: async () => ({ listening: false, port: null, error: null }),
     getClientConfigParams: async () => ({ port: 0, accessKey: "" }),
-    detectAgents: async () => [],
-    injectAgentConfig: async () => false,
+    detectAgents: async (): Promise<McpAgentApp[]> => [],
+    injectAgentConfig: async (_agentId: string, _params: McpClientConfigParams) => false,
     onStatus: noopUnsubscribe,
   },
   aiModel: emptyApi<AiModelApi>(),
   update: {
-    check: async () => {},
+    check: async (_manual: boolean) => {},
     download: async () => {},
     install: async () => {},
     openDownloadPage: async () => {},
@@ -409,24 +415,15 @@ const api = {
   } satisfies UpdateApi,
 };
 
+
+export type AndroidApi = typeof api;
+
 /**
- * 在 Android 平台安装与 Electron preload 兼容的 API。
+ * 在 Android 平台安装应用 API。
  * @returns 安装完成后的 API
  */
-export const installAndroidBridge = (): typeof api => {
-  const browserWindow = globalThis as typeof globalThis & {
-    api?: typeof api;
-    electron?: ElectronAPI;
-  };
-  if (Capacitor.getPlatform() !== "android") return browserWindow.api ?? api;
-  if (!browserWindow.api) browserWindow.api = api;
-  if (!browserWindow.electron) {
-    browserWindow.electron = {
-      process: {
-        platform: "android",
-        versions: { electron: "0.0.0", chrome: "0.0.0", node: "0.0.0" },
-      },
-    } as unknown as ElectronAPI;
-  }
-  return browserWindow.api;
+export const installAndroidBridge = (): AndroidApi => {
+  const appWindow = globalThis as typeof globalThis & { api?: typeof api };
+  if (!appWindow.api) appWindow.api = api;
+  return appWindow.api;
 };

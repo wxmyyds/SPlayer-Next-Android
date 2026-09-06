@@ -21,14 +21,9 @@ const props = withDefaults(
 const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
-const { isDesktopLyricOpen } = storeToRefs(settings);
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
 const mutedClass = computed(() => (props.cover ? "text-cover/50" : "text-on-surface-variant"));
-
-const lyricButtonType = computed(() =>
-  isDesktopLyricOpen.value ? (props.cover ? "cover" : "primary") : buttonType.value,
-);
 
 const volumePercent = computed(() => Math.round(status.volume * 100));
 
@@ -48,10 +43,6 @@ const toggleMute = (): void => {
   } else {
     player.setVolume(lastVolume.value || 0.7);
   }
-};
-
-const toggleDesktopLyric = (): void => {
-  window.api.window.toggleDesktopLyric().catch(() => {});
 };
 
 const equalizerOpen = ref(false);
@@ -114,16 +105,6 @@ const onMoreMenuSelect = (key: string): void => {
         <span class="text-xs tabular-nums mt-2">{{ volumePercent }}%</span>
       </div>
     </SPopover>
-    <SButton
-      :type="lyricButtonType"
-      :variant="isDesktopLyricOpen ? 'tertiary' : 'ghost'"
-      circle
-      size="large"
-      :class="isDesktopLyricOpen ? undefined : mutedClass"
-      @click="toggleDesktopLyric"
-    >
-      <template #icon><IconLucideCaptions /></template>
-    </SButton>
     <!-- 私人 FM 模式调整 -->
     <SButton
       v-if="status.fmMode"

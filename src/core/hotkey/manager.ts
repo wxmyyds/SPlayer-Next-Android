@@ -9,8 +9,8 @@
 
 import { watch } from "vue";
 import { useHotkeyStore } from "@/stores/hotkey";
-import { isMac } from "@/utils/config";
 import { parseAccelerator, matchParsed, type ParsedAccelerator } from "@shared/utils/accelerator";
+
 import type { HotkeyActionId } from "@shared/types/hotkey";
 import { buildRegistry, dispatch } from "./registry";
 
@@ -40,7 +40,7 @@ const recompile = (): void => {
   for (const id of ids) {
     const accel = store.bindings[id]?.inApp;
     if (!accel) continue;
-    const parsed = parseAccelerator(accel, isMac);
+    const parsed = parseAccelerator(accel, false);
     if (parsed) next.push({ id, parsed });
   }
   compiled = next;

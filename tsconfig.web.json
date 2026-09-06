@@ -1,23 +1,31 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": [
-    "src/env.d.ts",
-    "src/**/*",
-    "src/**/*.vue",
-    "windows/**/*",
-    "windows/**/*.vue",
-    "electron/preload/*.d.ts",
-    "platform/android/**/*.ts",
-    "shared/**/*"
-  ],
   "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "useDefineForClassFields": true,
     "tsBuildInfoFile": "node_modules/.cache/tsconfig.web.tsbuildinfo",
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["./shared/*"],
-      "@windows/*": ["./windows/*"],
       "@android/*": ["./platform/android/*"]
     },
     "types": ["./auto-imports.d.ts", "./components.d.ts"]
-  }
+  },
+  "include": [
+    "src/env.d.ts",
+    "src/**/*",
+    "src/**/*.vue",
+    "platform/android/**/*.ts",
+    "shared/**/*"
+  ]
 }

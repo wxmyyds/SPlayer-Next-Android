@@ -14,7 +14,6 @@ import { useProgressLyric } from "@/composables/useProgressLyric";
 import Lyrics from "@/components/player/Lyrics/index.vue";
 import AMLLLyrics from "@/components/player/Lyrics/AMLLLyrics.vue";
 import PlaylistPickerDialog from "@/components/modals/PlaylistPickerDialog.vue";
-import { useWindowControls } from "@/composables/useWindowControls";
 import * as player from "@/core/player";
 import { openExternal } from "@/utils/url";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
@@ -134,7 +133,12 @@ const lyricFontSize = computed(() =>
 const { immersive, onPlayerMouseEnter, onPlayerMouseLeave, onMainMove, onBarEnter, onBarLeave } =
   useImmersiveMode(isPlayerExpanded);
 
-const { isFullscreen, toggleFullscreen } = useWindowControls();
+const isFullscreen = ref(false);
+const toggleFullscreen = (): void => {
+  isFullscreen.value = !isFullscreen.value;
+  if (isFullscreen.value) document.documentElement.requestFullscreen?.().catch(() => {});
+  else document.exitFullscreen?.().catch(() => {});
+};
 
 const canDownload = computed(
   () =>
@@ -254,7 +258,6 @@ const showComments = (): void => {
                 <IconLucideMaximize v-else />
               </template>
             </SButton>
-            <WindowControls cover />
           </div>
         </div>
         <!-- 主区域 -->

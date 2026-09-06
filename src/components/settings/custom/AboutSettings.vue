@@ -9,7 +9,6 @@ import {
   REPO_NAME,
   HOMEPAGE_URL,
   COPYRIGHT_HOLDER,
-  IS_APPX,
   COMMIT_HASH,
   COMMIT_DATE,
 } from "@/utils/config";
@@ -26,7 +25,7 @@ const update = useUpdateStore();
 /** 提交时间 */
 const commitTimeAgo = useTimeAgo(new Date(COMMIT_DATE));
 /** 当前版本 */
-const versions = window.electron.process.versions;
+const versions = { capacitor: "7" };
 /** 操作系统信息 */
 const osInfo = window.api.system.osInfo;
 
@@ -62,10 +61,7 @@ const envItems = computed<EnvItem[]>(() => [
     label: t("settings.about.date"),
     value: `${COMMIT_DATE} (${commitTimeAgo.value})`,
   },
-  { label: "Electron", value: versions.electron },
-  { label: "Chromium", value: versions.chrome },
-  { label: "Node.js", value: versions.node },
-  { label: "V8", value: versions.v8 },
+  { label: "Capacitor", value: versions.capacitor },
   { label: "OS", value: `${osInfo.type} ${osInfo.arch} ${osInfo.release}` },
 ]);
 
@@ -137,8 +133,8 @@ onMounted(async () => {
         <div class="flex items-center gap-2 mr-auto">
           <span class="text-lg font-logo text-on-surface">{{ REPO_NAME }}</span>
           <STag type="primary" size="small" round>v{{ APP_VERSION }}</STag>
-          <STag v-if="IS_APPX" type="primary" size="small" round>
-            {{ t("settings.storeVersion") }}
+          <STag type="primary" size="small" round>
+            Android
           </STag>
         </div>
         <div class="flex items-center gap-2">

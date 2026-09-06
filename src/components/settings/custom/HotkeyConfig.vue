@@ -7,7 +7,6 @@ import { formatAccelerator } from "@shared/utils/accelerator";
 import { toast } from "@/composables/useToast";
 import { dialog } from "@/composables/useDialog";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
-import { isMac } from "@/utils/config";
 
 defineOptions({ inheritAttrs: false });
 
@@ -52,7 +51,7 @@ const labelOf = (id: HotkeyActionId): string => {
 
 /** 录入器 */
 const recorder = useHotkeyRecorder({
-  isMac: isMac,
+  isMac: false,
   // 避免单键（如 A / Space）被全局占用
   requireModifier: () => recordingTarget.value?.scope === "global",
   onConfirm: async (accel) => {
@@ -163,7 +162,7 @@ const valueOf = (id: HotkeyActionId, scope: Scope): string => {
   }
   const accel = hotkey.bindings[id]?.[scope];
   if (!accel) return "";
-  return formatAccelerator(accel, isMac);
+  return formatAccelerator(accel, false);
 };
 
 /** 获取占位符 */

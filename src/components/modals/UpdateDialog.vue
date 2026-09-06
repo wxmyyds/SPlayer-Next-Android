@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { marked } from "marked";
 import { useUpdateStore } from "@/stores/update";
-import { APP_VERSION, IS_APPX } from "@/utils/config";
+import { APP_VERSION } from "@/utils/config";
 import { formatFileSize } from "@/utils/format";
 
 const { t } = useI18n();
@@ -90,7 +90,7 @@ const releaseDateText = computed(() => {
           close();
         "
       >
-        {{ IS_APPX ? t("update.goStore") : t("update.goDownload") }}
+        {{ t("update.goDownload") }}
       </SButton>
     </template>
   </SDialog>

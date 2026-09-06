@@ -1,5 +1,5 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import tseslint from "@electron-toolkit/eslint-config-ts";
+import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
 import eslintPluginVue from "eslint-plugin-vue";
 import vueParser from "vue-eslint-parser";
