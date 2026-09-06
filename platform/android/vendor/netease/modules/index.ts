@@ -21,6 +21,12 @@ import search_suggest from "./search_suggest";
 import search_hot_detail from "./search_hot_detail";
 import lyric from "./lyric";
 import lyric_new from "./lyric_new";
+import album from "./album";
+import album_new from "./album_new";
+import artists from "./artists";
+import artist_album from "./artist_album";
+import artist_songs from "./artist_songs";
+import playlist_detail from "./playlist_detail";
 
 export const modules: Record<string, NeteaseModule> = {
   login_qr_key,
@@ -37,4 +43,10 @@ export const modules: Record<string, NeteaseModule> = {
   search_hot_detail,
   lyric,
   lyric_new,
+  album,
+  album_new,
+  artists,
+  artist_album,
+  artist_songs,
+  playlist_detail,
 };
