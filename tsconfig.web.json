@@ -17,7 +17,11 @@
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["./shared/*"],
-      "@android/*": ["./platform/android/*"]
+      "@android/*": ["./platform/android/*"],
+      "@main/utils/logger": ["./platform/android/vendor/shim/logger.ts"],
+      "@main/utils/proxy": ["./platform/android/vendor/shim/proxy.ts"],
+      "@main/database/sessions": ["./platform/android/vendor/shim/sessions.ts"],
+      "@main/store": ["./platform/android/vendor/shim/store.ts"]
     },
     "types": ["./auto-imports.d.ts", "./components.d.ts"]
   },

@@ -32,6 +32,10 @@ export default defineConfig({
       "@shared": resolve(root, "shared"),
       "@root": root,
       "@android": resolve(root, "platform/android"),
+      "@main/utils/logger": resolve(root, "platform/android/vendor/shim/logger.ts"),
+      "@main/utils/proxy": resolve(root, "platform/android/vendor/shim/proxy.ts"),
+      "@main/database/sessions": resolve(root, "platform/android/vendor/shim/sessions.ts"),
+      "@main/store": resolve(root, "platform/android/vendor/shim/store.ts"),
     },
   },
   build: {

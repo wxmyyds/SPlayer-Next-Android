@@ -18,6 +18,18 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "@shared": fileURLToPath(new URL("./shared", import.meta.url)),
       "@root": fileURLToPath(new URL("./", import.meta.url)),
+      "@main/utils/logger": fileURLToPath(
+        new URL("./platform/android/vendor/shim/logger.ts", import.meta.url),
+      ),
+      "@main/utils/proxy": fileURLToPath(
+        new URL("./platform/android/vendor/shim/proxy.ts", import.meta.url),
+      ),
+      "@main/database/sessions": fileURLToPath(
+        new URL("./platform/android/vendor/shim/sessions.ts", import.meta.url),
+      ),
+      "@main/store": fileURLToPath(
+        new URL("./platform/android/vendor/shim/store.ts", import.meta.url),
+      ),
     },
   },
   plugins: [
