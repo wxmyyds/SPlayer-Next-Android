@@ -41,6 +41,10 @@
     "test:native": "cargo test --workspace",
     "test:all": "pnpm test && pnpm test:native",
     "build:native": "tsx scripts/build-native.ts",
+    "build:android:web": "vite build --config platform/android/vite.config.ts --emptyOutDir false",
+    "cap:add:android": "cap add android",
+    "cap:sync:android": "pnpm build:android:web && cap sync android",
+    "android:debug": "pnpm cap:sync:android && cd android && gradlew.bat assembleDebug",
     "start": "electron-vite preview",
     "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
     "build": "rimraf dist && pnpm build:native && pnpm typecheck && electron-vite build",
@@ -54,6 +58,8 @@
     "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@hono/node-server": "^2.1.0",
@@ -71,6 +77,7 @@
   },
   "devDependencies": {
     "@applemusic-like-lyrics/core": "^0.5.2",
+    "@capacitor/cli": "^7.6.9",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron/rebuild": "^4.2.0",
