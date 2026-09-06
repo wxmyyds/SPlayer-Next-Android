@@ -1,15 +1,21 @@
 package com.wxmyyds.splayer.next;
 
 import android.app.Dialog;
+import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -27,9 +33,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "LoginWeb")
 public class LoginWebPlugin extends Plugin {
 
-    /** 伪装桌面 Chrome（与上游 FAKE_UA 一致，避免被判不受支持环境） */
-    private static final String FAKE_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    /** 伪装 UA 已移除：默认移动端 UA 拿轻量移动页；桌面 UA 的重型页在小屏 WebView 里白屏闪烁且无法操作 */
+    private String pageError;
 
     /** 网易关心的关键 cookie（与上游 NETEASE_COOKIE_KEYS 一致） */
     private static final String[] NETEASE_KEYS = {"MUSIC_U", "__csrf", "NMTID", "MUSIC_A"};
@@ -78,10 +83,41 @@ public class LoginWebPlugin extends Plugin {
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setUserAgentString(FAKE_UA);
-        web.setWebViewClient(new WebViewClient());
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // 网易页面含 http 子资源；默认 MIXED_CONTENT_NEVER_ALLOW 会拦成白屏
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        FrameLayout body = new FrameLayout(getActivity());
+        body.addView(web, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        ProgressBar loading = new ProgressBar(getActivity());
+        FrameLayout.LayoutParams loadingLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        loadingLp.gravity = Gravity.CENTER;
+        body.addView(loading, loadingLp);
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                pageError = null;
+                loading.setVisibility(android.view.View.VISIBLE);
+            }
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                loading.setVisibility(android.view.View.GONE);
+            }
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    pageError = error.getDescription() != null
+                            ? error.getDescription().toString()
+                            : "page load failed";
+                    loading.setVisibility(android.view.View.GONE);
+                }
+            }
+        });
         web.loadUrl(url);
-        root.addView(web, new LinearLayout.LayoutParams(
+        root.addView(body, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         dialog = new Dialog(getActivity(), android.R.style.Theme_NoTitleBar_Fullscreen);
@@ -96,10 +132,17 @@ public class LoginWebPlugin extends Plugin {
         poll = new Runnable() {
             @Override
             public void run() {
+                if (pageError != null) {
+                    Dialog d = dialog;
+                    fail(pageError);
+                    if (d != null) d.dismiss();
+                    return;
+                }
                 JSObject hit = collectCookies(cm, watchCookie);
                 if (hit != null) {
-                    if (dialog != null) dialog.dismiss();
-                    else finish(hit);
+                    Dialog d = dialog;
+                    finish(hit);
+                    if (d != null) d.dismiss();
                     return;
                 }
                 if (dialog != null) handler.postDelayed(this, 1000);
@@ -144,5 +187,17 @@ public class LoginWebPlugin extends Plugin {
         } else {
             call.reject("canceled");
         }
+    }
+
+    /** 页面级失败：带原因回传，渲染层弹失败提示 */
+    private void fail(String message) {
+        if (handler != null && poll != null) handler.removeCallbacks(poll);
+        handler = null;
+        poll = null;
+        dialog = null;
+        if (pending == null) return;
+        PluginCall call = pending;
+        pending = null;
+        call.reject(message != null ? message : "page load failed");
     }
 }
