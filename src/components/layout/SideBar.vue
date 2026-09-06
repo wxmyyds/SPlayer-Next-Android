@@ -7,6 +7,7 @@ import { SIDEBAR_GROUP_MY_PLAYLISTS, SIDEBAR_GROUP_SUBSCRIBED } from "@/types/se
 import { SIDEBAR_NAV_META, applySavedOrder } from "@/components/layout/sidebarNav";
 import { useSettingsStore } from "@/stores/settings";
 import { useStatusStore } from "@/stores/status";
+import { isAndroid } from "@/utils/platform";
 import { usePlaylistStore } from "@/stores/playlist";
 import { useUserStore } from "@/stores/user";
 import { useDownloadStore } from "@/stores/download";
@@ -103,6 +104,9 @@ const renderSubscribedHeader = () =>
   ]);
 
 const hiddenKeys = computed(() => new Set(appearance.sidebarHiddenKeys));
+
+/** Android 抽屉内始终展开显示完整内容 */
+const collapsed = computed(() => appearance.sidebarCollapsed && !isAndroid);
 
 /** 我的歌单 */
 const myPlaylistItems = computed<SMenuItem[]>(() => {
@@ -347,21 +351,19 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full">
-    <SideBarLogo :collapsed="appearance.sidebarCollapsed" />
+    <SideBarLogo :collapsed="collapsed" />
     <SContextMenu :items="contextMenuItems" @select="onContextMenuSelect">
       <div
         class="flex-1 min-h-0 pb-3 overflow-y-auto transition-[padding] duration-300"
         :class="
-          appearance.sidebarCollapsed
-            ? 'px-2 [&::-webkit-scrollbar]:hidden'
-            : 'px-3 [scrollbar-gutter:stable]'
+          collapsed ? 'px-2 [&::-webkit-scrollbar]:hidden' : 'px-3 [scrollbar-gutter:stable]'
         "
         @contextmenu.capture="onMenuContextMenu"
       >
         <SMenu
           :items="menuItems"
           :model-value="activeKey"
-          :collapsed="appearance.sidebarCollapsed"
+          :collapsed="collapsed"
           @select="onSelect"
         />
       </div>

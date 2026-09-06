@@ -34,6 +34,8 @@ export const useStatusStore = defineStore(
     const isPlayerExpanded = ref(false);
     /** 外层播放队列 */
     const outerQueueOpen = ref(false);
+    /** Android 侧边抽屉开关（运行时状态，不持久化） */
+    const sidebarDrawerOpen = ref(false);
     /** 播放器播放队列 */
     const fullQueueOpen = ref(false);
     /** 搜索弹窗状态 */
@@ -126,6 +128,7 @@ export const useStatusStore = defineStore(
       trackLoading,
       isPlayerExpanded,
       outerQueueOpen,
+      sidebarDrawerOpen,
       fullQueueOpen,
       searchOpen,
       commentsOpen,

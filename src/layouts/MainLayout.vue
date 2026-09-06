@@ -2,6 +2,7 @@
 import { useStatusStore } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
+import { isAndroid } from "@/utils/platform";
 import { useOrpheusProtocol } from "@/composables/useOrpheusProtocol";
 import { useExternalFileHandler } from "@/composables/useExternalFileHandler";
 
@@ -54,6 +55,8 @@ const mainScrollMap = new Map<string, number>();
 watch(
   () => route.fullPath,
   (_newPath, oldPath) => {
+    // Android 抽屉：路由切换后自动收起
+    if (isAndroid) status.sidebarDrawerOpen = false;
     if (oldPath && mainContainerRef.value) {
       mainScrollMap.set(oldPath, mainContainerRef.value.scrollTop);
     }
@@ -84,9 +87,27 @@ const mainMarginClass = computed(() =>
   showPlayerBar.value && appearance.layoutMode !== "floating" ? "mb-20" : "",
 );
 
+/** 侧边栏样式：Android 下为覆盖式抽屉，桌面端为固定侧栏 */
+const asideClass = computed(() => {
+  if (isAndroid) {
+    return [
+      "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] bg-surface-panel overflow-y-auto",
+      "shadow-2xl transition-transform duration-300",
+      status.sidebarDrawerOpen ? "translate-x-0" : "-translate-x-full",
+    ].join(" ");
+  }
+  return [
+    "shrink-0 bg-surface-panel overflow-y-auto z-10 transition-[width,margin] duration-300",
+    appearance.sidebarCollapsed ? "w-16" : "w-60",
+    sidebarClass.value,
+  ].join(" ");
+});
+
 /** 外层播放条样式 */
 const playerBarWrapperClass = computed(() => {
   const base = "fixed bottom-0 z-50 transition-[left] duration-300 pointer-events-none";
+  // Android 下侧边栏为覆盖式抽屉，播放栏始终全宽
+  if (isAndroid) return `${base} left-0 right-0`;
   const collapsed = appearance.sidebarCollapsed;
   switch (appearance.layoutMode) {
     case "sidebar-full":
@@ -118,12 +139,15 @@ const playerBarInnerClass = computed(() => {
     :class="isPlayerExpanded ? 'scale-95 opacity-0 pointer-events-none' : ''"
   >
     <!-- 侧边栏 -->
-    <aside
-      class="shrink-0 bg-surface-panel overflow-y-auto z-10 transition-[width,margin] duration-300"
-      :class="[appearance.sidebarCollapsed ? 'w-16' : 'w-60', sidebarClass]"
-    >
+    <aside :class="asideClass">
       <SideBar />
     </aside>
+    <!-- Android 侧边抽屉遮罩 -->
+    <div
+      v-if="isAndroid && status.sidebarDrawerOpen"
+      class="fixed inset-0 z-30 bg-black/50"
+      @click="status.sidebarDrawerOpen = false"
+    />
 
     <!-- 右侧主区域 -->
     <div class="flex-1 flex flex-col min-w-0" :class="mainMarginClass">

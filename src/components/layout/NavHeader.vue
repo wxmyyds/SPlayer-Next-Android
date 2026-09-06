@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
+import { useStatusStore } from "@/stores/status";
+import { isAndroid } from "@/utils/platform";
 import { useThemeStore } from "@/stores/theme";
 import { useUpdateStore } from "@/stores/update";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
@@ -14,6 +16,7 @@ import IconScaling from "~icons/lucide/scaling";
 const router = useRouter();
 const { t } = useI18n();
 const { show: showSettings } = useSettingsDialog();
+const status = useStatusStore();
 const theme = useThemeStore();
 const update = useUpdateStore();
 
@@ -58,6 +61,17 @@ const onMenuSelect = (key: string): void => {
   <div class="flex items-center justify-between flex-1 h-full min-w-0 app-drag-region">
     <!-- 左侧 -->
     <div class="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+      <SButton
+        v-if="isAndroid"
+        class="app-no-drag shrink-0"
+        variant="tertiary"
+        circle
+        :size="40"
+        :icon-size="20"
+        @click="status.sidebarDrawerOpen = !status.sidebarDrawerOpen"
+      >
+        <template #icon><IconLucideMenu /></template>
+      </SButton>
       <SButton
         class="app-no-drag shrink-0"
         variant="tertiary"

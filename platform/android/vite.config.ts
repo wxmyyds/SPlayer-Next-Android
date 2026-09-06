@@ -16,6 +16,7 @@ export default defineConfig({
   root,
   publicDir: resolve(root, "public"),
   define: {
+    "import.meta.env.VITE_PLATFORM": JSON.stringify("android"),
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_REPO_URL__: JSON.stringify(pkg.repository.url),
     __APP_REPO_NAME__: JSON.stringify(pkg.productName),
