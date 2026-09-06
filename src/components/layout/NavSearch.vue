@@ -281,7 +281,7 @@ onMounted(() => {
     <div
       role="button"
       :aria-label="t('nav.searchPlaceholder')"
-      :class="isAndroid ? 'w-full' : 'w-60'"
+      :class="isAndroid ? 'w-full max-w-xl' : 'w-60'"
       class="app-no-drag h-10 px-4 cursor-pointer flex items-center gap-2 min-w-0 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
       @click="dialogOpen = true"
       @contextmenu.prevent="dialogOpen = true"

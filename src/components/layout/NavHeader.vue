@@ -60,7 +60,13 @@ const onMenuSelect = (key: string): void => {
 <template>
   <div class="flex items-center justify-between flex-1 h-full min-w-0 app-drag-region">
     <!-- 左侧 -->
-    <div class="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+    <div
+      :class="
+        isAndroid
+          ? 'flex items-center gap-2 min-w-0 flex-1'
+          : 'flex items-center gap-2 sm:gap-3 min-w-0 shrink-0'
+      "
+    >
       <SButton
         v-if="isAndroid"
         class="app-no-drag shrink-0"

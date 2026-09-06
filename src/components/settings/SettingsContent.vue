@@ -2,6 +2,7 @@
 import { settingsSchema } from "@/settings/schema";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { useSettingsStore } from "@/stores/settings";
+import { isAndroid } from "@/utils/platform";
 import { openExternal } from "@/utils/url";
 import { REPO_URL, REPO_NAME, APP_VERSION } from "@/utils/config";
 
@@ -18,6 +19,9 @@ const isSearchActive = ref(false);
 
 const activeCategory = computed(() => settingsSchema.find((c) => c.id === activeId.value));
 
+/** Android 详情页开关：分类列表与详情二选一全屏展示 */
+const detailOpen = ref(false);
+
 /** 计算每个 section 的全局起始索引 */
 const sectionStartIndices = computed(() => {
   const indices: number[] = [];
@@ -32,6 +36,7 @@ const sectionStartIndices = computed(() => {
 const onCategorySelect = (id: string) => {
   activeId.value = id;
   highlightKey.value = undefined;
+  if (isAndroid) detailOpen.value = true;
   rememberCategory(id);
   nextTick(() => scrollRef.value?.scrollTo({ top: 0 }));
 };
@@ -41,6 +46,7 @@ const onSearchSelect = (categoryId: string, itemKey: string) => {
   if (activeId.value !== categoryId) {
     activeId.value = categoryId;
   }
+  if (isAndroid) detailOpen.value = true;
   nextTick(() => {
     setTimeout(() => {
       const el = document.getElementById(`setting-${itemKey}`);
@@ -62,7 +68,14 @@ onMounted(() => {
 <template>
   <div class="flex h-full overflow-hidden">
     <!-- 左侧 -->
-    <div class="w-70 shrink-0 flex flex-col bg-surface-panel p-5">
+    <div
+      v-show="!isAndroid || !detailOpen"
+      :class="
+        isAndroid
+          ? 'flex-1 min-w-0 flex flex-col bg-surface-panel p-5'
+          : 'w-70 shrink-0 flex flex-col bg-surface-panel p-5'
+      "
+    >
       <h2 class="text-2xl font-bold mb-1 px-1">{{ t("settings.title") }}</h2>
       <p class="text-sm text-on-surface-variant/80 mb-5 px-1">{{ t("settings.subtitle") }}</p>
 
@@ -95,7 +108,22 @@ onMounted(() => {
     </div>
 
     <!-- 右侧 -->
-    <div ref="scrollRef" class="flex-1 overflow-y-auto bg-surface py-6 px-8">
+    <div
+      v-show="!isAndroid || detailOpen"
+      ref="scrollRef"
+      :class="
+        isAndroid
+          ? 'flex-1 min-w-0 overflow-y-auto bg-surface py-4 px-4'
+          : 'flex-1 overflow-y-auto bg-surface py-6 px-8'
+      "
+    >
+      <!-- Android 返回栏 -->
+      <div v-if="isAndroid" class="flex items-center gap-1 mb-3">
+        <SButton variant="tertiary" circle :size="36" @click="detailOpen = false">
+          <template #icon><IconLucideChevronLeft /></template>
+        </SButton>
+        <span class="text-lg font-semibold">{{ t(`settings.group.${activeId}`) }}</span>
+      </div>
       <div v-if="activeCategory" :key="activeCategory.id" class="animate-fade-in">
         <component :is="activeCategory.component" v-if="activeCategory.component" />
         <template v-else>
