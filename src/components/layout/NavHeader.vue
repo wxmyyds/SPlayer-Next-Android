@@ -115,7 +115,7 @@ const onMenuSelect = (key: string): void => {
       </SButton>
     </div>
     <!-- 中间 -->
-    <div class="flex-1 h-full min-w-4" />
+    <div v-if="!isAndroid" class="flex-1 h-full min-w-4" />
     <!-- 右侧 -->
     <div class="flex items-center gap-2 sm:gap-3 shrink-0">
       <NavUser />

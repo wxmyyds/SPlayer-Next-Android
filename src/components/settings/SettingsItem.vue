@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SettingItem } from "@/types/settings-schema";
+import { isAndroid } from "@/utils/platform";
 import { useSettingModel } from "@/settings/useSettingModel";
 import { dialog } from "@/composables/useDialog";
 
@@ -60,8 +61,13 @@ const descriptionText = computed(() =>
     />
     <div
       v-else
-      class="flex items-center justify-between gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 transition-all duration-300"
-      :class="highlighted ? 'animate-highlight-pulse' : ''"
+      :class="[
+        isAndroid
+          ? 'flex flex-col items-stretch gap-2.5'
+          : 'flex items-center justify-between gap-4',
+        'rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 transition-all duration-300',
+        highlighted ? 'animate-highlight-pulse' : '',
+      ]"
     >
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 text-base">
@@ -75,7 +81,7 @@ const descriptionText = computed(() =>
         </div>
       </div>
 
-      <div class="shrink-0 w-50 flex justify-end">
+      <div :class="isAndroid ? 'w-full flex justify-start' : 'shrink-0 w-50 flex justify-end'">
         <SSwitch
           v-if="item.type === 'switch'"
           :model-value="model"
