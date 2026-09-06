@@ -27,6 +27,15 @@ import artists from "./artists";
 import artist_album from "./artist_album";
 import artist_songs from "./artist_songs";
 import playlist_detail from "./playlist_detail";
+import user_playlist from "./user_playlist";
+import user_subcount from "./user_subcount";
+import user_account from "./user_account";
+import user_level from "./user_level";
+import likelist from "./likelist";
+import like from "./like";
+import like_v1 from "./like_v1";
+import album_sublist from "./album_sublist";
+import artist_sublist from "./artist_sublist";
 
 export const modules: Record<string, NeteaseModule> = {
   login_qr_key,
@@ -49,4 +58,13 @@ export const modules: Record<string, NeteaseModule> = {
   artist_album,
   artist_songs,
   playlist_detail,
+  user_playlist,
+  user_subcount,
+  user_account,
+  user_level,
+  likelist,
+  like,
+  like_v1,
+  album_sublist,
+  artist_sublist,
 };
