@@ -33,6 +33,13 @@ import type { CommentsApi } from "@shared/types/comment";
 import type { AiModelApi } from "@shared/types/ai";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { CjkTransformMode, OpenccApi } from "@shared/types/opencc";
+import { htmlAudioPlayer } from "./htmlAudioPlayer";
+import {
+  callVendorApi,
+  clearVendorSession,
+  openVendorLoginWeb,
+  setVendorCookie,
+} from "./vendor/dispatch";
 
 const unsupported = "Android bridge capability is not implemented";
 const noopUnsubscribe = (..._args: unknown[]): (() => void) => () => {};
@@ -80,40 +87,8 @@ const config: ConfigApi = {
   },
 };
 
-const player: PlayerApi = {
-  load: unsupportedAsync,
-  play: unsupportedAsync,
-  pause: unsupportedAsync,
-  stop: async () => ok(),
-  seek: unsupportedAsync,
-  setVolume: async () => ok(),
-  setPauseOnDeviceSwitch: async () => ok(),
-  getVolume: async () => ok(defaultStatus.volume),
-  getStatus: async () => ok({ ...defaultStatus }),
-  setFftEnabled: async () => ok(),
-  getFftData: async () => ok({ ldata: [], rdata: [] }),
-  setFadeDuration: async () => ok(),
-  getFadeDuration: async () => ok(0),
-  getCoverRaw: async () => ok(null),
-  readLyricFile: unsupportedAsync,
-  reinit: async () => ok(),
-  setNormalizationEnabled: async () => ok(),
-  setEqualizerEnabled: async () => ok(),
-  setEqualizerBands: async () => ok(),
-  setPreampGain: async () => ok(),
-  setSpeed: async () => ok(),
-  setPitch: async () => ok(),
-  setPitchSync: async () => ok(),
-  getOutputDevices: async () =>
-    ok([{ id: "android-default", name: "Android 默认输出", isDefault: true }]),
-  getDefaultDeviceName: async () => ok("Android 默认输出"),
-  setOutputDevice: async () => ok(),
-  getSelectedDeviceName: async () => ok("Android 默认输出"),
-  syncPlayMode: () => {},
-  syncLikeState: () => {},
-  dispatch: () => {},
-  onEvent: (_callback: (event: PlayerEvent) => void) => noopUnsubscribe(),
-};
+/** 播放器：过渡期用 HTMLAudio 实现可听闭环，后续替换为 Rust 引擎 */
+const player: PlayerApi = htmlAudioPlayer;
 
 /** Android 系统桥接 API：与旧桌面 preload 的 system 形状兼容，均为无操作或空实现 */
 interface AndroidSystemApi {
@@ -263,11 +238,14 @@ const plugins: PluginsApi = {
   onStatus: noopUnsubscribe,
 };
 
+/** 音源 API：直调上游 dev 同款 vendor 实现（platform/android/vendor） */
 const apis: ApisApi = {
-  call: async () => ({ ok: false, error: unsupported }),
-  clearSession: async () => {},
-  openLoginWeb: async () => ({ ok: false, error: unsupported }),
-  setCookie: async () => ({ ok: false, error: unsupported }),
+  call: (platform, name, params) => callVendorApi(platform, name, params ?? {}),
+  clearSession: async (platform) => {
+    clearVendorSession(platform);
+  },
+  openLoginWeb: (platform) => openVendorLoginWeb(platform),
+  setCookie: async (platform, cookie) => setVendorCookie(platform, cookie),
 };
 
 const lyrics: LyricsApi = {
