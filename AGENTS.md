@@ -2,143 +2,136 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+> 本仓库是 SPlayer-Next 的 **Android 移植 fork**（上游：`SPlayer-Dev/SPlayer-Next`，分支 `dev`）。
+> 上游是桌面端（Electron + Windows/macOS/Linux），本 fork 目标是安卓端。本文件与 `CLAUDE.md`
+> 为 fork 所有，合上游时一律保留我方版本（见文末同步规则）。
+
 ## Project Overview
 
-SPlayer-Next — desktop music player on **Electron + Vue 3 + TypeScript**, with Rust native modules (NAPI-RS) for audio decoding, system media integration, and Windows taskbar lyric. Successor to SPlayer.
+Android music player. Vue 3 renderer (`src/`) 复用上游；外壳换成 **Capacitor 7 + Kotlin**，
+音频保留 Rust `audio-engine`（经 `cargo-ndk` 编 `so` + JNI + Oboe 后端输出）。
 
 ## Commands
 
 ```bash
 pnpm install              # Install deps
-pnpm dev                  # Build native (debug) + start Electron dev
-pnpm build                # Full build (rimraf → native → typecheck → electron-vite)
-pnpm build:{win,mac,linux}# Platform packages
-pnpm typecheck            # tsc + vue-tsc (node + web targets)
+pnpm build                # 复用上游：electron-vite build → dist/（Android 只取 renderer 产物）
+pnpm typecheck            # tsc + vue-tsc (node + web targets)，提交前必须过
 pnpm lint / format        # ESLint / Prettier
-pnpm build:native         # Rust only; add `--dev` for debug
 ```
 
-`SKIP_NATIVE_BUILD=true` skips Rust during dev.
+Android（`android/` 目录落地后以其 README 为准，大致）：
 
-`audio-engine` static-links FFmpeg via the `ffmpeg_audio` crate (vendor zip + cc-built at compile time). Zero environment dependency — no `FFMPEG_DIR` / `PKG_CONFIG_PATH`, no system FFmpeg required.
+```bash
+npx cap sync android                                   # Web 产物同步到原生壳
+cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build -p audio-engine
+./gradlew -p android assembleDebug
+```
+
+`SKIP_NATIVE_BUILD=true` 跳过 Rust（只调 UI 时用）。
+
+`audio-engine` 静态链接 FFmpeg（`ffmpeg_audio` crate），无系统依赖；安卓输出后端为 Oboe/AAudio，
+解码/EQ/FFT/响度归一逻辑与桌面共用同一套 Rust 代码。
 
 ## Shell
 
-The development shell is Git Bash on Windows. Write all terminal commands in bash syntax (`&&`, `cd`, etc.) — no PowerShell-only constructs. File paths remain in Windows format (backslashes).
+开发环境为 Termux/Linux，bash 语法，Unix 路径（正斜杠）。不要写 PowerShell 或 Windows 路径。
 
 ## Architecture
 
-### Process Model
+### 分层
 
-- **Main** (`electron/main/`) — windows, IPC, native modules
-- **Preload** (`electron/preload/`) — `contextBridge` exposing `window.api` (player/config/system/library/streaming/lyrics)
-- **Renderer** (`src/`) — Vue 3 SPA
-- **Lyric windows** (`windows/desktop-lyric`, `dynamic-island`, `taskbar-lyric`) — independent Vue entries sharing `windows/shared/`
+- **Renderer** (`src/`) — 与上游一致的 Vue 3 SPA，**不直接改**，见同步规则。
+- **Bridge** (`platform/android/` + `android/` Kotlin) — 用 Capacitor Plugin 实现与上游
+  `window.api` 签名完全相同的接口（`preload/index.d.ts` 为准）。`src/` 零改动。
+- **Service** — 前台 Service + MediaSession（替代托盘/缩略图/SMTC），通知栏封面与按钮。
+- **Storage** — `@capacitor-community/sqlite`，表结构与上游一致；`better-sqlite3` 是同步 API，
+  桥接层做一层 async DAO 适配（`platform/android/db.ts`），不要在业务代码里到处 `await` 补丁。
+- **Lyric** — 桌面歌词 `.vue` 路由复用，载体换成悬浮窗（`SYSTEM_ALERT_WINDOW`）/通知栏。
 
-### Native Modules (Rust + NAPI-RS)
+### Native Modules (Rust)
 
-Four `.node` modules in `native/`, built via `scripts/build-native.ts`, lazy-loaded by `electron/main/utils/nativeLoader.ts`. NAPI-RS auto-generates `index.d.ts`, imported via path aliases `@splayer/audio-engine`, `@splayer/audio-capture`, `@splayer/media-ctrl`, `@splayer/taskbar-lyric`.
+`native/` 中与平台无关的部分（decode/equalizer/fft/tempo/loudness/scanner）**别碰**。
+安卓差异收敛在：`audio_output.rs` 后端抽象（Oboe）、`device_watcher/android.rs` 空实现、
+构建成员去掉 `taskbar-lyric`/`taskbar-thumbnail`（经补丁改 `Cargo.toml`，不要直接提交）。
 
-- `audio-engine` — `ffmpeg_audio` decode (static FFmpeg) + rodio playback + FFT + cover extraction. URLs wrapped as `Read + Seek` via `ffmpeg_audio::HttpAudioSource` (using `HttpCancelHandle` for cancellation/reset) — TLS handled in Rust (`reqwest` + `rustls`), cross-platform with no system deps. Pushes events (state/position/ended/outputStalled) via ThreadsafeFunction. Has load_token race protection and an `HttpCancelHandle` handle injected into `HttpAudioSource` for instant stop and reset.
-- `audio-capture` — System sound / microphone capture for song recognition. Windows via WASAPI Loopback; Linux via PulseAudio (`libpulse-binding`, needs `libpulse-dev` at build time — CI `dev.yml`/`release.yml` install it). Collects 8 kHz mono f32 PCM.
-- `media-ctrl` — Cross-platform system media controls (Windows SMTC / Linux MPRIS / macOS MPNowPlaying) + Discord RPC.
-- `taskbar-lyric` — Windows taskbar lyric text rendering with RegistryWatcher / UiaWatcher / TrayWatcher.
+- `audio-engine` — 唯一满血保留的原生模块，JS 签名（`native/audio-engine/index.d.ts`）不变。
+- `media-ctrl` — Discord RPC 用 `cfg(not(target_os = "android"))` 关掉；播放控制走 MediaSession。
+- `audio-capture` — 只保留麦克风一路（`recognition:submitPcm`），系统内录一路经补丁短路。
+- `opencc` — 纯算法，零改。
+
+### 上游同步规则（最高优先级）
+
+- `origin` = 本 fork，`upstream` = 上游 `dev` 分支。同步用一次性 `merge-upstream-xxx` 分支，
+  炮灰分支，炸了重开；`android` 分支只合验证过的 merge 结果。
+- `src/ electron/ shared/ native核心` 不直接改，检查标准：
+  `git diff upstream/dev -- src electron shared` 为空。
+- 功能裁剪全放在 `patches/`，构建前 `git apply`（不提交）：
+  `disable-dynamic-island` / `disable-mcp` / `disable-desktop-chrome`（托盘/快捷键/
+  多窗口/`system.*`展示类/自更新/协议唤起）/ `disable-local-scan`（暂缓，恢复=删补丁）/
+  `disable-loopback-capture`（保留麦克风识曲）。
+- 补丁打不上（`reject`）时在 merge 分支上修好后重新导出补丁。
+- `.github/workflows/dev.yml`、`release.yml` 已在 fork 侧删除（补丁管不了 CI）；
+  保留 `ci.yml` + `test.yml`。合上游报冲突一律保持删除。
+- 本文件与 `CLAUDE.md`、`DEVELOPMENT.md` 为 fork 所有，合并时保留我方版本。
+
+### 插件无沙箱
+
+插件直跑（WebView 内执行，无 worker 隔离），只装可信源。不要给插件加沙箱/权限门控。
 
 ### Playback Data Flow
 
 ```
-User action → status store → IPC (player:load/play/pause/seek)
-  → main process player.ts → audio-engine
+User action → status store → window.api (Capacitor bridge)
+  → Service → audio-engine (.so via JNI)
   → Rust events (stateChanged/position/ended/outputStalled)
-  → main broadcasts to renderer + syncs to media-ctrl
-  → status store updates reactive state
-  → playback.ts updates non-reactive time source
+  → bridge → renderer + MediaSession
+  → status store 更新响应式状态
+  → playback.ts 更新非响应式时间源
 ```
+
+位置推送 200ms（前台）是歌词插值的锚点，不要改；P2 优化才做后台降频（见 DEVELOPMENT.md §7）。
 
 ### State Management
 
-Two-tier position tracking — high-frequency animation vs. low-frequency UI:
+沿用上游双层设计：
 
-- `src/stores/status.ts` — Pinia reactive. `position / duration / state / volume`, pushed ~5Hz from main. Drives progress bar, time display, play button.
-- `src/services/playback.ts` — Non-reactive plain vars. `getCurrentTime()` interpolates between pushes; `usePlaybackTime()` reads in RAF loop for 60fps lyrics/spectrum without Vue reactivity.
-- `src/stores/media.ts` — Pinia + shallowRef. Current `Track` (lightweight) + `TrackDetail` (lyrics, quality). Only `track + activeLyric` persisted to sessionStorage; never persist `TrackDetail` (large lyric strings cause memory issues).
+- `src/stores/status.ts` — Pinia 响应式，进度条/时间显示/播放按钮。
+- `src/services/playback.ts` — 非响应式插值，RAF 循环给歌词/频谱用，不走 Vue 响应式。
+- `src/stores/media.ts` — `Track` 轻量 + `TrackDetail` 按需加载；不持久化大 lyric 字符串。
 
-### Streaming Subsystem
-
-Server protocol clients live in the main process (`electron/main/services/streaming/`): Subsonic / Jellyfin / Emby adapters, safeStorage-backed config, Jellyfin/Emby session management, SQLite synchronization, and the authenticated cover protocol. Subsonic family (Navidrome / OpenSubsonic / Airsonic / Gonic / LMS) shares one adapter; types differ only as UI labels.
-
-- `electron/main/services/streaming/config.ts` — encrypted config and secret-free renderer views.
-- `electron/main/services/streaming/connection.ts` — connection tests, connect, and authenticated adapter requests.
-- `electron/main/services/streaming/coverProtocol.ts` — `streaming-cover://` proxy registered for the default and `persist:main` sessions.
-- `electron/main/services/streaming/adapters/` — Server response → unified `Track / Album / Artist / Playlist`. Trusts server's artist field; no client-side splitting.
-- `services/streaming/session.ts` — Jellyfin/Emby `/Sessions/Playing` heartbeat + PlaySessionId state machine; called from `core/player.ts`.
-- `stores/streaming.ts` — Server list, active state, and complete shallowRef arrays; main-process update events trigger SQLite snapshot reloads, with no polling or direct media-server access.
-- Credentials — `electron/main/services/streaming/config.ts` encrypts via Electron `safeStorage` to `{userData}/app-data/config/streaming.json`. `accessToken / userId` remain in the bounded main-process session cache and are re-acquired on connect.
-
-### Lyric Windows
-
-`windows/desktop-lyric`, `dynamic-island`, `taskbar-lyric` are independent Vue entries. Always use shared composables from `@windows/shared/`:
-
-- `useNowPlayingSync` — playback sync, lyric index, anchor interpolation
-- `getNowPlayingCurrentMs()` — non-reactive current time for RAF char highlight
-- Line selection: `pickPrimaryIndex` (desktop, considers overlap) vs. `pickLatestStartedIndex` (dynamic island, immediate switch)
-
-Don't reimplement these inside individual windows.
-
-### Type System
-
-- `shared/types/player.ts` — `Track`, `TrackDetail`, `Artist`, `Album`, `AudioQuality`, `PlayerState`, `PlayerStatus`, `PlayerEvent`, `LoadOptions`, `LoadResult`, `IpcResponse`
-- `shared/types/lyrics.ts` — `LyricFormat`, `LyricSource (external | embedded | online)`, `LyricData`, `LyricLine`, `LyricWord`, `LyricSpan`
-- `shared/types/platform.ts` — `Platform (netease | qqmusic | kugou)`
-- `shared/types/streaming.ts` — `StreamingServerType`, `StreamingServerConfig`, `StreamingPingResult`, `StreamingAuthResult`, etc.
-
-`Track` is for queue storage (no heavy data); `TrackDetail` loads on demand.
-
-### Settings Schema
-
-Declarative — defined in `src/settings/schema.ts`, types in `src/types/settings-schema.ts` (`SettingCategory → SettingSection → SettingItem`). Items bind via `{ store: "settings"|"theme", path: "nested.path" }`; `system.*` paths route through IPC to main config. Tag support on section/item via `SettingTag = { text; type? }` for Beta/experimental badges. i18n keys: `settings.section.{id}` / `settings.{itemKey}.{label,description}`.
-
-### Data Storage
+### Data Storage (Android)
 
 ```
-{userData}/app-data/        # Unified data directory, separate from Chromium cache data
-├── config/
-│   ├── settings.json       # Main config (electron/main/store/)
-│   ├── streaming.json      # Streaming credentials (safeStorage encrypted)
-│   └── lastfm.json         # Last.fm credentials (safeStorage encrypted)
-├── database/library.db     # Music library (better-sqlite3, WAL)
-├── cache/                  # covers/ (cover:// protocol) + artists/ backgrounds/ songs/
-├── logs/                   # App logs + native/
-└── plugins/                # scripts/ data/ logs/
-
-# All paths are defined centrally in electron/main/utils/paths.ts
+<app-files>/                # Context.getFilesDir()，经 platform/android/paths.ts 统一
+├── config/settings.json    # 主配置（沿用上游 store 结构与默认值）
+├── database/library.db     # 曲库（sqlite 插件，WAL）
+├── cache/covers/           # 300px 封面缩略图（cover:// 协议由桥接层实现）
+└── plugins/                # scripts/ data/（无沙箱，只读可信源）
 ```
 
-Renderer IndexedDB (localforage): `splayer/library`, `splayer/queue`. Local playlists are stored in
-SQLite through the main-process playlist service; the old `splayer/playlists` store is migration-only.
+Renderer IndexedDB（localforage）键名沿用上游（`splayer/library`、`splayer/queue`）。
 
 ### Cover Image
 
-Rust extracts 300x300 JPEG thumbnail to `{userData}/app-data/cache/covers/` during decode; renderer reads via `cover://{filename}` protocol. Original via `getCoverRaw()` for SMTC, never cached. Authenticated streaming covers use the main-process `streaming-cover://` proxy.
+沿用上游纪律：小图（列表/模糊背景/取色）一律用 300px 缩略图；原图只给可见大封面。
+大 `<img>` 加 `decoding="async"`，淡入前 `img.decode()`。
 
-### Config Store (Main)
+### Config
 
-`electron/main/store/` is custom (not electron-store). Reads/writes `{userData}/app-data/config/settings.json` (path via `electron/main/utils/paths.ts`), merges with defaults from `shared/defaults/settings.ts`. Supports dot-path access (`store.get("system.taskbarProgress")`), atomic writes, schema migrations.
+`shared/defaults/settings.ts` 默认值不改。安卓低端机降级（关 `lyric.enableBlur` /
+`imageBackground.blur`）走**现有 `config:set`** 在首次启动写入，不改代码不打补丁。
 
 ### i18n
 
-Renderer uses `vue-i18n` with `src/i18n/locales/{zh-CN,en-US}.json`. Main process has a lightweight translation table (`electron/main/utils/i18n.ts`) for tray/thumbar; locale synced via `system:setLocale` IPC.
+沿用 `src/i18n/locales/{zh-CN,en-US}.json`；主进程托盘翻译表随托盘一起被补丁掉，不用管。
 
 ### Path Aliases
 
+沿用上游（`@/` `@shared/` `@main/` `@windows/` `@splayer/*`），新增：
+
 ```
-@/                     → src/                   (renderer, tsconfig.web.json)
-@shared/               → shared/                (both processes)
-@main/                 → electron/main/         (main, tsconfig.node.json)
-@windows/              → windows/               (lyric windows)
-@splayer/audio-engine  → native/audio-engine    (main)
-@splayer/media-ctrl    → native/media-ctrl      (main)
-@splayer/taskbar-lyric → native/taskbar-lyric   (main)
+@android/              → platform/android/      (bridge、db 适配、perf 档位)
 ```
 
 ## Conventions
@@ -162,20 +155,17 @@ Forbidden: `// ───` separator lines (including ones with section titles), 
 
 Split logic into files rather than separator comments. Don't extract a helper for one-place callers (3+ uses justify it). No "just in case" defensive code or fallbacks for impossible scenarios. No configurable knobs (timeouts / retries / buffer sizes) unless required — write constants. Don't break errors into per-case enums; `anyhow` or plain `Error` is usually enough.
 
-### Memory Discipline
+### Memory Discipline（手机上比桌面更严）
 
-Memory is a hard requirement. The main process logs memory usage through `app.getAppMetrics()`
-60 seconds after launch and then every 10 minutes. When a change touches rendering, caching, or
-IPC, verify before and after with these samples.
-
-- **Images by display size** — anything blurred, sampled, or rendered small uses the 300px `cover` thumbnail (player blur background, color extraction, lists). `coverOriginal` only for the visible large cover and poster export. Large `<img>`: add `decoding="async"`; preload with `img.decode()` before fading in.
-- **Compositing layers are budgeted** — never put `will-change` in CSS on unbounded element collections; promote dynamically and only near the viewport (lyric engine `lineWillChange` pattern). New full-screen `filter: blur` / `backdrop-filter` layers need justification.
-- **Hidden = silent** — high-frequency pushes (`position` / `fftData` / `position-sync`) must not reach hidden windows: `broadcast(channel, data, true)` or an `isVisible()` gate; consumers recover from the next push (≤200ms), no resync needed. Low-frequency state events (`stateChanged` / `ended` / track-change) always go through. RAF loops and canvases must stop when their surface is hidden (engine `freeze()` / `visibilitychange` pattern).
-- **In-memory caches must be bounded** — every module-level Map/array cache needs an eviction rule (subsonic `viewAuthCache` evicts per-server). Never retain `TrackDetail`-sized data beyond the current track.
+- **Images by display size** — 同上游；长列表再加一条：只用缩略图，禁止原图进列表（OOM）。
+- **Compositing layers are budgeted** — 同上游；全屏 blur/backdrop-filter 在低端机默认关（走配置，不改代码）。
+- **Hidden = silent** — 高频推送（`position` / `fftData`）前台 200ms/50ms 不变；切后台后由 P2 补丁降频。低频状态事件常开。RAF/ canvas 随 surface 隐藏停止。
+- **In-memory caches must be bounded** — 同上游；封面取色结果按 URL 缓存，避免重复计算。
+- **Release 包不写文件日志**（P2），只保留内存环形日志，崩溃才落盘。
 
 ### Units
 
-Frontend time is **milliseconds** everywhere. Rust engine uses seconds internally; `toMs()` in `electron/main/ipc/player.ts` converts.
+Frontend time is **milliseconds** everywhere. Rust engine uses seconds internally; `toMs()` in `electron/main/ipc/player.ts` converts. 新增桥接代码同样遵守：过桥一律毫秒。
 
 ### Types & Persistence
 
@@ -187,13 +177,13 @@ In Vue components, `vue / pinia / vue-router / @vueuse/core / vue-i18n` are auto
 Icon components used only in Vue templates are auto-imported. Do not manually import them in
 `<script setup>`; import an icon explicitly only when it is referenced by script code.
 
-### Logging (Main Process)
+### Logging
 
-Use scoped loggers from `@main/utils/logger` (`coreLog / playerLog / mediaLog / trayLog / taskbarLog / nativeLog`, etc.). Don't import `electron-log` directly.
+Use scoped loggers from `@main/utils/logger` (`coreLog / playerLog / mediaLog`, etc.). Don't import `electron-log` directly. 安卓侧日志经桥接打到 logcat，tag 沿用 scope 名。
 
-### IPC Listeners
+### Bridge Listeners
 
-In preload's `onEvent`, always `ipcRenderer.removeAllListeners()` before adding a new listener (HMR accumulates otherwise). Renderer composables call the returned `unsubscribe` in `onBeforeUnmount`.
+Capacitor 监听必须在组件 `onBeforeUnmount` 取消订阅（等价于上游 IPC 的 unsubscribe 纪律）。Preload 的 `removeAllListeners` 规则只适用于桌面 HMR，本 fork 不适用。
 
 ### Prettier
 
@@ -205,7 +195,7 @@ outside the commit.
 
 ### Shared Types
 
-Put cross-process types (`LocaleCode / SystemConfig / StreamingServerType`, etc.) in `shared/types/`.
+Put cross-process types (`LocaleCode / SystemConfig / StreamingServerType`, etc.) in `shared/types/`. 新增桥接类型先看能否复用已有 `window.api` 形状，能复用就不新增。
 
 ### Commit Messages
 
