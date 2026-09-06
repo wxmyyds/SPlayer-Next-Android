@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import type { ElectronAPI } from "@electron-toolkit/preload";
 import { defaultHotkeyConfig } from "@shared/defaults/hotkeys";
 import { defaultSystemConfig } from "@shared/defaults/settings";
@@ -35,6 +36,7 @@ const ok = <T = void>(data?: T): IpcResponse<T> => ({
 });
 const fail = <T = never>(): IpcResponse<T> => ({ success: false, error: unsupported });
 const unsupportedAsync = async <T = never>(): Promise<IpcResponse<T>> => fail<T>();
+
 const defaultStatus: PlayerStatus = {
   state: "idle",
   position: 0,
@@ -156,12 +158,7 @@ const library: LibraryApi = {
   onScanProgress: noopUnsubscribe,
 };
 
-const emptyStreaming = {
-  songs: [],
-  albums: [],
-  artists: [],
-  playlists: [],
-};
+const emptyStreaming = { songs: [], albums: [], artists: [], playlists: [] };
 
 const streaming: StreamingApi = {
   loadServers: async () => ({ servers: [], activeServerId: null }),
@@ -412,15 +409,24 @@ const api = {
   } satisfies UpdateApi,
 };
 
-if (!window.api) {
-  window.api = api;
-}
-
-if (!window.electron) {
-  window.electron = {
-    process: {
-      platform: "android",
-      versions: { electron: "0.0.0", chrome: "0.0.0", node: "0.0.0" },
-    },
-  } as unknown as ElectronAPI;
-}
+/**
+ * 在 Android 平台安装与 Electron preload 兼容的 API。
+ * @returns 安装完成后的 API
+ */
+export const installAndroidBridge = (): typeof api => {
+  const browserWindow = globalThis as typeof globalThis & {
+    api?: typeof api;
+    electron?: ElectronAPI;
+  };
+  if (Capacitor.getPlatform() !== "android") return browserWindow.api ?? api;
+  if (!browserWindow.api) browserWindow.api = api;
+  if (!browserWindow.electron) {
+    browserWindow.electron = {
+      process: {
+        platform: "android",
+        versions: { electron: "0.0.0", chrome: "0.0.0", node: "0.0.0" },
+      },
+    } as unknown as ElectronAPI;
+  }
+  return browserWindow.api;
+};

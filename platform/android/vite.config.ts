@@ -9,7 +9,6 @@ import { FileSystemIconLoader } from "unplugin-icons/loaders";
 import RekaResolver from "reka-ui/resolver";
 import Components from "unplugin-vue-components/vite";
 import pkg from "../../package.json" with { type: "json" };
-import { androidBridgePlugin } from "./vite-plugin";
 
 const root = resolve(__dirname, "../..");
 
@@ -43,7 +42,6 @@ export default defineConfig({
     },
   },
   plugins: [
-    androidBridgePlugin(),
     vue(),
     UnoCSS(),
     AutoImport({

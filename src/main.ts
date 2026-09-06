@@ -13,6 +13,9 @@ import { initPlayer, playFiles, restoreLastTrack } from "./core/player";
 import { handleOrpheus } from "./services/orpheus";
 import { installHotkeyManager } from "./core/hotkey/manager";
 import { vRipple } from "./directives/ripple";
+import { installAndroidBridge } from "@android/bridge";
+
+installAndroidBridge();
 
 const pinia = createPinia();
 pinia.use(piniaPersistedstate);

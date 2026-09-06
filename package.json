@@ -43,6 +43,7 @@
     "build:native": "tsx scripts/build-native.ts",
     "build:android:web": "vite build --config platform/android/vite.config.ts --emptyOutDir false",
     "cap:add:android": "cap add android",
+    "android:check": "pnpm typecheck && pnpm build:android:web",
     "cap:sync:android": "pnpm build:android:web && cap sync android",
     "android:debug": "pnpm cap:sync:android && cd android && gradlew.bat assembleDebug",
     "start": "electron-vite preview",

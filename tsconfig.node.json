@@ -5,9 +5,10 @@
     "vitest.config.*",
     "electron/main/**/*",
     "electron/preload/**/*",
+    "electron/preload/*.d.ts",
     "scripts/**/*",
     "platform/android/vite.config.ts",
-    "platform/android/vite-plugin.ts",
+    "platform/android/bridge.ts",
     "shared/**/*"
   ],
   "compilerOptions": {

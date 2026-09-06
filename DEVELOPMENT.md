@@ -7,30 +7,24 @@
 
 ## 1. 上游架构速览（只看结论）
 
-| 层 | 位置 | 说明 |
-|---|---|---|
-| 前端 UI + 播放调度 | `src/`（约 368 文件，`Vue3 + Vite + Pinia + UnoCSS + Pixi`） | 页面 165 个 SFC，`src/core/player/index.ts` 只是调度器，不直接碰硬件 |
-| 真后端 | `electron/main/`（约 275 文件） | 网易/酷狗/QQ 逆向 API、下载/扫描/缓存、`better-sqlite3`、`hono + ws` 本地服务、`BrowserWindow` 多窗口 |
-| 原生性能层 | `native/`（6 个 Rust napi crate） | `audio-engine`（FFmpeg 解码 + cpal 输出 + 变速/变调/10段EQ/响度归一/rustfft 频谱/封面提取）、`media-ctrl`（Win SMTC / MPRIS / NowPlaying + Discord）、`audio-capture`、`taskbar-lyric`、`taskbar-thumbnail`（纯 Win）、`opencc`（纯算法） |
-| 契约层 | `electron/preload/index.d.ts` + `shared/types/*` + `native/audio-engine/index.d.ts` | 前端只认 `window.api`，不直接认 Electron；JS 只认 `AudioPlayer` 签名，不认 Rust 内部 |
+| 层                 | 位置                                                                                | 说明                                                                                                                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 前端 UI + 播放调度 | `src/`（约 368 文件，`Vue3 + Vite + Pinia + UnoCSS + Pixi`）                        | 页面 165 个 SFC，`src/core/player/index.ts` 只是调度器，不直接碰硬件                                                                                                                                                                      |
+| 真后端             | `electron/main/`（约 275 文件）                                                     | 网易/酷狗/QQ 逆向 API、下载/扫描/缓存、`better-sqlite3`、`hono + ws` 本地服务、`BrowserWindow` 多窗口                                                                                                                                     |
+| 原生性能层         | `native/`（6 个 Rust napi crate）                                                   | `audio-engine`（FFmpeg 解码 + cpal 输出 + 变速/变调/10段EQ/响度归一/rustfft 频谱/封面提取）、`media-ctrl`（Win SMTC / MPRIS / NowPlaying + Discord）、`audio-capture`、`taskbar-lyric`、`taskbar-thumbnail`（纯 Win）、`opencc`（纯算法） |
+| 契约层             | `electron/preload/index.d.ts` + `shared/types/*` + `native/audio-engine/index.d.ts` | 前端只认 `window.api`，不直接认 Electron；JS 只认 `AudioPlayer` 签名，不认 Rust 内部                                                                                                                                                      |
 
 ---
 
 ## 2. 总体路线（定死，不摇摆）
 
-1. **套壳，不重写**：`Capacitor 7` 吃现有 `electron-vite build` 产出的 `dist/`，不做 Flutter/RN/Kotlin 全量重写。
+1. **套壳，不重写**：`Capacitor 7` 使用 Android 专用 renderer 构建，桌面端继续使用现有 `electron-vite` 构建；不做 Flutter/RN/Kotlin 全量重写。
 2. **冻结两个 ABI**：
-   - `window.api`（`preload/index.d.ts` 形状）—— `src/` 零改动，Android 端用 Kotlin + Capacitor 实现一套签名完全相同的 `window.api`。
-   - `AudioPlayer`（`native/audio-engine/index.d.ts`：`load/play/pause/seek/setVolume/getFftData/...`）—— Rust 只换后端，不换签名。
-3. **只加法，不改法**：上游文件不直接改，全靠补丁去掉不要的功能（见 §5）。所有 Android 代码只放在新增目录：
-   ```
-   /android/
-   /platform/android/
-   /capacitor.config.ts
-   /patches/
-   ```
-   检查标准：`git diff upstream/dev -- src electron shared` 为空，裁剪只体现在 `patches/`（工作区打补丁，不提交）。
-4. **Electron 主进程拆两半**：
+   - `window.api`（以现有 preload 契约为基准）—— Android 初始化、平台分支和必要调用方适配直接提交到源代码，保持桌面平台默认路径不变。
+   - `AudioPlayer`（`native/audio-engine/index.d.ts`：`load/play/pause/seek/setVolume/getFftData/...`）—— Rust 允许按 target 切换输出后端，不改变 JS 契约。
+3. **源代码直接适配**：Android 平台差异直接修改对应的 `src/`、`electron/`、`shared/`、`native/` 或新增 `platform/android/`、`android/` 文件；通过 `import.meta.env.VITE_PLATFORM`、`cfg(target_os = "android")`、平台抽象和 Capacitor Plugin 隔离桌面行为。禁止把日常构建建立在未提交的 patch 或工作区状态上。
+4. **保留可合并性**：Android 分支的改动必须小范围、可定位、优先添加平台分支；通用逻辑先抽象再复用。同步上游时使用 `merge-upstream-xxx` 临时分支，解决并验证冲突后再合回 `android`。
+5. **Electron 主进程拆两半**：
    - 纯 TS 可跑（`apis/netease|kugou|qqmusic`、歌词解析、封面、插件逻辑）：直接打进 WebView 跑。插件不要沙箱，直跑，只装可信源。
    - 碰 Node 的（`fs / sqlite / 原生 / 窗口`）：下沉到 Capacitor Plugin（Kotlin）实现。
 
@@ -38,15 +32,15 @@
 
 ## 3. 功能取舍（“尽量”，不是“必须”）
 
-### 3.1 用补丁去掉（代码不动，构建时打补丁，见 §5）
+### 3.1 Android 源代码分支裁剪
 
-| 功能 | 原因 |
-|---|---|
-| 灵动岛 `dynamicIsland` | 安卓重做悬浮动画+手势成本高，价值低 | `disable-dynamic-island.patch` |
-| MCP `services/mcp/* + ipc/mcp.ts + @modelcontextprotocol/sdk` | 桌面 AI 玩具，后台常驻耗电 + 商店审核风险 | `disable-mcp.patch` |
-| 桌面壳：托盘/缩略图/任务栏歌词/全局快捷键/多窗口创建/`showInExplorer`等 `system.*`/`updater`/`orpheus`冷启动 | 无对应安卓概念，只能用通知/MediaSession/DeepLink 重做 | `disable-desktop-chrome.patch` |
-| 系统内录（`audio-capture` 内录一路） | 安卓取不到任意系统声，只留麦克风识曲 | `disable-loopback-capture.patch` |
-| 本地曲库扫描（暂缓） | 分区存储 + 后台被杀，第一版先用在线/流媒体跑通，以后单独适配 | `disable-local-scan.patch`（恢复=删此补丁） |
+| 功能                                                          | 原因                                                                         | 实现位置                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------- |
+| 灵动岛 `dynamicIsland`                                        | Android 暂不复用桌面悬浮动画，保留 API 兼容并在 Android 源代码分支中关闭入口 | `src/` / `platform/android/`     |
+| MCP `services/mcp/* + ipc/mcp.ts`                             | Android 首批不启用桌面 AI 常驻服务                                           | `electron/` / `src/`             |
+| 桌面壳：托盘/缩略图/任务栏歌词/多窗口创建/`showInExplorer` 等 | 由 Android Activity、通知、MediaSession 和系统分享能力替代                   | `src/` / `android/`              |
+| 系统内录（`audio-capture` 内录一路）                          | Android 首批只保留麦克风识曲                                                 | `native/` / `android/`           |
+| 本地曲库扫描（暂缓）                                          | 首版先用在线/流媒体跑通，后续接入 MediaStore/SAF                             | `platform/android/` 与源代码分支 |
 
 ### 3.2 必须保留（砍了会被骂）
 
@@ -54,14 +48,14 @@
 
 ### 3.3 桌面→安卓映射
 
-| 桌面 | 安卓 |
-|---|---|
+| 桌面                            | 安卓                                                                          |
+| ------------------------------- | ----------------------------------------------------------------------------- |
 | `BrowserWindow` 桌面歌词/主窗口 | 同一 `.vue` 路由，悬浮窗（`SYSTEM_ALERT_WINDOW`）装 `WebView` / 主 `Activity` |
-| 托盘/缩略图按钮 | 前台 `Service + MediaSession + 通知栏封面/按钮` |
-| 全局快捷键 | 耳机线控/蓝牙/`MediaSession` 回调进同一套 `hotkey registry` |
-| `better-sqlite3` | `@capacitor-community/sqlite`，`schema` + `queries.ts` 原样用，只换 driver |
-| 下载/文件关联 | `MediaStore + SAF`，路径转换收敛到 `platform/android/paths.ts` |
-| `Hono + ws` 本地服务 | 前台 `Service` 里跑，代码不动 |
+| 托盘/缩略图按钮                 | 前台 `Service + MediaSession + 通知栏封面/按钮`                               |
+| 全局快捷键                      | 耳机线控/蓝牙/`MediaSession` 回调进同一套 `hotkey registry`                   |
+| `better-sqlite3`                | `@capacitor-community/sqlite`，`schema` + `queries.ts` 原样用，只换 driver    |
+| 下载/文件关联                   | `MediaStore + SAF`，路径转换收敛到 `platform/android/paths.ts`                |
+| `Hono + ws` 本地服务            | 前台 `Service` 里跑，代码不动                                                 |
 
 ---
 
@@ -81,65 +75,33 @@
 
 ---
 
-## 5. 补丁清单
+## 5. Android 源代码适配清单
 
-> 原则：上游文件一个都不删。裁剪全放在 `patches/` 里，构建前 `git apply` 打上即可。合上游时工作区永远是干净的，冲突只会落在补丁刷新那一步（见 §6）。
+> 原则：平台差异直接提交在对应源文件中，不依赖未提交的补丁。每项 Android 裁剪都必须保留桌面默认分支，并通过显式平台判断或 target 条件隔离。
 
-### 5.1 灵动岛（`patches/disable-dynamic-island.patch`）
+### 5.1 平台入口与窗口能力
 
-补丁覆盖的文件（工作区删除/短路，git 不提交）：
+Android 平台入口直接位于 `src/main.ts`，调用 `platform/android/bridge.ts` 安装兼容 API；不通过 HTML 注入脚本，也不依赖构建前删除文件。桌面窗口相关能力在 `src/`、`electron/` 中使用平台判断保留桌面分支，Android 分支改为 Activity、通知、MediaSession 或 no-op。
 
-```
-electron/main/window/dynamicIsland.ts
-windows/dynamic-island/   # App.vue + composables/useDragWindow.ts 整个目录
-```
+### 5.2 MCP
 
-同一补丁内顺带改的行：
+MCP 服务在 Android 平台不启动，相关设置入口和 API 保持类型兼容。实现时直接在 `electron/main/`、`src/` 的服务注册入口加入平台分支，桌面平台继续执行原逻辑；不删除 MCP 源文件和依赖。
 
-- `electron/main/window/index.ts`：删 `createDynamicIslandWindow` 整段 `export{...}` + `restoreLyricWindows` 里 `if (dynamicIsland.visible)` 一行
-- `electron/main/core/index.ts`：删 `getDynamicIslandWindow` import + `namedWindows` 里 `["dynamic-island", ...]` 一行
-- `electron/main/ipc/window.ts`：删 `dynamicIsland` 相关 `handle`
-- `electron/preload/index.ts` + `index.d.ts`：删 `DynamicIslandApi / dynamicIsland:`
-- `shared/types/window.ts`：删 `DynamicIslandApi` 定义
-- `electron.vite.config.ts`：删 `"dynamic-island": resolve(...index.html)` 一行
-- 零碎分支（`tray.ts / ipc/config.ts / utils/i18n.ts / shared/defaults/hotkeys.ts / shared/defaults/settings.ts / shared/types/hotkey.ts / shared/types/settings.ts / src/stores/settings.ts / src/core/hotkey/registry.ts / src/settings/categories/externalLyric.ts / src/settings/virtualBindings.ts / src/components/settings/custom/FontConfig.vue`）：删 `dynamicIsland` 分支
+### 5.3 桌面壳 Android 分支
 
-### 5.2 MCP（`patches/disable-mcp.patch`）
+Android 源代码分支直接短路或替换：托盘、缩略图、任务栏歌词窗口创建、桌面多窗口、`system:*` 中的展示文件/打开日志/重启/开发者工具、自更新、协议冷启动与外部文件拖拽；对应 Android 能力由 Activity、通知、MediaSession 和系统分享入口提供。
 
-补丁覆盖的文件（工作区删除/短路，git 不提交）：
+### 5.4 本地扫描 Android 分支
 
-```
-electron/main/services/mcp/   # cache.ts endpoint.ts http.ts injector.ts onlineSearch.ts server.ts
-electron/main/ipc/mcp.ts
-src/components/settings/custom/McpConfigDialog.vue
-src/components/settings/custom/McpStatusCard.vue
-```
+Android 源代码分支短路扫描入口、`library` 扫描 IPC 和桌面目录选择器；数据库表结构保留，后续通过 MediaStore/SAF 实现扫描。
 
-同一补丁内顺带改的行：
+### 5.5 系统内录 Android 分支
 
-- `electron/main/core/index.ts`：短路 `startMcpServer / stopMcpServer` 调用 + import
-- `electron/main/ipc/index.ts`：短路 `registerMcpIpc`
-- `electron/preload/index.ts` + `index.d.ts`：删 `mcp`
-- `shared/types/settings.ts` + `shared/defaults/settings.ts`：短路 `mcp` 字段
-- `src/settings/categories/aiIntegration.ts`：短路 `mcp` 段落
-- `docs/.vitepress/config.ts`：短路 `mcp` 文档入口
-- `package.json`：短路 `"@modelcontextprotocol/sdk"` 依赖（工作区改动，不提交 lockfile）
+Android 源代码分支只短路内录一路，保留麦克风识曲：`recognition/session.ts` 中走内录会话的分支按平台跳过，`recognition:submitPcm`（麦克风 PCM）保留。
 
-### 5.3 桌面壳（`patches/disable-desktop-chrome.patch`）
+### 5.6 源代码维护
 
-短路（工作区改动，git 不提交）：托盘、缩略图、任务栏歌词窗口创建、全局快捷键注册、`system:*` 中的展示文件/打开日志/重启/开发者工具、自更新、协议冷启动与外部文件拖拽。对应设置入口一并藏掉。
-
-### 5.4 本地扫描暂缓（`patches/disable-local-scan.patch`）
-
-短路扫描入口 + `library` 扫描 IPC + 扫描按钮/目录设置。数据库表结构不动，以后适配 MediaStore/SAF 时删掉本补丁即恢复。
-
-### 5.5 系统内录（`patches/disable-loopback-capture.patch`）
-
-只短路内录一路，保留麦克风识曲：`recognition/session.ts` 中走内录会话的分支短路，`recognition:submitPcm`（麦克风 PCM）保留。
-
-### 5.6 补丁维护
-
-构建前先检查再打上：`git apply --check patches/*.patch`，通过后 `git apply patches/*.patch`。改补丁内容时先 `git apply -R` 撤下，改完再导出。上游改了被补丁覆盖的行时 `apply` 会报失败，在 `merge-upstream-xxx` 分支上修好后重新导出补丁即可。
+平台分支必须使用小范围、可复用的条件判断或抽象，禁止通过构建脚本删除源文件或依赖未提交的工作区状态。上游改动涉及同一文件时，在 `merge-upstream-xxx` 分支中先合并通用逻辑，再恢复 Android 分支；合并后运行完整 Android 验证链路。
 
 ## 6. Git 工作流（含合并分支）
 
@@ -151,7 +113,7 @@ merge-upstream-xxx    ← 炮灰分支，专门解决冲突
 android               ← 平时开发分支，只合验证过的 merge 分支
 ```
 
-补丁文件（`patches/*.patch`）单独提交，和功能代码混在一起也没关系，合上游时工作区先 `git stash` 或保持干净即可。
+Android 平台源代码改动与功能代码一起提交；合并上游时要求工作区干净，避免把生成产物或临时兼容代码带入合并。
 
 每次同步（建议 2 周一次，alpha 阶段别天天追）：
 
@@ -160,11 +122,11 @@ git fetch upstream
 git checkout -b merge-upstream-0906 android
 git merge upstream/dev
 # 工作区是干净的，一般直接合上；有冲突也只在业务代码处，手动合
-# 合完验证补丁还能打上：
-git apply --check patches/*.patch && git apply patches/*.patch
-pnpm typecheck && pnpm build
-# 验证完把补丁打上的工作区改动还原（补丁只在构建时打，不提交）：
-git restore . && git clean -fd
+# 合并后验证 Android 平台分支：
+pnpm typecheck
+pnpm build:android:web
+pnpm exec cap sync android
+./gradlew -p android assembleDebug
 git checkout android
 git merge merge-upstream-0906
 git branch -d merge-upstream-0906
@@ -172,40 +134,35 @@ git branch -d merge-upstream-0906
 
 建议：`git config rerere.enabled true`，同类冲突解一次自动记住。`merge-xxx` 炸了直接删了重开，不影响 `android`。
 
-### Fork 侧一次性改动：关掉桌面构建工作流（非补丁）
+### Fork 侧 Android 工作流
 
-补丁管不了 CI（runner 读的是仓库里的 workflow 文件，`git apply` 之前就定了），所以这一步在 fork 上直接提交，一次到位：
-
-- 删 `.github/workflows/dev.yml`、`release.yml`（win/mac/linux 矩阵构建，最烧分钟数）
-- `docs.yml` 可留可删（只和文档站有关）
-- 保留 `ci.yml`（lint/typecheck）+ `test.yml`（单测），安卓照样用得上
-- 以后合上游时这两个文件报冲突，一律保持删除
-- 懒得提交也行：在 fork 的 Settings → Actions 里把对应 workflow Disable 掉，效果一样且合并不受影响
+当前只保留 `.github/workflows/android.yml`，直接执行 Android 类型检查、Web 构建、Capacitor 同步和 Debug APK 构建。上游合并发生 workflow 冲突时，保留 Android 工作流，不恢复桌面端矩阵构建。
 
 ---
 
 ## 7. 构建与验证
 
 ```bash
-# Web 产物（复用上游）
-pnpm build              # electron-vite build → dist/（Android 只取 renderer 产物，主进程/.node 不用编）
-# Android
-# Android 构建见 android/ 目录
-# capacitor sync + cargo-ndk
+# Android Web 产物
+pnpm build:android:web
+# Android 原生工程
+pnpm exec cap sync android
+./gradlew -p android assembleDebug
+# 全量类型检查
 pnpm typecheck           # node + web 双通道必须过
 ```
 
 分两阶段：
 
-- P1 跑通（先做，不做任何性能优化，默认参数出声就行）：空壳 + `window.api` shim 能进首页 → 调网易 API 播 128k mp3 → 接 SQLite + 登录态 → Rust 引擎出声（EQ/变速/FFT 默认值）。
+- P1 跑通（先做，不做任何性能优化，默认参数出声就行）：Android 源代码平台分支能进首页 → 调网易 API 播 128k mp3 → 接 SQLite + 登录态 → Rust 引擎出声（EQ/变速/FFT 默认值）。
 - P2 优化（跑通后再做）：位置推送可调间隔、FFT 降频+截断、背景模糊重写/降级、低端机档位。具体方案见讨论记录，动手前再细化。
 
 ---
 
 ## 8. 约定
 
-1. 除 §5 补丁清单外，不直接改 `src/ electron/ shared/`，要改就提上游 PR（如 `getAppCacheDir()/getPlatform()` 抽象）。
-2. 新增代码只进 `android/ platform/android/`。
+1. Android 平台适配允许直接修改必要的 `src/ electron/ shared/ native/` 源文件；必须使用显式 Android 分支或可复用抽象，桌面默认行为保持不变。
+2. 新增 Android 专属代码进入 `android/ platform/android/`；通用抽象优先放入上游可复用位置，避免重复实现。
 3. 许可证 `AGPL-3.0`：发包必须开源对应分支。
 4. 上游伪装的是 `Android15` UA（见 `kugou/core/device.ts`），协议层优先复用，不重造轮子。
 5. `AGENTS.md` / `CLAUDE.md` / 本文档为 fork 所有，合上游时一律保留我方版本。
