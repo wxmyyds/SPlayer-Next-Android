@@ -118,6 +118,25 @@ const coverCentered = computed(() => {
 const isPortrait = useMediaQuery("(orientation: portrait)");
 const stackedLayout = computed(() => isAndroid && isPortrait.value);
 
+/** 堆叠双页（参照 SPlayer-for-Android）：0 封面控制页，1 歌词频谱页 */
+const stackPage = ref(0);
+const coverPaneRef = useTemplateRef("coverPaneRef");
+const lyricPaneRef = useTemplateRef("lyricPaneRef");
+if (typeof useSwipe === "function") {
+  useSwipe(coverPaneRef, {
+    threshold: 60,
+    onSwipeEnd: (_e, direction) => {
+      if (stackedLayout.value && direction === "LEFT") stackPage.value = 1;
+    },
+  });
+  useSwipe(lyricPaneRef, {
+    threshold: 60,
+    onSwipeEnd: (_e, direction) => {
+      if (stackedLayout.value && direction === "RIGHT") stackPage.value = 0;
+    },
+  });
+}
+
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
   await player.seek(timeMs);
   if (!isPlaying.value) await player.play();
@@ -220,10 +239,10 @@ const showComments = (): void => {
         <div v-if="fullscreenCover" class="absolute inset-y-0 left-0 w-[60%]">
           <PlayerCover fullscreen />
         </div>
-        <!-- 底部频谱 -->
+        <!-- 底部频谱：堆叠时只在歌词页展示 -->
         <BottomSpectrum
           v-if="isPlayerExpanded && settings.player.enableSpectrum"
-          :show="isPlaying && immersive"
+          :show="isPlaying && immersive && (!stackedLayout || stackPage === 1)"
         />
         <!-- 顶/底栏渐变遮罩（全屏封面模式） -->
         <div
@@ -296,6 +315,8 @@ const showComments = (): void => {
           <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
           <div
             v-if="!fullscreenCover"
+            ref="coverPaneRef"
+            v-show="!stackedLayout || stackPage === 0"
             class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
@@ -329,8 +350,8 @@ const showComments = (): void => {
               </Transition>
             </div>
           </div>
-          <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制） -->
-          <template v-if="stackedLayout">
+          <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制，第一页） -->
+          <template v-if="stackedLayout && stackPage === 0">
             <div class="w-full flex flex-col gap-1 px-5 pt-3 shrink-0">
               <div class="w-full min-w-0">
                 <PlayerData align="left" simple />
@@ -462,8 +483,10 @@ const showComments = (): void => {
               </SButton>
             </div>
           </template>
-          <!-- 右侧（堆叠时为下方歌词区，文档流占满剩余高度） -->
+          <!-- 右侧（堆叠时为歌词频谱页，文档流占满剩余高度） -->
           <div
+            ref="lyricPaneRef"
+            v-show="!stackedLayout || stackPage === 1"
             class="group flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
@@ -566,6 +589,17 @@ const showComments = (): void => {
             </div>
             <!-- 歌词侧边工具栏 -->
             <LyricActions :immersive="immersive" />
+          </div>
+          <!-- 堆叠分页点 -->
+          <div v-if="stackedLayout" class="shrink-0 flex items-center justify-center gap-2 py-2">
+            <button
+              v-for="i in 2"
+              :key="i"
+              class="size-1.5 rounded-full transition-colors"
+              :class="stackPage === i - 1 ? 'bg-cover' : 'bg-cover/30'"
+              :aria-label="`page ${i}`"
+              @click="stackPage = i - 1"
+            />
           </div>
           <!-- 播放队列 -->
           <div
