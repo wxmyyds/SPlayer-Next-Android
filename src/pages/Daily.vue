@@ -8,6 +8,7 @@ import { useDataStore } from "@/stores/data";
 import { useUserStore } from "@/stores/user";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 
@@ -118,11 +119,12 @@ watch(
 <template>
   <div class="flex h-full flex-col">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pt-2 pb-3">
-      <div class="flex items-center gap-5">
+    <div class="shrink-0 pt-2 pb-3" :class="isAndroid ? 'px-3' : 'px-5'">
+      <div class="flex items-center" :class="isAndroid ? 'gap-3' : 'gap-5'">
         <!-- 日历磁贴 -->
         <div
-          class="flex size-28 shrink-0 flex-col items-center justify-center rounded-2xl border border-solid border-primary/15 bg-primary/8"
+          class="flex shrink-0 flex-col items-center justify-center rounded-2xl border border-solid border-primary/15 bg-primary/8"
+          :class="isAndroid ? 'size-20' : 'size-28'"
         >
           <template v-if="selectedDay">
             <span class="text-xs text-on-surface-variant/60">
@@ -138,10 +140,13 @@ watch(
           <IconLucideCalendarDays v-else class="size-8 text-primary/40" />
         </div>
         <!-- 信息 -->
-        <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <div class="flex min-w-0 flex-1 flex-col" :class="isAndroid ? 'gap-1' : 'gap-2'">
           <!-- 标题 -->
           <div class="flex items-baseline gap-3">
-            <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("daily.title") }}</h1>
+            <h1
+              class="font-bold text-on-surface text-balance"
+              :class="isAndroid ? 'text-xl' : 'text-3xl'"
+            >{{ t("daily.title") }}</h1>
             <span
               v-if="selectedDay && selectedDay.tracks.length > 0"
               class="flex items-center gap-1 text-sm text-on-surface-variant/50"
@@ -159,12 +164,16 @@ watch(
             }}
           </p>
           <!-- 操作行 -->
-          <div class="mt-1 flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
+          <div
+            class="mt-1 flex items-center justify-between"
+            :class="isAndroid ? 'flex-wrap gap-2' : 'gap-3'"
+          >
+            <div class="flex items-center" :class="isAndroid ? 'gap-2' : 'gap-2'">
               <SButton
                 type="primary"
                 variant="secondary"
                 round
+                :size="isAndroid ? 'small' : 'medium'"
                 :disabled="!selectedDay || selectedDay.tracks.length === 0"
                 @click="handlePlayAll"
               >
@@ -188,6 +197,7 @@ watch(
               :model-value="selectedKey"
               :options="dayOptions"
               align="end"
+              :class="isAndroid ? 'min-w-0 max-w-full' : ''"
               @update:model-value="selectedKey = String($event)"
             >
               <template #trigger="{ selected }">

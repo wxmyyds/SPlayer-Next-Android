@@ -6,6 +6,7 @@ import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { useHistoryStore } from "@/stores/history";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 
 const { t } = useI18n();
@@ -52,10 +53,13 @@ onMounted(() => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-center justify-between mt-2 mb-4">
         <div class="flex items-baseline gap-4">
-          <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("history.title") }}</h1>
+          <h1
+            class="font-bold text-on-surface text-balance"
+            :class="isAndroid ? 'text-xl' : 'text-3xl'"
+          >{{ t("history.title") }}</h1>
           <span
             v-if="history.tracks.length > 0"
             class="text-sm text-on-surface-variant/50 flex items-center gap-1"
@@ -65,12 +69,16 @@ onMounted(() => {
           </span>
         </div>
       </div>
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
+      <div
+        class="flex items-center justify-between"
+        :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'"
+      >
+        <div class="flex items-center" :class="isAndroid ? 'gap-2' : 'gap-3'">
           <SButton
             type="primary"
             variant="secondary"
             round
+            :size="isAndroid ? 'small' : 'medium'"
             :disabled="history.tracks.length === 0"
             @click="handlePlayAll"
           >
@@ -89,13 +97,13 @@ onMounted(() => {
             </template>
           </SDropdownMenu>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center" :class="isAndroid ? 'flex-1' : 'gap-3'">
           <SInput
             v-model="searchQuery"
             :placeholder="t('common.search')"
             clearable
             round
-            class="w-40 focus-within:w-56"
+            :class="isAndroid ? 'min-w-0 flex-1' : 'w-40 focus-within:w-56'"
             data-search-input
           >
             <template #prefix>
