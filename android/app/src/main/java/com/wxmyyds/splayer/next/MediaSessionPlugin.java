@@ -342,6 +342,13 @@ public class MediaSessionPlugin extends Plugin {
     }
 
     /** 经 mediaKey 通道通知 JS 执行播放/暂停（与通知栏按键同一路径） */
+    private void emitMediaKey(String action) {
+        Log.i(TAG, "emit mediaKey " + action);
+        JSObject data = new JSObject();
+        data.put("action", action);
+        data.put("position", -1);
+        notifyListeners("mediaKey", data);
+    }
 
     private void registerNoisyReceiver() {
         if (noisyRegistered) return;
