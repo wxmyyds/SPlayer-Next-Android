@@ -255,13 +255,13 @@ onBeforeUnmount(() => {
           :src="collection.cover"
           :alt="collection.title"
           class="rounded-xl shrink-0 transition-[width,height] duration-300"
-          :class="collapsed ? 'size-20' : isAndroid ? 'size-28' : 'size-40'"
+          :class="collapsed ? 'size-20' : isAndroid ? 'size-24' : 'size-40'"
         />
         <!-- 信息 -->
         <div class="flex-1 flex flex-col min-w-0">
           <div
             class="flex flex-col transition-[gap] duration-300"
-            :class="collapsed ? 'gap-0.5' : 'gap-2'"
+            :class="collapsed ? 'gap-0.5' : isAndroid ? 'gap-1' : 'gap-2'"
           >
             <div class="flex min-w-0 items-center gap-3">
               <h1
@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
                     <IconLucideHourglass class="shrink-0" />
                     {{ t("collection.totalDuration", { time: totalDuration }) }}
                   </span>
-                  <span v-if="updateTimeText" class="flex items-center gap-1 shrink-0">
+                  <span v-if="updateTimeText && !isAndroid" class="flex items-center gap-1 shrink-0">
                     <IconLucideCalendar class="shrink-0" />
                     {{ updateTimeText }}
                   </span>
@@ -352,6 +352,7 @@ onBeforeUnmount(() => {
                 type="primary"
                 variant="secondary"
                 round
+                :size="isAndroid ? 'small' : 'medium'"
                 :disabled="collection.tracks.length === 0"
                 @click="handlePlayAll"
               >
@@ -364,6 +365,7 @@ onBeforeUnmount(() => {
                 v-if="subscribe.available.value"
                 variant="secondary"
                 round
+                :size="isAndroid ? 'small' : 'medium'"
                 :disabled="subscribe.busy.value"
                 @click="subscribe.toggle"
               >
