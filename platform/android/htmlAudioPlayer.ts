@@ -14,6 +14,34 @@ import type {
   PlayerEvent,
   PlayerStatus,
 } from "@shared/types/player";
+import { registerPlugin, WebPlugin } from "@capacitor/core";
+
+/** 原生系统播放桥（MediaSessionPlugin）：元数据/状态下发 + 通知栏反控事件 */
+interface MediaBridgePlugin {
+  updateState: (options: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    artworkUrl?: string;
+    playing?: boolean;
+    positionMs?: number;
+    durationMs?: number;
+    stopped?: boolean;
+  }) => Promise<void>;
+  addListener: (
+    event: "mediaKey",
+    callback: (payload: { action: string; position: number }) => void,
+  ) => Promise<{ remove: () => void }>;
+}
+
+/** 非原生环境回退：空实现（开发/测试用） */
+class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
+  async updateState(): Promise<void> {}
+}
+
+const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
+  web: () => new MediaBridgeWeb(),
+});
 
 const ok = <T,>(data?: T): IpcResponse<T> => ({
   success: true,
@@ -36,23 +64,22 @@ const emit = (event: PlayerEvent): void => {
 
 let audio: HTMLAudioElement | null = null;
 let lastPositionPush = 0;
-let mediaSessionWired = false;
+let mediaBridgeWired = false;
 
-/** 系统媒体会话：接通后通知栏/锁屏/蓝牙可感知播放并反控（Chromium WebView 原生桥接） */
-const wireMediaSession = (): void => {
-  if (mediaSessionWired) return;
+/** 系统播放桥接线：通知栏/锁屏反控 → 触发同名播放事件（渲染层零改动） */
+const wireMediaBridge = (): void => {
+  if (mediaBridgeWired) return;
+  mediaBridgeWired = true;
   try {
-    const ms = navigator.mediaSession;
-    if (!ms || typeof ms.setActionHandler !== "function") return;
-    mediaSessionWired = true;
-    ms.setActionHandler("play", () => emit({ type: "play" }));
-    ms.setActionHandler("pause", () => emit({ type: "pause" }));
-    ms.setActionHandler("previoustrack", () => emit({ type: "prev" }));
-    ms.setActionHandler("nexttrack", () => emit({ type: "next" }));
-    ms.setActionHandler("seekto", (details) => {
-      const el = audio;
-      if (el && typeof details.seekTime === "number") {
-        el.currentTime = Math.max(0, details.seekTime);
+    const addListener = (MediaBridge as Partial<MediaBridgePlugin>).addListener;
+    void addListener?.call(MediaBridge, "mediaKey", (payload) => {
+      const action = payload.action;
+      if (action === "play") emit({ type: "play" });
+      else if (action === "pause") emit({ type: "pause" });
+      else if (action === "next") emit({ type: "next" });
+      else if (action === "prev") emit({ type: "prev" });
+      else if (action === "seekto" && typeof payload.position === "number" && audio) {
+        audio.currentTime = Math.max(0, payload.position / 1000);
       }
     });
   } catch {
@@ -62,21 +89,13 @@ const wireMediaSession = (): void => {
 
 /** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
 const publishMetadata = (meta?: { title?: string; artists?: Array<{ name?: string }>; album?: { name?: string }; cover?: string; coverOriginal?: string }): void => {
+  wireMediaBridge();
   try {
-    const ms = navigator.mediaSession;
-    if (!ms || typeof MediaMetadata === "undefined") return;
-    if (!meta) {
-      ms.metadata = null;
-      return;
-    }
-    const artwork: Array<{ src: string; sizes: string; type: string }> = [];
-    if (meta.coverOriginal) artwork.push({ src: meta.coverOriginal, sizes: "512x512", type: "image/jpeg" });
-    if (meta.cover && meta.cover !== meta.coverOriginal) artwork.push({ src: meta.cover, sizes: "300x300", type: "image/jpeg" });
-    ms.metadata = new MediaMetadata({
-      title: meta.title ?? "",
-      artist: (meta.artists ?? []).map((a) => a.name).filter(Boolean).join(" / "),
-      album: meta.album?.name ?? "",
-      artwork,
+    void MediaBridge.updateState({
+      title: meta?.title ?? "",
+      artist: (meta?.artists ?? []).map((a) => a.name).filter(Boolean).join(" / "),
+      album: meta?.album?.name ?? "",
+      artworkUrl: meta?.coverOriginal ?? meta?.cover,
     });
   } catch {
     // 忽略
@@ -86,17 +105,12 @@ const publishMetadata = (meta?: { title?: string; artists?: Array<{ name?: strin
 /** 同步播放状态与进度到系统 */
 const publishState = (state: "playing" | "paused" | "none", positionMs?: number, durationMs?: number): void => {
   try {
-    const ms = navigator.mediaSession;
-    if (!ms) return;
-    ms.playbackState = state;
-    if (
-      positionMs !== undefined &&
-      durationMs !== undefined &&
-      durationMs > 0 &&
-      typeof ms.setPositionState === "function"
-    ) {
-      ms.setPositionState({ duration: durationMs / 1000, position: Math.min(positionMs, durationMs) / 1000 });
-    }
+    void MediaBridge.updateState({
+      playing: state === "playing",
+      positionMs,
+      durationMs,
+      stopped: state === "none" || undefined,
+    });
   } catch {
     // 忽略
   }
