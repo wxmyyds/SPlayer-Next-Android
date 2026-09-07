@@ -283,7 +283,7 @@ const showComments = (): void => {
             class="absolute flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
-                ? 'top-0 inset-x-0 flex items-start justify-center px-4 pt-6'
+                ? 'top-0 inset-x-0 flex items-start justify-center px-4 pt-10'
                 : 'inset-y-0 left-0 flex items-center justify-center px-12'
             "
             :style="
@@ -297,7 +297,7 @@ const showComments = (): void => {
           >
             <div
               class="relative"
-              :class="stackedLayout ? 'w-[min(42vw,20vh)]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
+              :class="stackedLayout ? 'w-[min(44vw,20vh)]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
             >
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id">
@@ -314,7 +314,7 @@ const showComments = (): void => {
             class="group absolute flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
-              stackedLayout ? 'inset-x-0 bottom-0 top-[34%] px-4' : 'inset-y-0 right-0 pr-20',
+              stackedLayout ? 'inset-x-0 bottom-0 top-[38%] px-4' : 'inset-y-0 right-0 pr-20',
             ]"
             :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
           >
