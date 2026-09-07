@@ -40,6 +40,7 @@ import {
   openVendorLoginWeb,
   setVendorCookie,
 } from "./vendor/dispatch";
+import { fetchWithProxy } from "./vendor/shim/proxy";
 
 const unsupported = "Android bridge capability is not implemented";
 const noopUnsubscribe = (..._args: unknown[]): (() => void) => () => {};
@@ -131,7 +132,18 @@ const system: AndroidSystemApi = {
   openSettings: async (_category?: string, _highlight?: string) => {},
   onOpenSettings: noopUnsubscribe,
   listFonts: async () => [],
-  fetchRemoteBytes: async (_url: string) => fail<Uint8Array | null>(),
+  fetchRemoteBytes: async (url: string) => {
+    // 封面取色/模糊背景等要原始字节：走原生 HTTP（桌面主进程同款语义）
+    try {
+      const res = await fetchWithProxy(url);
+      if (!res.ok) return { success: false as const, error: `HTTP ${res.status}` };
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.length === 0) return { success: false as const, error: "empty body" };
+      return ok<Uint8Array | null>(bytes);
+    } catch (err) {
+      return { success: false as const, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
   saveFile: async (_data: ArrayBuffer, _fileName: string) => ({
     success: false,
     error: unsupported,
