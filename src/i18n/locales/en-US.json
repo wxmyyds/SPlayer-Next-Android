@@ -202,6 +202,8 @@
     "cloud": "My Cloud",
     "streaming": "Media Sources",
     "stats": "Stats",
+    "tabHistory": "History",
+    "tabFavorites": "Favorites",
     "reload": "Reload",
     "devtools": "Developer Tools",
     "globalSettings": "Global Settings",

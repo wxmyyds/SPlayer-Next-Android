@@ -190,6 +190,8 @@
     "cloud": "我的云盘",
     "streaming": "媒体源",
     "stats": "统计",
+    "tabHistory": "历史",
+    "tabFavorites": "收藏",
     "reload": "热重载",
     "devtools": "开发者工具",
     "globalSettings": "全局设置",

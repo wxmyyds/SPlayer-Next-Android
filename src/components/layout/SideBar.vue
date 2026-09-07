@@ -4,7 +4,7 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import type { ContentScope } from "@/types/collection";
 import { SIDEBAR_GROUP_MY_PLAYLISTS, SIDEBAR_GROUP_SUBSCRIBED } from "@/types/settings";
-import { SIDEBAR_NAV_META, applySavedOrder } from "@/components/layout/sidebarNav";
+import { BOTTOM_TAB_KEYS, SIDEBAR_NAV_META, applySavedOrder } from "@/components/layout/sidebarNav";
 import { useSettingsStore } from "@/stores/settings";
 import { useStatusStore } from "@/stores/status";
 import { isAndroid } from "@/utils/platform";
@@ -187,6 +187,8 @@ const navItems = computed<SMenuItem[]>(() => {
       if (hidden.has(key)) continue;
       const entry = SIDEBAR_NAV_META[key];
       if (!entry) continue;
+      // Android：首页/统计/历史/收藏已迁至底部 Tab 栏，抽屉不再展示
+      if (isAndroid && BOTTOM_TAB_KEYS.has(key)) continue;
       if (key === "/download" && !systemSettings.download.enabled) continue;
       if (key === "/streaming" && !systemSettings.streaming.enabled) continue;
       if (key === "/stats" && !appearance.showStatsInSidebar) continue;

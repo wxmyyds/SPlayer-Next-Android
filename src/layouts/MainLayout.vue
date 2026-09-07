@@ -84,9 +84,14 @@ const sidebarClass = computed(() => {
 
 /** 主界面底部边距 */
 const mainMarginClass = computed(() => {
+  // Android：底部 Tab 栏常驻；有曲目时播放栏再叠加其上（7.5rem）
+  if (isAndroid) {
+    return showPlayerBar.value
+      ? "mb-[calc(11rem+env(safe-area-inset-bottom))]"
+      : "mb-[calc(3.5rem+env(safe-area-inset-bottom))]";
+  }
   if (!showPlayerBar.value || appearance.layoutMode === "floating") return "";
-  // Android 下播放栏叠加底部手势安全区，主内容同步下移（播放栏含 56px 封面行 + 控件行）
-  return isAndroid ? "mb-[calc(7.5rem+env(safe-area-inset-bottom))]" : "mb-20";
+  return "mb-20";
 });
 
 /** 顶栏样式：Android 下避开状态栏安全区 */
@@ -114,17 +119,17 @@ const asideClass = computed(() => {
 
 /** 外层播放条样式 */
 const playerBarWrapperClass = computed(() => {
-  const base = "fixed bottom-0 z-50 transition-[left] duration-300 pointer-events-none";
-  // Android 下侧边栏为覆盖式抽屉，播放栏始终全宽
-  if (isAndroid) return `${base} left-0 right-0`;
+  const base = "fixed z-50 transition-[left] duration-300 pointer-events-none";
+  // Android：侧边栏为覆盖式抽屉，播放栏全宽，底边让位给常驻 Tab 栏
+  if (isAndroid) return `${base} bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0`;
   const collapsed = appearance.sidebarCollapsed;
   switch (appearance.layoutMode) {
     case "sidebar-full":
-      return `${base} ${collapsed ? "left-16" : "left-60"} right-0`;
+      return `${base} bottom-0 ${collapsed ? "left-16" : "left-60"} right-0`;
     case "floating":
-      return `${base} ${collapsed ? "left-[76px]" : "left-[252px]"} right-0 px-4 pb-6`;
+      return `${base} bottom-0 ${collapsed ? "left-[76px]" : "left-[252px]"} right-0 px-4 pb-6`;
     default:
-      return `${base} left-0 right-0`;
+      return `${base} bottom-0 left-0 right-0`;
   }
 });
 
@@ -132,12 +137,12 @@ const playerBarWrapperClass = computed(() => {
 const playerBarInnerClass = computed(() => {
   // 禁用底部播放栏交互
   const base = isPlayerExpanded.value ? "pointer-events-none" : "pointer-events-auto";
-  const safe = isAndroid ? " pb-[env(safe-area-inset-bottom)]" : "";
   switch (appearance.layoutMode) {
     case "floating":
-      return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10${safe}`;
+      return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10`;
     default:
-      return `${base} ${isAndroid ? "h-30" : "h-20"} bg-surface-panel border-t border-t-solid border-t-primary/10${safe}`;
+      // 底部安全区由 Android 的 Tab 栏承担，播放栏不再重复避让
+      return `${base} ${isAndroid ? "h-30" : "h-20"} bg-surface-panel border-t border-t-solid border-t-primary/10`;
   }
 });
 </script>
@@ -192,6 +197,9 @@ const playerBarInnerClass = computed(() => {
       </footer>
     </div>
   </Transition>
+
+  <!-- Android 底部 Tab 栏 -->
+  <BottomTabBar v-if="isAndroid" />
 
   <!-- Toast -->
   <SToast :max="1" />

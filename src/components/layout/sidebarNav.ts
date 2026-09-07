@@ -48,6 +48,22 @@ export const SIDEBAR_NAV_META: Record<string, SidebarNavEntry> = Object.fromEntr
   SIDEBAR_NAV_ENTRIES.map((entry) => [entry.key, entry]),
 );
 
+/** Android 底部 Tab 栏项：由侧边栏迁入，标签用 tab 专属短文案 */
+export const BOTTOM_TAB_ENTRIES: SidebarNavEntry[] = [
+  { key: "/", labelKey: "nav.home", icon: IconLucideHome, hideable: false },
+  { key: "/stats", labelKey: "nav.stats", icon: IconLucideChartPie, hideable: false },
+  { key: "/history", labelKey: "nav.tabHistory", icon: IconLucideHistory, hideable: false },
+  {
+    key: "/favorites",
+    labelKey: "nav.tabFavorites",
+    icon: IconLucideStar,
+    hideable: false,
+  },
+];
+
+/** 底部 Tab 项 key 集合（Android 抽屉据此过滤） */
+export const BOTTOM_TAB_KEYS = new Set(BOTTOM_TAB_ENTRIES.map((entry) => entry.key));
+
 /**
  * 按存档顺序重排列表：存档中不存在的项排在最前
  * 其余项按存档顺序跟随；空存档返回原列表
