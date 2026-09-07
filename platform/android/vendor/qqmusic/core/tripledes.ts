@@ -3,8 +3,8 @@
  * 移植自 LDDC 项目: https://github.com/chenmozhijin/LDDC
  * 原始代码: LDDC/core/decryptor/tripledes.py
  *
- * 上游 dev 位于 electron/main/apis/qqmusic/core/tripledes.ts，
- * Android vendor 用纯 JS 移植，零 node 依赖。
+ * 上游 dev 位于 electron/main/apis/qqmusic/core/tripledes.ts，此处逐字保留（零 node 依赖，
+ * 位序约定与 QQ QRC 加密端 bug 兼容，勿改写为「标准」DES 实现）。
  */
 
 const ENCRYPT = 1;
@@ -149,83 +149,176 @@ const initialPermutation = (inputData: Uint8Array): [number, number] => {
 };
 
 const inversePermutation = (s0: number, s1: number): Uint8Array => {
-  const result = new Uint8Array(8);
   const data = new Uint8Array(8);
-  for (let i = 0; i < 32; i++) {
-    data[Math.floor(i / 8)] |= bitnumIntr(s0, i, 7 - (i % 8));
-    data[4 + Math.floor(i / 8)] |= bitnumIntr(s1, i, 7 - (i % 8));
-  }
-  result[0] = data[7];
-  result[1] = data[6];
-  result[2] = data[5];
-  result[3] = data[4];
-  result[4] = data[3];
-  result[5] = data[2];
-  result[6] = data[1];
-  result[7] = data[0];
-  return result;
+
+  data[3] =
+    bitnumIntr(s1, 7, 7) |
+    bitnumIntr(s0, 7, 6) |
+    bitnumIntr(s1, 15, 5) |
+    bitnumIntr(s0, 15, 4) |
+    bitnumIntr(s1, 23, 3) |
+    bitnumIntr(s0, 23, 2) |
+    bitnumIntr(s1, 31, 1) |
+    bitnumIntr(s0, 31, 0);
+
+  data[2] =
+    bitnumIntr(s1, 6, 7) |
+    bitnumIntr(s0, 6, 6) |
+    bitnumIntr(s1, 14, 5) |
+    bitnumIntr(s0, 14, 4) |
+    bitnumIntr(s1, 22, 3) |
+    bitnumIntr(s0, 22, 2) |
+    bitnumIntr(s1, 30, 1) |
+    bitnumIntr(s0, 30, 0);
+
+  data[1] =
+    bitnumIntr(s1, 5, 7) |
+    bitnumIntr(s0, 5, 6) |
+    bitnumIntr(s1, 13, 5) |
+    bitnumIntr(s0, 13, 4) |
+    bitnumIntr(s1, 21, 3) |
+    bitnumIntr(s0, 21, 2) |
+    bitnumIntr(s1, 29, 1) |
+    bitnumIntr(s0, 29, 0);
+
+  data[0] =
+    bitnumIntr(s1, 4, 7) |
+    bitnumIntr(s0, 4, 6) |
+    bitnumIntr(s1, 12, 5) |
+    bitnumIntr(s0, 12, 4) |
+    bitnumIntr(s1, 20, 3) |
+    bitnumIntr(s0, 20, 2) |
+    bitnumIntr(s1, 28, 1) |
+    bitnumIntr(s0, 28, 0);
+
+  data[7] =
+    bitnumIntr(s1, 3, 7) |
+    bitnumIntr(s0, 3, 6) |
+    bitnumIntr(s1, 11, 5) |
+    bitnumIntr(s0, 11, 4) |
+    bitnumIntr(s1, 19, 3) |
+    bitnumIntr(s0, 19, 2) |
+    bitnumIntr(s1, 27, 1) |
+    bitnumIntr(s0, 27, 0);
+
+  data[6] =
+    bitnumIntr(s1, 2, 7) |
+    bitnumIntr(s0, 2, 6) |
+    bitnumIntr(s1, 10, 5) |
+    bitnumIntr(s0, 10, 4) |
+    bitnumIntr(s1, 18, 3) |
+    bitnumIntr(s0, 18, 2) |
+    bitnumIntr(s1, 26, 1) |
+    bitnumIntr(s0, 26, 0);
+
+  data[5] =
+    bitnumIntr(s1, 1, 7) |
+    bitnumIntr(s0, 1, 6) |
+    bitnumIntr(s1, 9, 5) |
+    bitnumIntr(s0, 9, 4) |
+    bitnumIntr(s1, 17, 3) |
+    bitnumIntr(s0, 17, 2) |
+    bitnumIntr(s1, 25, 1) |
+    bitnumIntr(s0, 25, 0);
+
+  data[4] =
+    bitnumIntr(s1, 0, 7) |
+    bitnumIntr(s0, 0, 6) |
+    bitnumIntr(s1, 8, 5) |
+    bitnumIntr(s0, 8, 4) |
+    bitnumIntr(s1, 16, 3) |
+    bitnumIntr(s0, 16, 2) |
+    bitnumIntr(s1, 24, 1) |
+    bitnumIntr(s0, 24, 0);
+
+  return data;
 };
 
 const f = (state: number, key: number[]): number => {
-  const stateL = state >>> 0;
+  const t1 =
+    (bitnumIntl(state, 31, 0) |
+      ((state & 0xf0000000) >>> 1) |
+      bitnumIntl(state, 4, 5) |
+      bitnumIntl(state, 3, 6) |
+      ((state & 0x0f000000) >>> 3) |
+      bitnumIntl(state, 8, 11) |
+      bitnumIntl(state, 7, 12) |
+      ((state & 0x00f00000) >>> 5) |
+      bitnumIntl(state, 12, 17) |
+      bitnumIntl(state, 11, 18) |
+      ((state & 0x000f0000) >>> 7) |
+      bitnumIntl(state, 16, 23)) >>>
+    0;
 
-  const state0 = bitnumIntl(stateL, 31, 31) >>> 0;
-  const state1 = bitnumIntl(stateL, 30, 31) >>> 0;
-  const state2 = bitnumIntl(stateL, 29, 31) >>> 0;
-  const state3 = bitnumIntl(stateL, 28, 31) >>> 0;
-  const state4 = bitnumIntl(stateL, 27, 30) >>> 0;
-  const state5 = bitnumIntl(stateL, 26, 30) >>> 0;
-  const state6 = bitnumIntl(stateL, 25, 30) >>> 0;
-  const state7 = bitnumIntl(stateL, 24, 30) >>> 0;
-  const state8 = bitnumIntl(stateL, 23, 29) >>> 0;
-  const state9 = bitnumIntl(stateL, 22, 29) >>> 0;
-  const state10 = bitnumIntl(stateL, 21, 29) >>> 0;
-  const state11 = bitnumIntl(stateL, 20, 29) >>> 0;
-  const state12 = bitnumIntl(stateL, 19, 28) >>> 0;
-  const state13 = bitnumIntl(stateL, 18, 28) >>> 0;
-  const state14 = bitnumIntl(stateL, 17, 28) >>> 0;
-  const state15 = bitnumIntl(stateL, 16, 28) >>> 0;
-  const state16 = bitnumIntl(stateL, 15, 27) >>> 0;
-  const state17 = bitnumIntl(stateL, 14, 27) >>> 0;
-  const state18 = bitnumIntl(stateL, 13, 27) >>> 0;
-  const state19 = bitnumIntl(stateL, 12, 27) >>> 0;
-  const state20 = bitnumIntl(stateL, 11, 26) >>> 0;
-  const state21 = bitnumIntl(stateL, 10, 26) >>> 0;
-  const state22 = bitnumIntl(stateL, 9, 26) >>> 0;
-  const state23 = bitnumIntl(stateL, 8, 26) >>> 0;
-  const state24 = bitnumIntl(stateL, 7, 25) >>> 0;
-  const state25 = bitnumIntl(stateL, 6, 25) >>> 0;
-  const state26 = bitnumIntl(stateL, 5, 25) >>> 0;
-  const state27 = bitnumIntl(stateL, 4, 25) >>> 0;
-  const state28 = bitnumIntl(stateL, 3, 24) >>> 0;
-  const state29 = bitnumIntl(stateL, 2, 24) >>> 0;
-  const state30 = bitnumIntl(stateL, 1, 24) >>> 0;
-  const state31 = bitnumIntl(stateL, 0, 24) >>> 0;
+  const t2 =
+    (bitnumIntl(state, 15, 0) |
+      ((state & 0x0000f000) << 15) |
+      bitnumIntl(state, 20, 5) |
+      bitnumIntl(state, 19, 6) |
+      ((state & 0x00000f00) << 13) |
+      bitnumIntl(state, 24, 11) |
+      bitnumIntl(state, 23, 12) |
+      ((state & 0x000000f0) << 11) |
+      bitnumIntl(state, 28, 17) |
+      bitnumIntl(state, 27, 18) |
+      ((state & 0x0000000f) << 9) |
+      bitnumIntl(state, 0, 23)) >>>
+    0;
 
-  const sb1 =
-    (state31 << 5) | (state30 << 4) | (state29 << 3) | (state28 << 2) | (state27 << 1) | state26;
-  const sb2 =
-    (state25 << 5) | (state24 << 4) | (state23 << 3) | (state22 << 2) | (state21 << 1) | state20;
-  const sb3 =
-    (state19 << 5) | (state18 << 4) | (state17 << 3) | (state16 << 2) | (state15 << 1) | state14;
-  const sb4 =
-    (state13 << 5) | (state12 << 4) | (state11 << 3) | (state10 << 2) | (state9 << 1) | state8;
-  const sb5 =
-    (state7 << 5) | (state6 << 4) | (state5 << 3) | (state4 << 2) | (state3 << 1) | state2;
-  const sb6 = (state1 << 1) | state0;
-  const sb7 = (state31 >> 1) | (state30 >> 2) | (state29 >> 3) | (state28 >> 4) | (state27 >> 5);
-  const sb8 = (state25 >> 1) | (state24 >> 2) | (state23 >> 3) | (state22 >> 4) | (state21 >> 5);
+  const lrgstate = [
+    ((t1 >>> 24) & 0x000000ff) ^ key[0],
+    ((t1 >>> 16) & 0x000000ff) ^ key[1],
+    ((t1 >>> 8) & 0x000000ff) ^ key[2],
+    ((t2 >>> 24) & 0x000000ff) ^ key[3],
+    ((t2 >>> 16) & 0x000000ff) ^ key[4],
+    ((t2 >>> 8) & 0x000000ff) ^ key[5],
+  ];
+
+  state =
+    ((sbox[0][sboxBit(lrgstate[0] >>> 2)] << 28) |
+      (sbox[1][sboxBit(((lrgstate[0] & 0x03) << 4) | (lrgstate[1] >>> 4))] << 24) |
+      (sbox[2][sboxBit(((lrgstate[1] & 0x0f) << 2) | (lrgstate[2] >>> 6))] << 20) |
+      (sbox[3][sboxBit(lrgstate[2] & 0x3f)] << 16) |
+      (sbox[4][sboxBit(lrgstate[3] >>> 2)] << 12) |
+      (sbox[5][sboxBit(((lrgstate[3] & 0x03) << 4) | (lrgstate[4] >>> 4))] << 8) |
+      (sbox[6][sboxBit(((lrgstate[4] & 0x0f) << 2) | (lrgstate[5] >>> 6))] << 4) |
+      sbox[7][sboxBit(lrgstate[5] & 0x3f)]) >>>
+    0;
 
   return (
-    (sbox[0][sboxBit(sb1 << 1)] |
-      sbox[1][sboxBit((sb1 >> 5) | (sb2 << 1))] |
-      sbox[2][sboxBit((sb2 >> 4) | (sb3 << 2))] |
-      sbox[3][sboxBit((sb3 >> 3) | (sb4 << 3))] |
-      sbox[4][sboxBit((sb4 >> 2) | (sb5 << 4))] |
-      sbox[5][sboxBit((sb5 >> 1) | (sb6 << 5))] |
-      sbox[6][sboxBit((sb6 >> 6) | (sb7 << 6))] |
-      sbox[7][sboxBit((sb7 >> 6) | (sb8 << 6))]) ^
-    ((key[0] << 24) | (key[1] << 16) | (key[2] << 8) | key[3] | (key[4] << 24) | (key[5] << 16))
+    (bitnumIntl(state, 15, 0) |
+      bitnumIntl(state, 6, 1) |
+      bitnumIntl(state, 19, 2) |
+      bitnumIntl(state, 20, 3) |
+      bitnumIntl(state, 28, 4) |
+      bitnumIntl(state, 11, 5) |
+      bitnumIntl(state, 27, 6) |
+      bitnumIntl(state, 16, 7) |
+      bitnumIntl(state, 0, 8) |
+      bitnumIntl(state, 14, 9) |
+      bitnumIntl(state, 22, 10) |
+      bitnumIntl(state, 25, 11) |
+      bitnumIntl(state, 4, 12) |
+      bitnumIntl(state, 17, 13) |
+      bitnumIntl(state, 30, 14) |
+      bitnumIntl(state, 9, 15) |
+      bitnumIntl(state, 1, 16) |
+      bitnumIntl(state, 7, 17) |
+      bitnumIntl(state, 23, 18) |
+      bitnumIntl(state, 13, 19) |
+      bitnumIntl(state, 31, 20) |
+      bitnumIntl(state, 26, 21) |
+      bitnumIntl(state, 2, 22) |
+      bitnumIntl(state, 8, 23) |
+      bitnumIntl(state, 18, 24) |
+      bitnumIntl(state, 12, 25) |
+      bitnumIntl(state, 29, 26) |
+      bitnumIntl(state, 5, 27) |
+      bitnumIntl(state, 21, 28) |
+      bitnumIntl(state, 10, 29) |
+      bitnumIntl(state, 3, 30) |
+      bitnumIntl(state, 24, 31)) >>>
+    0
   );
 };
 

@@ -2,8 +2,7 @@
  * 歌词分发（Android 版）
  *
  * 对标上游 dev 的 electron/main/ipc/lyrics.ts：同 key 并发去重，
- * 网易走 vendor 实现；QQ/酷狗待移植 tripledes/qrc/krc 核心，暂返回失败
- * （渲染层失败即换下一来源，行为与桌面未登录态一致）。
+ * 网易/QQ/酷狗三源均已接 vendor 实现（渲染层失败即换下一来源）。
  */
 
 import { coreLog } from "@main/utils/logger";

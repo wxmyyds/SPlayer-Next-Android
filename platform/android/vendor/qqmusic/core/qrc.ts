@@ -27,14 +27,22 @@ export const decryptQrc = async (encryptedQrc: string): Promise<string> => {
   // Triple DES 解密
   const decrypted = qrcDecrypt(encryptedData, QRC_KEY);
 
-  // Zlib 解压：依次尝试 deflate / raw / gzip（DecompressionStream）
-  try {
-    const out = await inflateAuto(decrypted);
-    return new TextDecoder("utf-8").decode(out);
-  } catch {
-    // 也可能本身就不是压缩数据
-    const str = new TextDecoder("utf-8").decode(decrypted);
-    if (str.includes("[") || str.includes("<")) return str;
-    throw new Error("无法解压数据");
+  // Zlib 解压：依次尝试 deflate / raw / gzip（DecompressionStream）。
+  // 3DES 按块加密会在压缩流尾部留 0..8 字节填充，而 DecompressionStream 遇到尾部
+  // 垃圾会整流报错（node zlib 则容忍），这里从尾部逐字节截断重试：截多报截断、
+  // 截少报垃圾，只有精确的流末尾能解压成功。
+  let lastErr: unknown;
+  for (let trim = 0; trim <= 8 && trim <= decrypted.length; trim++) {
+    try {
+      const out = await inflateAuto(decrypted.subarray(0, decrypted.length - trim));
+      return new TextDecoder("utf-8").decode(out);
+    } catch (err) {
+      lastErr = err;
+    }
   }
+
+  // 也可能本身就不是压缩数据
+  const str = new TextDecoder("utf-8").decode(decrypted);
+  if (str.includes("[") || str.includes("<")) return str;
+  throw lastErr instanceof Error ? lastErr : new Error("无法解压数据");
 };
