@@ -236,10 +236,15 @@ const showComments = (): void => {
           class="cover-mask-bottom absolute bottom-0 inset-x-0 h-48 z-5 pointer-events-none transition-opacity duration-400"
           :class="immersive ? 'opacity-0' : 'opacity-100'"
         />
-        <!-- 顶栏 -->
+        <!-- 顶栏：Android 避开状态栏 -->
         <div
-          class="absolute top-0 inset-x-0 h-14 z-10 app-drag-region transition-opacity duration-400 flex items-center justify-between px-3"
-          :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
+          class="absolute inset-x-0 z-10 app-drag-region transition-opacity duration-400 flex items-center justify-between px-3"
+          :class="[
+            immersive ? 'opacity-0 pointer-events-none' : 'opacity-100',
+            isAndroid
+              ? 'h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]'
+              : 'h-14',
+          ]"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
@@ -277,7 +282,15 @@ const showComments = (): void => {
         <!-- 主区域：堆叠时文档流（封面区+歌词区上下排），桌面左右绝对分栏 -->
         <div
           class="absolute inset-x-0"
-          :class="stackedLayout ? 'top-14 bottom-0 flex flex-col' : 'top-14 bottom-20'"
+          :class="
+            stackedLayout
+              ? isAndroid
+                ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-0 flex flex-col pb-[env(safe-area-inset-bottom)]'
+                : 'top-14 bottom-0 flex flex-col'
+              : isAndroid
+                ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-20'
+                : 'top-14 bottom-20'
+          "
           @mousemove="onMainMove"
         >
           <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
@@ -560,7 +573,7 @@ const showComments = (): void => {
             :class="[
               status.fullQueueOpen
                 ? stackedLayout
-                  ? 'inset-0 z-20 p-4 pt-16 pb-6 bg-black/60 backdrop-blur-xl'
+                  ? 'inset-0 z-20 p-4 pt-[calc(4rem+env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-black/60 backdrop-blur-xl'
                   : 'inset-y-0 right-0 pl-4 py-6'
                 : 'inset-y-0 right-0 pl-4 py-6 pointer-events-none',
             ]"
