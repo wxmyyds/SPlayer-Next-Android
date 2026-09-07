@@ -8,6 +8,7 @@ import { useTrackMenu } from "@/composables/useTrackMenu";
 import { useDownload } from "@/composables/useDownload";
 import { useProgressLyric } from "@/composables/useProgressLyric";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
@@ -131,7 +132,15 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <div class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
+    <!-- 竖屏拥挤：Android 用弹性行布局，隐藏时间信息，控件紧凑化 -->
+    <div v-if="isAndroid" class="flex items-center h-full px-2 gap-1">
+      <TrackInfo compact class="flex-1 min-w-0" />
+      <PlayerControls compact class="shrink-0" />
+      <div class="shrink-0">
+        <Toolbar />
+      </div>
+    </div>
+    <div v-else class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
       <TrackInfo>
         <template #title-trailing>
           <div class="flex items-center shrink-0">
