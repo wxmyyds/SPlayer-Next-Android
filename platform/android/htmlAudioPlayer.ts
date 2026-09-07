@@ -279,6 +279,8 @@ const stopFftLoop = (): void => {
 /** 淡入淡出：Gain 节点优先（频谱图接管后 el.volume 失效），直出时回退 el.volume */
 let fadeMs = 200;
 let userVolume = 1;
+/** 倍速（HTMLAudio preservesPitch 默认保持音高，与桌面引擎变速语义一致）；元素重建后需重设 */
+let speedRate = 1;
 let fadeRun = 0;
 let mediaSource: MediaElementAudioSourceNode | null = null;
 let fadeGain: GainNode | null = null;
@@ -359,6 +361,7 @@ const getAudio = (): HTMLAudioElement => {
   if (!audio) {
     const el = new Audio();
     el.preload = "auto";
+    el.playbackRate = speedRate;
     el.addEventListener("play", () => {
       publishState("playing");
       if (audioCtx) void audioCtx.resume().catch(() => {});
@@ -420,7 +423,7 @@ const snapshot = (): PlayerStatus => {
     position: el ? Math.round(el.currentTime * 1000) : 0,
     duration: el && Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0,
     volume: el ? el.volume : 1,
-    speed: 1,
+    speed: speedRate,
     isFinished: el ? el.ended : false,
   };
 };
@@ -573,7 +576,11 @@ export const htmlAudioPlayer: PlayerApi = {
   setEqualizerEnabled: async () => ok(),
   setEqualizerBands: async () => ok(),
   setPreampGain: async () => ok(),
-  setSpeed: async () => ok(),
+  setSpeed: async (speed: number) => {
+    speedRate = Number.isFinite(speed) && speed > 0 ? speed : 1;
+    getAudio().playbackRate = speedRate;
+    return ok();
+  },
   setPitch: async () => ok(),
   setPitchSync: async () => ok(),
   getOutputDevices: async () =>
