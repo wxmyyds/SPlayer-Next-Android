@@ -118,24 +118,48 @@ const coverCentered = computed(() => {
 const isPortrait = useMediaQuery("(orientation: portrait)");
 const stackedLayout = computed(() => isAndroid && isPortrait.value);
 
-/** 堆叠双页（参照 SPlayer-for-Android）：0 封面控制页，1 歌词频谱页 */
+/** 堆叠双页（参照 SPlayer-for-Android）：0 封面控制页，1 歌词频谱页，轨道滑动跟手 */
 const stackPage = ref(0);
 const coverPaneRef = useTemplateRef("coverPaneRef");
 const lyricPaneRef = useTemplateRef("lyricPaneRef");
-if (typeof useSwipe === "function") {
-  useSwipe(coverPaneRef, {
-    threshold: 60,
-    onSwipeEnd: (_e, direction) => {
-      if (stackedLayout.value && direction === "left") stackPage.value = 1;
-    },
-  });
-  useSwipe(lyricPaneRef, {
-    threshold: 60,
-    onSwipeEnd: (_e, direction) => {
-      if (stackedLayout.value && direction === "right") stackPage.value = 0;
-    },
-  });
-}
+const goStackPage = (page: number): void => {
+  stackPage.value = Math.max(0, Math.min(1, page));
+};
+const coverSwipe = useSwipe(coverPaneRef, {
+  threshold: 40,
+  onSwipeEnd: (_e, direction) => {
+    if (stackedLayout.value && direction === "left") goStackPage(1);
+  },
+});
+const lyricSwipe = useSwipe(lyricPaneRef, {
+  threshold: 40,
+  onSwipeEnd: (_e, direction) => {
+    if (stackedLayout.value && direction === "right") goStackPage(0);
+  },
+});
+const isStackSwiping = computed(
+  () => coverSwipe.isSwiping.value || lyricSwipe.isSwiping.value,
+);
+/** 手指跟随偏移（px，左滑为负），竖滑不跟 */
+const stackDragPx = computed(() => {
+  const active = coverSwipe.isSwiping.value
+    ? coverSwipe
+    : lyricSwipe.isSwiping.value
+      ? lyricSwipe
+      : null;
+  if (!active) return 0;
+  const len = active.lengthX.value;
+  if (active.lengthY.value >= len) return 0;
+  const dir = active.direction.value;
+  const px = dir === "left" ? -len : dir === "right" ? len : 0;
+  return stackPage.value === 0 ? Math.min(0, px) : Math.max(0, px);
+});
+const stackTrackTransform = computed(
+  () => `translateX(calc(${-stackPage.value * 50}% + ${stackDragPx.value}px))`,
+);
+const stackTrackTransition = computed(() =>
+  isStackSwiping.value ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+);
 
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
   await player.seek(timeMs);
@@ -304,19 +328,32 @@ const showComments = (): void => {
           :class="
             stackedLayout
               ? isAndroid
-                ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-0 flex flex-col pb-[env(safe-area-inset-bottom)]'
-                : 'top-14 bottom-0 flex flex-col'
+                ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-0 flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]'
+                : 'top-14 bottom-0 flex flex-col overflow-hidden'
               : isAndroid
                 ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-20'
                 : 'top-14 bottom-20'
           "
           @mousemove="onMainMove"
         >
+          <!-- 堆叠滑动轨道（桌面 display:contents 穿透，不影响绝对分栏） -->
+          <div
+            :class="stackedLayout ? 'flex flex-row flex-1 min-h-0 shrink-0' : 'contents'"
+            :style="
+              stackedLayout
+                ? {
+                    width: '200%',
+                    transform: stackTrackTransform,
+                    transition: stackTrackTransition,
+                  }
+                : undefined
+            "
+          >
+          <div :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col overflow-y-auto' : 'contents'">
           <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
           <div
             v-if="!fullscreenCover"
             ref="coverPaneRef"
-            v-show="!stackedLayout || stackPage === 0"
             class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
@@ -351,7 +388,7 @@ const showComments = (): void => {
             </div>
           </div>
           <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制，第一页） -->
-          <template v-if="stackedLayout && stackPage === 0">
+          <template v-if="stackedLayout">
             <div class="w-full flex flex-col gap-1 px-5 pt-3 shrink-0">
               <div class="w-full min-w-0">
                 <PlayerData align="left" simple />
@@ -483,10 +520,11 @@ const showComments = (): void => {
               </SButton>
             </div>
           </template>
+          </div>
+          <div :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col min-h-0' : 'contents'">
           <!-- 右侧（堆叠时为歌词频谱页，文档流占满剩余高度） -->
           <div
             ref="lyricPaneRef"
-            v-show="!stackedLayout || stackPage === 1"
             class="group flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
@@ -590,15 +628,20 @@ const showComments = (): void => {
             <!-- 歌词侧边工具栏 -->
             <LyricActions :immersive="immersive" />
           </div>
-          <!-- 堆叠分页点 -->
-          <div v-if="stackedLayout" class="shrink-0 flex items-center justify-center gap-2 py-2">
+          </div>
+          </div>
+          <!-- 堆叠分页点（参照：6px 圆点，激活 16px 胶囊） -->
+          <div
+            v-if="stackedLayout"
+            class="shrink-0 flex items-center justify-center gap-2 py-2 pointer-events-none"
+          >
             <button
               v-for="i in 2"
               :key="i"
-              class="size-1.5 rounded-full transition-colors"
-              :class="stackPage === i - 1 ? 'bg-cover' : 'bg-cover/30'"
+              class="h-1.5 rounded-full transition-all duration-300 pointer-events-auto"
+              :class="stackPage === i - 1 ? 'w-4 bg-cover' : 'w-1.5 bg-cover/25'"
               :aria-label="`page ${i}`"
-              @click="stackPage = i - 1"
+              @click="goStackPage(i - 1)"
             />
           </div>
           <!-- 播放队列 -->
