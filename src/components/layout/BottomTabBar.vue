@@ -60,8 +60,10 @@ useEventListener(window, "resize", updateIndicator);
       :class="activeKey === tab.key ? 'text-primary' : 'text-on-surface-variant'"
       @click="onSelect(tab.key)"
     >
-      <component :is="tab.icon" class="size-[17px]" />
-      <span class="text-[10px] leading-none">{{ t(tab.labelKey) }}</span>
+      <component :is="tab.icon" class="size-[17px] max-[360px]:size-4" />
+      <span class="text-[10px] leading-none break-keep max-[360px]:text-[9px]">
+        {{ t(tab.labelKey) }}
+      </span>
     </button>
   </nav>
 </template>

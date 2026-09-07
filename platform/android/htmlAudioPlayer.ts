@@ -43,7 +43,7 @@ const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
   web: () => new MediaBridgeWeb(),
 });
 
-const ok = <T,>(data?: T): IpcResponse<T> => ({
+const ok = <T>(data?: T): IpcResponse<T> => ({
   success: true,
   ...(data === undefined ? {} : { data }),
 });
@@ -88,12 +88,21 @@ const wireMediaBridge = (): void => {
 };
 
 /** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
-const publishMetadata = (meta?: { title?: string; artists?: Array<{ name?: string }>; album?: { name?: string }; cover?: string; coverOriginal?: string }): void => {
+const publishMetadata = (meta?: {
+  title?: string;
+  artists?: Array<{ name?: string }>;
+  album?: { name?: string };
+  cover?: string;
+  coverOriginal?: string;
+}): void => {
   wireMediaBridge();
   try {
     void MediaBridge.updateState({
       title: meta?.title ?? "",
-      artist: (meta?.artists ?? []).map((a) => a.name).filter(Boolean).join(" / "),
+      artist: (meta?.artists ?? [])
+        .map((a) => a.name)
+        .filter(Boolean)
+        .join(" / "),
       album: meta?.album?.name ?? "",
       artworkUrl: meta?.coverOriginal ?? meta?.cover,
     });
@@ -103,7 +112,11 @@ const publishMetadata = (meta?: { title?: string; artists?: Array<{ name?: strin
 };
 
 /** 同步播放状态与进度到系统 */
-const publishState = (state: "playing" | "paused" | "none", positionMs?: number, durationMs?: number): void => {
+const publishState = (
+  state: "playing" | "paused" | "none",
+  positionMs?: number,
+  durationMs?: number,
+): void => {
   try {
     void MediaBridge.updateState({
       playing: state === "playing",
@@ -367,9 +380,7 @@ const getAudio = (): HTMLAudioElement => {
     });
     el.addEventListener("error", () => {
       // 错误码进 logcat（adb 抓 console），定位断点用；事件形状保持与桌面一致
-      console.warn(
-        `[player] audio error code=${el.error?.code ?? -1} src=${el.src}`,
-      );
+      console.warn(`[player] audio error code=${el.error?.code ?? -1} src=${el.src}`);
       emit({ type: "sourceError" });
     });
     el.addEventListener("seeked", () =>
@@ -402,7 +413,8 @@ const getAudio = (): HTMLAudioElement => {
 const snapshot = (): PlayerStatus => {
   const el = audio;
   return {
-    state: !el || el.ended ? "idle" : el.paused ? (el.currentTime > 0 ? "paused" : "idle") : "playing",
+    state:
+      !el || el.ended ? "idle" : el.paused ? (el.currentTime > 0 ? "paused" : "idle") : "playing",
     position: el ? Math.round(el.currentTime * 1000) : 0,
     duration: el && Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0,
     volume: el ? el.volume : 1,

@@ -59,7 +59,9 @@ onMounted(() => {
           <h1
             class="font-bold text-on-surface text-balance"
             :class="isAndroid ? 'text-xl' : 'text-3xl'"
-          >{{ t("history.title") }}</h1>
+          >
+            {{ t("history.title") }}
+          </h1>
           <span
             v-if="history.tracks.length > 0"
             class="text-sm text-on-surface-variant/50 flex items-center gap-1"

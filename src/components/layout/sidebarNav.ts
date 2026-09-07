@@ -11,6 +11,10 @@ import IconLucideStar from "~icons/lucide/star";
 import IconLucideHistory from "~icons/lucide/history";
 import IconLucideDownload from "~icons/lucide/download";
 import IconLucideCloud from "~icons/lucide/cloud";
+import IconMaterialSymbolsHome from "~icons/material-symbols/home-rounded";
+import IconMaterialSymbolsPieChart from "~icons/material-symbols/pie-chart-rounded";
+import IconMaterialSymbolsHistory from "~icons/material-symbols/history-rounded";
+import IconMaterialSymbolsStar from "~icons/material-symbols/star-rounded";
 
 /** 侧边栏固定导航项元数据 */
 export interface SidebarNavEntry {
@@ -48,15 +52,20 @@ export const SIDEBAR_NAV_META: Record<string, SidebarNavEntry> = Object.fromEntr
   SIDEBAR_NAV_ENTRIES.map((entry) => [entry.key, entry]),
 );
 
-/** Android 底部 Tab 栏项：由侧边栏迁入，标签用 tab 专属短文案 */
+/** Android 底部 Tab 栏项：由侧边栏迁入，填充式图标对齐参考设计，标签用 tab 专属短文案 */
 export const BOTTOM_TAB_ENTRIES: SidebarNavEntry[] = [
-  { key: "/", labelKey: "nav.home", icon: IconLucideHome, hideable: false },
-  { key: "/stats", labelKey: "nav.stats", icon: IconLucideChartPie, hideable: false },
-  { key: "/history", labelKey: "nav.tabHistory", icon: IconLucideHistory, hideable: false },
+  { key: "/", labelKey: "nav.home", icon: IconMaterialSymbolsHome, hideable: false },
+  { key: "/stats", labelKey: "nav.stats", icon: IconMaterialSymbolsPieChart, hideable: false },
+  {
+    key: "/history",
+    labelKey: "nav.tabHistory",
+    icon: IconMaterialSymbolsHistory,
+    hideable: false,
+  },
   {
     key: "/favorites",
     labelKey: "nav.tabFavorites",
-    icon: IconLucideStar,
+    icon: IconMaterialSymbolsStar,
     hideable: false,
   },
 ];

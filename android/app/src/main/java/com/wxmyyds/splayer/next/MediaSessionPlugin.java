@@ -161,13 +161,28 @@ public class MediaSessionPlugin extends Plugin {
                                             || (artworkUrl != null && !artworkUrl.isEmpty());
                             if (!title.isEmpty() && !title.equals(currentTitle)) lastArt = null;
                             if (metaProvided) {
+                                // 时长优先取本次推送，未带时用当前元数据旧值兜底
+                                long duration =
+                                        durationMs > 0
+                                                ? durationMs
+                                                : current != null
+                                                        ? current.getLong(MediaMetadata.METADATA_KEY_DURATION)
+                                                        : 0L;
                                 MediaMetadata.Builder meta =
                                         new MediaMetadata.Builder()
                                                 .putString(MediaMetadata.METADATA_KEY_TITLE, title)
                                                 .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
                                                 .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
-                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
+                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, duration);
                                 sSession.setMetadata(meta.build());
+                            } else if (durationMs > 0
+                                    && current != null
+                                    && current.getLong(MediaMetadata.METADATA_KEY_DURATION) != durationMs) {
+                                // 纯进度推送：把最新时长补进元数据，系统媒体卡片据此渲染进度条
+                                sSession.setMetadata(
+                                        new MediaMetadata.Builder(current)
+                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
+                                                .build());
                             }
                             publishState(playing, positionMs, durationMs, lastArt);
                             if (artworkUrl != null && !artworkUrl.isEmpty()) {
