@@ -40,6 +40,11 @@ import {
   openVendorLoginWeb,
   setVendorCookie,
 } from "./vendor/dispatch";
+import {
+  fetchLyricTTMLOverlay,
+  matchLyricById,
+  matchLyricByQuery,
+} from "./vendor/lyric/index";
 import { fetchWithProxy } from "./vendor/shim/proxy";
 
 const unsupported = "Android bridge capability is not implemented";
@@ -261,9 +266,9 @@ const apis: ApisApi = {
 };
 
 const lyrics: LyricsApi = {
-  matchById: async () => ({ ok: false, error: unsupported }),
-  matchByQuery: async () => ({ ok: false, error: unsupported }),
-  fetchTTMLOverlay: async () => ({ ok: false, error: unsupported }),
+  matchById: (platform, id) => matchLyricById(platform, id),
+  matchByQuery: (platform, track) => matchLyricByQuery(platform, track),
+  fetchTTMLOverlay: (track, platform) => fetchLyricTTMLOverlay(track, platform),
   matchLocalTTML: async () => ({ ok: false, error: unsupported }),
   pickLyricRepoDir: async () => null,
 };
