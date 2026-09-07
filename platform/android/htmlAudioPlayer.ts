@@ -338,7 +338,7 @@ export const htmlAudioPlayer: PlayerApi = {
   load: async (source: string, options?: LoadOptions) => {
     if (!/^https?:\/\//i.test(source)) return fail("unsupported source");
     const el = getAudio();
-    const switchSrc = async (): Promise<IpcResponse> => {
+    const switchSrc = async (): Promise<Awaited<ReturnType<PlayerApi["load"]>>> => {
       publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
       el.src = source;
       // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
