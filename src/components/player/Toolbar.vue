@@ -14,8 +14,10 @@ const props = withDefaults(
   defineProps<{
     /** 是否使用封面主题 */
     cover?: boolean;
+    /** 是否隐藏音量（全屏页手机用硬按键调音） */
+    hideVolume?: boolean;
   }>(),
-  { cover: false },
+  { cover: false, hideVolume: false },
 );
 
 const { t } = useI18n();
@@ -70,7 +72,13 @@ const onMoreMenuSelect = (key: string): void => {
   <div class="flex items-center gap-1">
     <!-- 在线音质 -->
     <QualityControl v-if="settings.appearance.showQualitySwitch" :cover="cover" />
-    <SPopover trigger="hover" side="top" :cover="cover" content-class="px-3 pb-2 pt-3">
+    <SPopover
+      v-if="!hideVolume"
+      trigger="hover"
+      side="top"
+      :cover="cover"
+      content-class="px-3 pb-2 pt-3"
+    >
       <template #trigger>
         <SButton
           :type="buttonType"
