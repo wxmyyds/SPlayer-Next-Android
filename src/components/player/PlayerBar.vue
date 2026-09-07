@@ -112,7 +112,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
       </SSlider>
     </div>
     <div class="shrink-0">
-      <Toolbar />
+      <Toolbar :hide-volume="isAndroid" />
     </div>
   </div>
   <!-- 默认模式 -->
@@ -137,7 +137,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
       <TrackInfo compact class="flex-1 min-w-0" />
       <PlayerControls compact class="shrink-0" />
       <div class="shrink-0">
-        <Toolbar />
+        <Toolbar :hide-volume="isAndroid" />
       </div>
     </div>
     <div v-else class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
@@ -186,7 +186,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
       <PlayerControls class="mx-15" />
       <div class="flex items-center justify-end gap-2 min-w-0">
         <PlayerTimeInfo />
-        <Toolbar />
+        <Toolbar :hide-volume="isAndroid" />
       </div>
     </div>
   </div>
