@@ -2,6 +2,11 @@
 import type { Track } from "@shared/types/player";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import { useQueuePanel } from "@/composables/useQueuePanel";
+import { isAndroid } from "@/utils/platform";
+
+/** 竖屏全屏队列：去掉桌面右侧留白，横向占满 */
+const isPortrait = useMediaQuery("(orientation: portrait)");
+const stackedLayout = computed(() => isAndroid && isPortrait.value);
 
 defineEmits<{ close: [] }>();
 
@@ -22,8 +27,11 @@ const {
 
 <template>
   <div class="flex flex-col h-full text-cover">
-    <div class="shrink-0 flex items-start justify-between gap-4 pl-1 pr-20 pb-4">
-      <div class="flex flex-col min-w-0 pl-2.5">
+    <div
+      class="shrink-0 flex items-start justify-between gap-4 pb-4"
+      :class="stackedLayout ? 'pl-0 pr-0' : 'pl-1 pr-20'"
+    >
+      <div class="flex flex-col min-w-0" :class="stackedLayout ? 'pl-0' : 'pl-2.5'">
         <h2 class="m-0 text-2xl font-semibold leading-tight truncate">
           {{ t("playlist.title") }}
         </h2>
@@ -79,7 +87,7 @@ const {
         :get-item-key="(item: Track) => item.id"
       >
         <template #default="{ item, index }: { item: Track; index: number }">
-          <div class="relative pl-1 pr-20 py-1">
+          <div class="relative py-1" :class="stackedLayout ? 'pl-0 pr-0' : 'pl-1 pr-20'">
             <div
               class="group relative flex items-center gap-3 px-2.5 h-16 rounded-xl cursor-pointer transition-[background-color] duration-150"
               :class="
