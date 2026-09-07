@@ -9,6 +9,7 @@ import { useUserStore } from "@/stores/user";
 import { useStatusStore } from "@/stores/status";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 
@@ -113,10 +114,13 @@ const handleMoreMenu = (key: string): void => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-center justify-between mt-2 mb-4">
         <div class="flex items-baseline gap-4">
-          <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("liked.title") }}</h1>
+          <h1
+            class="font-bold text-on-surface text-balance"
+            :class="isAndroid ? 'text-xl' : 'text-3xl'"
+          >{{ t("liked.title") }}</h1>
           <span
             v-if="currentTracks.length > 0"
             class="text-sm text-on-surface-variant/50 flex items-center gap-1"
@@ -126,12 +130,16 @@ const handleMoreMenu = (key: string): void => {
           </span>
         </div>
       </div>
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
+      <div
+        class="flex items-center justify-between"
+        :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'"
+      >
+        <div class="flex items-center" :class="isAndroid ? 'gap-2' : 'gap-3'">
           <SButton
             type="primary"
             variant="secondary"
             round
+            :size="isAndroid ? 'small' : 'medium'"
             :disabled="currentTracks.length === 0"
             @click="handlePlayAll"
           >
@@ -150,20 +158,20 @@ const handleMoreMenu = (key: string): void => {
             </template>
           </SDropdownMenu>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center" :class="isAndroid ? 'flex-1 flex-wrap gap-2' : 'gap-3'">
           <SInput
             v-model="searchQuery"
             :placeholder="t('common.search')"
             clearable
             round
-            class="w-40 focus-within:w-56"
+            :class="isAndroid ? 'min-w-32 flex-1' : 'w-40 focus-within:w-56'"
             data-search-input
           >
             <template #prefix>
               <IconLucideSearch class="size-4 text-on-surface-variant/40 shrink-0" />
             </template>
           </SInput>
-          <div class="w-48">
+          <div :class="isAndroid ? 'flex-1 min-w-44' : 'w-48'">
             <STabs v-model="tab" :tabs="tabs" type="segment" round />
           </div>
         </div>
