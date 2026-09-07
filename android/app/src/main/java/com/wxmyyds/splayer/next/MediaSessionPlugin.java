@@ -19,6 +19,7 @@ import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
+import android.util.Log;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -47,6 +48,8 @@ import okhttp3.Response;
     permissions = @Permission(strings = {Manifest.permission.POST_NOTIFICATIONS}, alias = "notifications"))
 public class MediaSessionPlugin extends Plugin {
 
+    private static final String TAG = "SPlayerFocus";
+
     static final String CHANNEL_ID = "splayer_playback";
     static final int NOTIFICATION_ID = 1;
     private static final String ACTION_MEDIA_KEY = "com.wxmyyds.splayer.next.MEDIA_KEY";
@@ -63,11 +66,16 @@ public class MediaSessionPlugin extends Plugin {
             new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
-                    if (!pauseOnNoisy) return;
-                    // 拔耳机/断蓝牙：暂停并让出焦点，重连后不自动续播
-                    resumeOnFocusGain = false;
-                    emitMediaKey("pause");
-                    abandonAudioFocus();
+                    try {
+                        if (!pauseOnNoisy) return;
+                        // 拔耳机/断蓝牙：暂停并让出焦点，重连后不自动续播
+                        Log.i(TAG, "becoming noisy, pause");
+                        resumeOnFocusGain = false;
+                        emitMediaKey("pause");
+                        abandonAudioFocus();
+                    } catch (Exception e) {
+                        Log.e(TAG, "noisy handling failed", e);
+                    }
                 }
             };
     private AudioFocusRequest focusRequest;
@@ -174,10 +182,15 @@ public class MediaSessionPlugin extends Plugin {
                             long durationMs = readLong(call, "durationMs", 0);
                             String artworkUrl = call.getString("artworkUrl", null);
 
-                            // 焦点生命周期：起播申请；用户暂停让出；焦点丢失自动暂停期间保留等 GAIN 恢复
-                            lastPlaying = playing;
-                            if (playing) requestAudioFocusIfNeeded();
-                            else if (!resumeOnFocusGain) abandonAudioFocus();
+                            // 焦点生命周期：起播申请；用户暂停让出；焦点丢失自动暂停期间保留等 GAIN 恢复。
+                            // 焦点机制任何异常（OEM 差异等）都不允许波及通知/播放推送主链
+                            try {
+                                lastPlaying = playing;
+                                if (playing) requestAudioFocusIfNeeded();
+                                else if (!resumeOnFocusGain) abandonAudioFocus();
+                            } catch (Exception e) {
+                                Log.e(TAG, "focus lifecycle failed", e);
+                            }
 
                             // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
                             MediaMetadata current =
@@ -351,6 +364,7 @@ public class MediaSessionPlugin extends Plugin {
 
     /** 经 mediaKey 通道通知 JS 执行播放/暂停（与通知栏按键同一路径） */
     private void emitMediaKey(String action) {
+        Log.i(TAG, "emit mediaKey " + action);
         JSObject data = new JSObject();
         data.put("action", action);
         data.put("position", -1);
@@ -383,7 +397,11 @@ public class MediaSessionPlugin extends Plugin {
                                     AudioManager.AUDIOFOCUS_GAIN)
                             == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         }
-        if (!granted) return;
+        if (!granted) {
+            Log.w(TAG, "focus request failed");
+            return;
+        }
+        Log.i(TAG, "focus granted");
         focusHeld = true;
         registerNoisyReceiver();
     }
@@ -402,6 +420,7 @@ public class MediaSessionPlugin extends Plugin {
     }
 
     private void onAudioFocusChanged(int change) {
+        Log.i(TAG, "focus change " + change);
         switch (change) {
             case AudioManager.AUDIOFOCUS_LOSS:
                 // 永久失去（被其他播放器抢占）：暂停且不自动恢复

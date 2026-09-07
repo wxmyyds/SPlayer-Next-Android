@@ -452,6 +452,7 @@ export const htmlAudioPlayer: PlayerApi = {
           await el.play();
           fadeIn(el);
         } catch (err) {
+          console.warn(`[player] play failed: ${err instanceof Error ? err.message : String(err)}`);
           return fail(err instanceof Error ? err.message : String(err));
         }
       }
@@ -485,7 +486,10 @@ export const htmlAudioPlayer: PlayerApi = {
         void audioCtx.resume().catch(() => {});
       }
       const el = getAudio();
-      await el.play();
+      await el.play().catch((err: unknown) => {
+        console.warn(`[player] play failed: ${err instanceof Error ? err.message : String(err)}`);
+        throw err;
+      });
       fadeIn(el);
       return ok();
     } catch (err) {
