@@ -117,6 +117,8 @@ const coverCentered = computed(() => {
 /** 竖屏堆叠布局：仅 Android 竖屏，封面上歌词中控制下，桌面左右分栏不变 */
 const isPortrait = useMediaQuery("(orientation: portrait)");
 const stackedLayout = computed(() => isAndroid && isPortrait.value);
+/** Android 横屏精简布局：只保留封面+歌手/歌单/专辑+歌词（无顶/底栏、无播控） */
+const landscapeLayout = computed(() => isAndroid && !isPortrait.value);
 
 /** 堆叠双页（参照 SPlayer-for-Android）：0 封面控制页，1 歌词频谱页，轨道滑动跟手 */
 const stackPage = ref(0);
@@ -141,9 +143,7 @@ const lyricSwipe = useSwipe(lyricPaneRef, {
     if (stackedLayout.value && direction === "right") goStackPage(0);
   },
 });
-const isStackSwiping = computed(
-  () => page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value,
-);
+const isStackSwiping = computed(() => page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value);
 /** 手指跟随偏移（px，左滑为负），竖滑不跟 */
 const stackDragPx = computed(() => {
   const active = page1Swipe.isSwiping.value
@@ -267,10 +267,10 @@ const showComments = (): void => {
         <div v-if="fullscreenCover" class="absolute inset-y-0 left-0 w-[60%]">
           <PlayerCover fullscreen />
         </div>
-        <!-- 底部频谱：堆叠时只在歌词页展示 -->
+        <!-- 底部频谱：堆叠时只在歌词页展示，横屏精简布局不展示 -->
         <BottomSpectrum
           v-if="isPlayerExpanded && settings.player.enableSpectrum"
-          :show="isPlaying && immersive && (!stackedLayout || stackPage === 1)"
+          :show="isPlaying && immersive && !landscapeLayout && (!stackedLayout || stackPage === 1)"
         />
         <!-- 顶/底栏渐变遮罩（全屏封面模式） -->
         <div
@@ -283,8 +283,9 @@ const showComments = (): void => {
           class="cover-mask-bottom absolute bottom-0 inset-x-0 h-48 z-5 pointer-events-none transition-opacity duration-400"
           :class="immersive ? 'opacity-0' : 'opacity-100'"
         />
-        <!-- 顶栏：Android 避开状态栏 -->
+        <!-- 顶栏：Android 避开状态栏；横屏精简布局不渲染 -->
         <div
+          v-if="!landscapeLayout"
           class="absolute inset-x-0 z-10 app-drag-region transition-opacity duration-400 flex items-center justify-between px-3"
           :class="[
             immersive ? 'opacity-0 pointer-events-none' : 'opacity-100',
@@ -309,7 +310,14 @@ const showComments = (): void => {
             </SButton>
           </div>
           <div class="app-no-drag flex items-center gap-3">
-            <SButton v-if="isAndroid" type="cover" variant="ghost" circle :size="40" @click="collapse">
+            <SButton
+              v-if="isAndroid"
+              type="cover"
+              variant="ghost"
+              circle
+              :size="40"
+              @click="collapse"
+            >
               <template #icon><IconLucideChevronDown /></template>
             </SButton>
             <SButton
@@ -319,24 +327,27 @@ const showComments = (): void => {
               circle
               :size="40"
               @click="toggleFullscreen"
-            >              <template #icon>
+            >
+              <template #icon>
                 <IconLucideMinimize v-if="isFullscreen" />
                 <IconLucideMaximize v-else />
               </template>
             </SButton>
           </div>
         </div>
-        <!-- 主区域：堆叠时文档流（封面区+歌词区上下排），桌面左右绝对分栏 -->
+        <!-- 主区域：堆叠时文档流（封面区+歌词区上下排），横屏精简为左右分栏，桌面左右绝对分栏 -->
         <div
           class="absolute inset-x-0"
           :class="
-            stackedLayout
-              ? isAndroid
-                ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-0 flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]'
-                : 'top-14 bottom-0 flex flex-col overflow-hidden'
-              : isAndroid
-                ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-20'
-                : 'top-14 bottom-20'
+            landscapeLayout
+              ? 'top-0 bottom-0'
+              : stackedLayout
+                ? isAndroid
+                  ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-0 flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]'
+                  : 'top-14 bottom-0 flex flex-col overflow-hidden'
+                : isAndroid
+                  ? 'top-[calc(3.5rem+env(safe-area-inset-top))] bottom-20'
+                  : 'top-14 bottom-20'
           "
           @mousemove="onMainMove"
         >
@@ -353,285 +364,318 @@ const showComments = (): void => {
                 : undefined
             "
           >
-          <div ref="page1Ref" :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col overflow-y-auto pb-10' : 'contents'">
-          <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
-          <div
-            v-if="!fullscreenCover"
-            class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            :class="
-              stackedLayout
-                ? 'w-full flex-col items-center px-5 pt-8 shrink-0'
-                : 'absolute inset-y-0 left-0 items-center justify-center px-12'
-            "
-            :style="
-              stackedLayout
-                ? undefined
-                : {
-                    width: coverWidth,
-                    transform: coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
-                  }
-            "
-          >
             <div
-              class="relative"
+              ref="page1Ref"
               :class="
                 stackedLayout
-                  ? 'w-[min(100%,clamp(240px,72vw,380px))]'
-                  : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'
+                  ? 'w-1/2 h-full shrink-0 flex flex-col overflow-y-auto pb-10'
+                  : 'contents'
               "
             >
-              <Transition name="scale-switch" mode="out-in">
-                <div :key="displayTrack?.id">
-                  <PlayerCover />
-                  <div v-if="!stackedLayout" class="absolute top-full left-0 w-full pt-6">
-                    <PlayerData align="left" />
-                  </div>
-                </div>
-              </Transition>
-            </div>
-          </div>
-          <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制，第一页） -->
-          <template v-if="stackedLayout">
-            <div class="w-full flex flex-col gap-1 px-5 pt-3 shrink-0">
-              <div class="w-full min-w-0">
-                <PlayerData align="left" simple />
-              </div>
-              <div class="flex items-center gap-1">
-                <SButton
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  :size="36"
-                  :disabled="!hasTrack"
-                  @click="fav.toggle(displayTrack)"
-                >
-                  <template #icon>
-                    <SIconSwap :active="fav.isLiked(displayTrack)">
-                      <template #on><IconFavorite /></template>
-                      <template #off><IconFavoriteOutline /></template>
-                    </SIconSwap>
-                  </template>
-                </SButton>
-                <SButton
-                  v-if="displayTrack?.source === 'local' || displayTrack?.source === 'netease'"
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  :size="36"
-                  @click="displayTrack && openPicker([displayTrack])"
-                >
-                  <template #icon><IconLucideListPlus /></template>
-                </SButton>
-                <Toolbar cover hide-volume />
-              </div>
-            </div>
-            <div class="w-full flex items-center gap-2 px-5 pt-2 shrink-0">
-              <span
-                class="text-xs text-cover/50 tabular-nums min-w-9 text-center"
-                @click="toggleTimeFormat"
-              >
-                {{ timeDisplay[0] }}
-              </span>
-              <SSlider
-                :model-value="position"
-                :min="0"
-                :max="duration"
-                :step="100"
-                :always-show-thumb="false"
-                cover
-                class="flex-1"
-                @drag-end="onSeekDragEnd"
-              />
-              <span
-                class="text-xs text-cover/50 tabular-nums min-w-9 text-center"
-                @click="toggleTimeFormat"
-              >
-                {{ timeDisplay[1] }}
-              </span>
-            </div>
-            <div class="w-full flex items-center justify-between px-8 pt-3 shrink-0 mx-auto" style="max-width: 420px">
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :size="40"
-                @click="
-                  fmMode
-                    ? player.dislikeFmTrack()
-                    : heartMode
-                      ? player.exitHeartMode()
-                      : player.toggleShuffleMode()
+              <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
+              <div
+                v-if="!fullscreenCover"
+                class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                :class="
+                  landscapeLayout
+                    ? 'absolute inset-y-0 left-0 w-[38%] flex-col items-center justify-center gap-5 px-4'
+                    : stackedLayout
+                      ? 'w-full flex-col items-center px-5 pt-8 shrink-0'
+                      : 'absolute inset-y-0 left-0 items-center justify-center px-12'
+                "
+                :style="
+                  stackedLayout || landscapeLayout
+                    ? undefined
+                    : {
+                        width: coverWidth,
+                        transform: coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
+                      }
                 "
               >
-                <template #icon>
-                  <IconLucideHeartOff v-if="fmMode" />
-                  <IconSpHeartMode v-else-if="heartMode" />
-                  <IconLucideShuffle v-else-if="shuffleMode === 'on'" />
-                  <IconSpPlayOrder v-else />
-                </template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :size="50"
-                :disabled="!hasTrack || fmMode"
-                @click="player.prevTrack()"
-              >
-                <template #icon><IconLucideSkipBack /></template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="secondary"
-                circle
-                :size="60"
-                :loading="isLoading"
-                :disabled="!hasTrack && !isLoading"
-                @click="player.togglePlay()"
-              >
-                <template #icon>
-                  <SIconSwap :active="isPlaying">
-                    <template #on><IconLucidePause /></template>
-                    <template #off><IconLucidePlay /></template>
-                  </SIconSwap>
-                </template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :size="50"
-                :disabled="!hasTrack"
-                @click="player.nextTrack()"
-              >
-                <template #icon><IconLucideSkipForward /></template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :size="40"
-                :disabled="fmMode"
-                :class="fmMode ? 'opacity-40' : 'opacity-100'"
-                @click="player.cycleRepeatMode()"
-              >
-                <template #icon>
-                  <IconLucideInfinity v-if="fmMode" />
-                  <IconLucideRepeat1 v-else-if="repeatMode === 'one'" />
-                  <IconLucideRepeat v-else />
-                </template>
-              </SButton>
-            </div>
-          </template>
-          </div>
-          <div :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col min-h-0' : 'contents'">
-          <!-- 右侧（堆叠时为歌词频谱页，文档流占满剩余高度） -->
-          <div
-            ref="lyricPaneRef"
-            class="group flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            :class="[
-              coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
-              stackedLayout ? 'relative flex-1 min-h-0 w-full px-4 pt-2' : 'absolute inset-y-0 right-0 pr-20',
-            ]"
-            :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
-          >
-            <!-- 全屏封面 -->
-            <div
-              v-if="fullscreenCover"
-              class="shrink-0 pt-2 pb-6 pl-[calc(1em-0.5rem)]"
-              :style="{ fontSize: lyricFontSize }"
-            >
-              <PlayerData align="left" simple />
-            </div>
-            <!-- 歌词容器 -->
-            <div
-              class="lyric-area relative flex-1 min-h-0"
-              :style="{
-                fontSize: lyricFontSize,
-                fontWeight: String(settings.lyric.fontWeight),
-                fontFamily: settings.lyric.fontFamily || undefined,
-                '--lyric-font-zh': settings.lyric.fontFamilyChinese || undefined,
-                '--lyric-font-ja': settings.lyric.fontFamilyJapanese || undefined,
-                '--lyric-font-ko': settings.lyric.fontFamilyKorean || undefined,
-                '--lyric-font-latin': settings.lyric.fontFamilyLatin || undefined,
-                mixBlendMode: settings.lyric.lyricBlendMode,
-              }"
-            >
-              <AMLLLyrics
-                v-if="lyricMounted && hasLyric && settings.lyric.engine === 'amll'"
-                ref="lyricRef"
-                :lyric-lines="media.parsedLyric"
-                :initial-time="initialLyricTimeMs"
-                :playing="isPlaying"
-                :align-position="settings.lyric.alignPosition"
-                :word-fade-width="settings.lyric.wordFadeWidth"
-                :hide-passed-lines="settings.lyric.hidePassedLines"
-                :enable-blur="settings.lyric.enableBlur"
-                :show-translation="settings.lyric.showTranslation"
-                :show-line-romanization="settings.lyric.amllShowLineRomanization"
-                :show-word-romanization="settings.lyric.amllShowWordRomanization"
-                @seek="handleLyricSeek"
-              >
-                <template #bottom>
-                  <div v-if="media.lyricAuthors.length > 0" class="lyric-credit-line">
-                    <span class="lyric-credit-prefix">{{ $t("player.lyricCredit") }}</span>
-                    <template v-for="(author, idx) in media.lyricAuthors" :key="author">
-                      <span v-if="idx > 0" class="mx-1">,</span>
-                      <span
-                        class="lp-content lyric-credit"
-                        @click.stop="openExternal(`https://github.com/${author}`)"
+                <div
+                  class="relative"
+                  :class="
+                    landscapeLayout
+                      ? 'w-[70%] max-w-[220px]'
+                      : stackedLayout
+                        ? 'w-[min(100%,clamp(240px,72vw,380px))]'
+                        : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'
+                  "
+                >
+                  <Transition name="scale-switch" mode="out-in">
+                    <div :key="displayTrack?.id">
+                      <PlayerCover />
+                      <div
+                        v-if="!stackedLayout && !landscapeLayout"
+                        class="absolute top-full left-0 w-full pt-6"
                       >
-                        {{ "@" + author }}
-                      </span>
-                    </template>
+                        <PlayerData align="left" />
+                      </div>
+                    </div>
+                  </Transition>
+                </div>
+                <!-- 横屏精简信息：歌手/歌单/专辑 -->
+                <PlayerData v-if="landscapeLayout" align="center" meta-only class="shrink-0" />
+              </div>
+              <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制，第一页） -->
+              <template v-if="stackedLayout">
+                <div class="w-full flex flex-col gap-1 px-5 pt-3 shrink-0">
+                  <div class="w-full min-w-0">
+                    <PlayerData align="left" simple />
                   </div>
-                </template>
-              </AMLLLyrics>
-              <Lyrics
-                v-else-if="lyricMounted && hasLyric"
-                ref="lyricRef"
-                :lyric-lines="media.parsedLyric"
-                :initial-time="initialLyricTimeMs"
-                :playing="isPlaying"
-                :align-position="settings.lyric.alignPosition"
-                :word-fade-width="settings.lyric.wordFadeWidth"
-                :spring-config="springConfig"
-                :inactive-alpha="settings.lyric.inactiveAlpha"
-                :hide-passed-lines="settings.lyric.hidePassedLines"
-                :enable-blur="settings.lyric.enableBlur"
-                :enable-word-highlight="settings.lyric.enableWordHighlight"
-                :enable-float-animation="settings.lyric.enableFloatAnimation"
-                :enable-emphasize-effect="settings.lyric.enableEmphasizeEffect"
-                :show-translation="settings.lyric.showTranslation"
-                :show-romanization="settings.lyric.showRomanization"
-                @seek="handleLyricSeek"
-              >
-                <template #bottom>
-                  <div v-if="media.lyricAuthors.length > 0" class="lyric-credit-line">
-                    <span class="lyric-credit-prefix">{{ $t("player.lyricCredit") }}</span>
-                    <template v-for="(author, idx) in media.lyricAuthors" :key="author">
-                      <span v-if="idx > 0" class="mx-1">,</span>
-                      <span
-                        class="lp-content lyric-credit"
-                        @click.stop="openExternal(`https://github.com/${author}`)"
-                      >
-                        {{ "@" + author }}
-                      </span>
-                    </template>
+                  <div class="flex items-center gap-1">
+                    <SButton
+                      type="cover"
+                      variant="ghost"
+                      circle
+                      :size="36"
+                      :disabled="!hasTrack"
+                      @click="fav.toggle(displayTrack)"
+                    >
+                      <template #icon>
+                        <SIconSwap :active="fav.isLiked(displayTrack)">
+                          <template #on><IconFavorite /></template>
+                          <template #off><IconFavoriteOutline /></template>
+                        </SIconSwap>
+                      </template>
+                    </SButton>
+                    <SButton
+                      v-if="displayTrack?.source === 'local' || displayTrack?.source === 'netease'"
+                      type="cover"
+                      variant="ghost"
+                      circle
+                      :size="36"
+                      @click="displayTrack && openPicker([displayTrack])"
+                    >
+                      <template #icon><IconLucideListPlus /></template>
+                    </SButton>
+                    <Toolbar cover hide-volume />
                   </div>
-                </template>
-              </Lyrics>
+                </div>
+                <div class="w-full flex items-center gap-2 px-5 pt-2 shrink-0">
+                  <span
+                    class="text-xs text-cover/50 tabular-nums min-w-9 text-center"
+                    @click="toggleTimeFormat"
+                  >
+                    {{ timeDisplay[0] }}
+                  </span>
+                  <SSlider
+                    :model-value="position"
+                    :min="0"
+                    :max="duration"
+                    :step="100"
+                    :always-show-thumb="false"
+                    cover
+                    class="flex-1"
+                    @drag-end="onSeekDragEnd"
+                  />
+                  <span
+                    class="text-xs text-cover/50 tabular-nums min-w-9 text-center"
+                    @click="toggleTimeFormat"
+                  >
+                    {{ timeDisplay[1] }}
+                  </span>
+                </div>
+                <div
+                  class="w-full flex items-center justify-between px-8 pt-3 shrink-0 mx-auto"
+                  style="max-width: 420px"
+                >
+                  <SButton
+                    type="cover"
+                    variant="ghost"
+                    circle
+                    :size="40"
+                    @click="
+                      fmMode
+                        ? player.dislikeFmTrack()
+                        : heartMode
+                          ? player.exitHeartMode()
+                          : player.toggleShuffleMode()
+                    "
+                  >
+                    <template #icon>
+                      <IconLucideHeartOff v-if="fmMode" />
+                      <IconSpHeartMode v-else-if="heartMode" />
+                      <IconLucideShuffle v-else-if="shuffleMode === 'on'" />
+                      <IconSpPlayOrder v-else />
+                    </template>
+                  </SButton>
+                  <SButton
+                    type="cover"
+                    variant="ghost"
+                    circle
+                    :size="50"
+                    :disabled="!hasTrack || fmMode"
+                    @click="player.prevTrack()"
+                  >
+                    <template #icon><IconLucideSkipBack /></template>
+                  </SButton>
+                  <SButton
+                    type="cover"
+                    variant="secondary"
+                    circle
+                    :size="60"
+                    :loading="isLoading"
+                    :disabled="!hasTrack && !isLoading"
+                    @click="player.togglePlay()"
+                  >
+                    <template #icon>
+                      <SIconSwap :active="isPlaying">
+                        <template #on><IconLucidePause /></template>
+                        <template #off><IconLucidePlay /></template>
+                      </SIconSwap>
+                    </template>
+                  </SButton>
+                  <SButton
+                    type="cover"
+                    variant="ghost"
+                    circle
+                    :size="50"
+                    :disabled="!hasTrack"
+                    @click="player.nextTrack()"
+                  >
+                    <template #icon><IconLucideSkipForward /></template>
+                  </SButton>
+                  <SButton
+                    type="cover"
+                    variant="ghost"
+                    circle
+                    :size="40"
+                    :disabled="fmMode"
+                    :class="fmMode ? 'opacity-40' : 'opacity-100'"
+                    @click="player.cycleRepeatMode()"
+                  >
+                    <template #icon>
+                      <IconLucideInfinity v-if="fmMode" />
+                      <IconLucideRepeat1 v-else-if="repeatMode === 'one'" />
+                      <IconLucideRepeat v-else />
+                    </template>
+                  </SButton>
+                </div>
+              </template>
+            </div>
+            <div
+              :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col min-h-0' : 'contents'"
+            >
+              <!-- 右侧（堆叠时为歌词频谱页，文档流占满剩余高度） -->
               <div
-                v-else-if="lyricMounted"
-                class="w-full h-full flex items-center justify-center text-cover/30"
+                ref="lyricPaneRef"
+                class="group flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                :class="[
+                  (coverCentered && !landscapeLayout) || status.fullQueueOpen
+                    ? 'opacity-0 pointer-events-none'
+                    : 'opacity-100',
+                  landscapeLayout
+                    ? 'absolute inset-y-0 right-0 w-1/2 pr-4'
+                    : stackedLayout
+                      ? 'relative flex-1 min-h-0 w-full px-4 pt-2'
+                      : 'absolute inset-y-0 right-0 pr-20',
+                ]"
+                :style="
+                  stackedLayout
+                    ? { width: '100%' }
+                    : landscapeLayout
+                      ? undefined
+                      : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }
+                "
               >
-                暂无歌词
+                <!-- 全屏封面 -->
+                <div
+                  v-if="fullscreenCover"
+                  class="shrink-0 pt-2 pb-6 pl-[calc(1em-0.5rem)]"
+                  :style="{ fontSize: lyricFontSize }"
+                >
+                  <PlayerData align="left" simple />
+                </div>
+                <!-- 歌词容器 -->
+                <div
+                  class="lyric-area relative flex-1 min-h-0"
+                  :style="{
+                    fontSize: lyricFontSize,
+                    fontWeight: String(settings.lyric.fontWeight),
+                    fontFamily: settings.lyric.fontFamily || undefined,
+                    '--lyric-font-zh': settings.lyric.fontFamilyChinese || undefined,
+                    '--lyric-font-ja': settings.lyric.fontFamilyJapanese || undefined,
+                    '--lyric-font-ko': settings.lyric.fontFamilyKorean || undefined,
+                    '--lyric-font-latin': settings.lyric.fontFamilyLatin || undefined,
+                    mixBlendMode: settings.lyric.lyricBlendMode,
+                  }"
+                >
+                  <AMLLLyrics
+                    v-if="lyricMounted && hasLyric && settings.lyric.engine === 'amll'"
+                    ref="lyricRef"
+                    :lyric-lines="media.parsedLyric"
+                    :initial-time="initialLyricTimeMs"
+                    :playing="isPlaying"
+                    :align-position="settings.lyric.alignPosition"
+                    :word-fade-width="settings.lyric.wordFadeWidth"
+                    :hide-passed-lines="settings.lyric.hidePassedLines"
+                    :enable-blur="settings.lyric.enableBlur"
+                    :show-translation="settings.lyric.showTranslation"
+                    :show-line-romanization="settings.lyric.amllShowLineRomanization"
+                    :show-word-romanization="settings.lyric.amllShowWordRomanization"
+                    @seek="handleLyricSeek"
+                  >
+                    <template #bottom>
+                      <div v-if="media.lyricAuthors.length > 0" class="lyric-credit-line">
+                        <span class="lyric-credit-prefix">{{ $t("player.lyricCredit") }}</span>
+                        <template v-for="(author, idx) in media.lyricAuthors" :key="author">
+                          <span v-if="idx > 0" class="mx-1">,</span>
+                          <span
+                            class="lp-content lyric-credit"
+                            @click.stop="openExternal(`https://github.com/${author}`)"
+                          >
+                            {{ "@" + author }}
+                          </span>
+                        </template>
+                      </div>
+                    </template>
+                  </AMLLLyrics>
+                  <Lyrics
+                    v-else-if="lyricMounted && hasLyric"
+                    ref="lyricRef"
+                    :lyric-lines="media.parsedLyric"
+                    :initial-time="initialLyricTimeMs"
+                    :playing="isPlaying"
+                    :align-position="settings.lyric.alignPosition"
+                    :word-fade-width="settings.lyric.wordFadeWidth"
+                    :spring-config="springConfig"
+                    :inactive-alpha="settings.lyric.inactiveAlpha"
+                    :hide-passed-lines="settings.lyric.hidePassedLines"
+                    :enable-blur="settings.lyric.enableBlur"
+                    :enable-word-highlight="settings.lyric.enableWordHighlight"
+                    :enable-float-animation="settings.lyric.enableFloatAnimation"
+                    :enable-emphasize-effect="settings.lyric.enableEmphasizeEffect"
+                    :show-translation="settings.lyric.showTranslation"
+                    :show-romanization="settings.lyric.showRomanization"
+                    @seek="handleLyricSeek"
+                  >
+                    <template #bottom>
+                      <div v-if="media.lyricAuthors.length > 0" class="lyric-credit-line">
+                        <span class="lyric-credit-prefix">{{ $t("player.lyricCredit") }}</span>
+                        <template v-for="(author, idx) in media.lyricAuthors" :key="author">
+                          <span v-if="idx > 0" class="mx-1">,</span>
+                          <span
+                            class="lp-content lyric-credit"
+                            @click.stop="openExternal(`https://github.com/${author}`)"
+                          >
+                            {{ "@" + author }}
+                          </span>
+                        </template>
+                      </div>
+                    </template>
+                  </Lyrics>
+                  <div
+                    v-else-if="lyricMounted"
+                    class="w-full h-full flex items-center justify-center text-cover/30"
+                  >
+                    暂无歌词
+                  </div>
+                </div>
+                <!-- 歌词侧边工具栏：横屏精简布局不渲染 -->
+                <LyricActions v-if="!landscapeLayout" :immersive="immersive" />
               </div>
             </div>
-            <!-- 歌词侧边工具栏 -->
-            <LyricActions :immersive="immersive" />
-          </div>
-          </div>
           </div>
           <!-- 堆叠分页点（逐像素对照参照：白 20% 圆点 / 主色 16px 胶囊，内联样式锁定） -->
           <div
@@ -689,7 +733,11 @@ const showComments = (): void => {
                   : 'inset-y-0 right-0 pl-4 py-6'
                 : 'inset-y-0 right-0 pl-4 py-6 pointer-events-none',
             ]"
-            :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
+            :style="
+              stackedLayout
+                ? { width: '100%' }
+                : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }
+            "
           >
             <Transition
               enter-active-class="transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -703,9 +751,9 @@ const showComments = (): void => {
             </Transition>
           </div>
         </div>
-        <!-- 底栏（仅桌面；竖屏控制已移入页面） -->
+        <!-- 底栏（桌面与 Android 横屏精简布局不渲染） -->
         <div
-          v-if="!stackedLayout"
+          v-if="!stackedLayout && !landscapeLayout"
           class="absolute bottom-0 inset-x-0 z-10 flex items-center transition-opacity duration-400 h-20 gap-4 px-4"
           :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
           @mouseenter="onBarEnter"

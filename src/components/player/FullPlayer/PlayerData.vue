@@ -22,11 +22,14 @@ const props = withDefaults(
     simple?: boolean;
     /** 是否显示来源/音质标签行（竖屏信息行窄时可关，给歌名歌手让路） */
     showTags?: boolean;
+    /** 仅元信息行（Android 横屏精简）：不渲染标题/副标题/标签，只留歌手/专辑/播放来源 */
+    metaOnly?: boolean;
   }>(),
   {
     align: "center",
     simple: false,
     showTags: true,
+    metaOnly: false,
   },
 );
 
@@ -151,18 +154,21 @@ const alignItems = computed(() => {
     :class="alignItems"
   >
     <!-- 标题 -->
-    <SMarquee fit class="max-w-full text-[2em] font-semibold leading-tight">
+    <SMarquee v-if="!metaOnly" fit class="max-w-full text-[2em] font-semibold leading-tight">
       {{ displayTrack.title }}
     </SMarquee>
     <!-- 副标题/注释 -->
     <div
-      v-if="!simple && displayTrack.comment"
+      v-if="!simple && !metaOnly && displayTrack.comment"
       class="max-w-full text-[1.4em] text-cover/40 truncate"
     >
       {{ displayTrack.comment }}
     </div>
     <!-- 元信息标签行 -->
-    <div v-if="showTags" class="flex items-center gap-1.5 text-[1em] my-1 text-cover/60">
+    <div
+      v-if="showTags && !metaOnly"
+      class="flex items-center gap-1.5 text-[1em] my-1 text-cover/60"
+    >
       <span
         class="inline-flex items-center justify-center leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30"
       >
