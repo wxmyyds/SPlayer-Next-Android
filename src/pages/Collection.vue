@@ -151,6 +151,9 @@ const handlePlayAll = () => {
 
 const searchQuery = ref("");
 
+/** 专辑页 Android：播放/收藏按钮搬到封面下方从左往右排，桌面与其他类型不动 */
+const actionsBelowCover = isAndroid && type === "album";
+
 /** 歌曲列表引用 */
 const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
 
@@ -342,8 +345,9 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <!-- 操作栏：窄屏允许换行，搜索框弹性占满剩余行 -->
+          <!-- 操作栏：默认在信息列内；专辑 Android 版搬到封面下方 -->
           <div
+            v-if="!actionsBelowCover"
             class="mt-auto flex items-center justify-between"
             :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'"
           >
@@ -410,6 +414,70 @@ onBeforeUnmount(() => {
             </SInput>
           </div>
         </div>
+      </div>
+      <!-- 专辑 Android：封面下方从左往右的操作行 -->
+      <div v-if="actionsBelowCover" class="mt-2 flex items-center flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <SButton
+            type="primary"
+            variant="secondary"
+            round
+            size="small"
+            :disabled="collection.tracks.length === 0"
+            @click="handlePlayAll"
+          >
+            <template #icon>
+              <IconLucidePlay />
+            </template>
+            {{ t("common.playAll") }}
+          </SButton>
+          <SButton
+            v-if="subscribe.available.value"
+            variant="secondary"
+            round
+            size="small"
+            :disabled="subscribe.busy.value"
+            @click="subscribe.toggle"
+          >
+            <template #icon>
+              <IconMaterialSymbolsFavoriteRounded v-if="subscribe.isSubscribed.value" />
+              <IconMaterialSymbolsFavoriteOutlineRounded v-else />
+            </template>
+            {{
+              t(
+                subscribe.isSubscribed.value
+                  ? "collection.unsubscribe"
+                  : "collection.subscribe",
+              )
+            }}
+          </SButton>
+          <SDropdownMenu
+            v-if="moreMenuItems.length > 0"
+            :items="moreMenuItems"
+            align="start"
+            @select="handleMoreMenu"
+          >
+            <template #trigger>
+              <SButton variant="secondary" circle>
+                <template #icon>
+                  <IconLucideEllipsis />
+                </template>
+              </SButton>
+            </template>
+          </SDropdownMenu>
+        </div>
+        <SInput
+          v-model="searchQuery"
+          :placeholder="t('common.search')"
+          clearable
+          round
+          class="min-w-32 flex-1"
+          data-search-input
+        >
+          <template #prefix>
+            <IconLucideSearch class="size-4 text-on-surface-variant/40 shrink-0" />
+          </template>
+        </SInput>
       </div>
     </div>
     <Transition name="fade" mode="out-in" :duration="150">
