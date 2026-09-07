@@ -126,7 +126,7 @@ const config: ConfigApi = {
         // 单键损坏跳过
       }
     }
-    return merged as SystemConfig;
+    return merged as unknown as SystemConfig;
   },
   async reset() {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {
