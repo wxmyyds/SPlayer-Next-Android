@@ -172,8 +172,12 @@ public class MediaSessionPlugin extends Plugin {
 
                             // 焦点礼让交由 WebView 内部媒体栈处理（原生再申请会与其互斥，元素被瞬时暂停）；
                             // 这里只管拔耳机监听生命周期：播放期注册，暂停/停止注销
-                            if (playing) registerNoisyReceiver();
-                            else unregisterNoisyReceiver();
+                            try {
+                                if (playing) registerNoisyReceiver();
+                                else unregisterNoisyReceiver();
+                            } catch (Exception e) {
+                                Log.e(TAG, "noisy lifecycle failed", e);
+                            }
 
                             // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
                             MediaMetadata current =
@@ -352,14 +356,19 @@ public class MediaSessionPlugin extends Plugin {
 
     private void registerNoisyReceiver() {
         if (noisyRegistered) return;
-        Log.i(TAG, "register noisy receiver");
-        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        if (Build.VERSION.SDK_INT >= 33) {
-            getContext().registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            getContext().registerReceiver(noisyReceiver, filter);
+        try {
+            Log.i(TAG, "register noisy receiver");
+            IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            if (Build.VERSION.SDK_INT >= 33) {
+                getContext().registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                getContext().registerReceiver(noisyReceiver, filter);
+            }
+            noisyRegistered = true;
+        } catch (Exception e) {
+            // 部分 ROM 对 NOT_EXPORTED 校验过严会抛异常；监听失败只影响拔耳机暂停，绝不波及播放
+            Log.e(TAG, "register noisy receiver failed", e);
         }
-        noisyRegistered = true;
     }
 
     private void unregisterNoisyReceiver() {
