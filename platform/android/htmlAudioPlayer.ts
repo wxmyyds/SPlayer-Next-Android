@@ -154,7 +154,7 @@ const getAudio = (): HTMLAudioElement => {
         data: { position, duration },
       });
     });
-    wireMediaSession();
+    wireMediaBridge();
     try {
       const saved = localStorage.getItem("splayer.android.player.volume");
       if (saved !== null) el.volume = Math.min(1, Math.max(0, Number(saved) || 0));
