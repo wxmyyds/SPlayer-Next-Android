@@ -116,16 +116,108 @@ const publishState = (state: "playing" | "paused" | "none", positionMs?: number,
   }
 };
 
+/** FFT：渲染层要 128 双通道事件（桌面引擎推送同款形状），Web Audio 分析器补齐 */
+const FFT_BINS = 128;
+let fftWanted = false;
+let audioCtx: AudioContext | null = null;
+let analyser: AnalyserNode | null = null;
+let fftTimer: ReturnType<typeof setInterval> | null = null;
+
+/** 音源是否允许跨域分析：无 CORS 头时建图会静音，先 Range 预检 */
+const probeCors = async (source: string): Promise<boolean> => {
+  try {
+    const res = await fetch(source, {
+      headers: { Range: "bytes=0-0" },
+      signal: AbortSignal.timeout(2500),
+    });
+    const allow = res.headers.get("access-control-allow-origin");
+    return !!allow;
+  } catch {
+    return false;
+  }
+};
+
+/** 为当前音频建分析图（仅 CORS 安全时；否则保持直出，频谱持平但不断声） */
+const ensureFftGraph = async (el: HTMLAudioElement): Promise<void> => {
+  if (analyser || !fftWanted || !el.src) return;
+  if (!(await probeCors(el.src))) return;
+  try {
+    el.crossOrigin = "anonymous";
+    // crossOrigin 需在 src 赋值前生效，改完重载一次
+    const url = el.src;
+    const position = el.currentTime;
+    const wasPlaying = !el.paused;
+    audioCtx ??= new AudioContext();
+    await audioCtx.resume().catch(() => {});
+    const source = audioCtx.createMediaElementSource(el);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = FFT_BINS * 4;
+    analyser.smoothingTimeConstant = 0.75;
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    el.src = url;
+    el.load();
+    const restore = (): void => {
+      el.removeEventListener("loadedmetadata", restore);
+      if (Number.isFinite(position) && position > 0) {
+        try {
+          el.currentTime = position;
+        } catch {
+          // 忽略
+        }
+      }
+      if (wasPlaying) void el.play().catch(() => {});
+    };
+    el.addEventListener("loadedmetadata", restore);
+  } catch {
+    analyser = null;
+  }
+};
+
+const pushFftFrame = (): void => {
+  const el = audio;
+  if (!el || !analyser || el.paused) return;
+  try {
+    const raw = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(raw);
+    // 256 bins 两两平均 → 128，与桌面引擎维度一致
+    const ldata = new Array<number>(FFT_BINS);
+    for (let i = 0; i < FFT_BINS; i++) {
+      const a = raw[i * 2] ?? 0;
+      const b = raw[i * 2 + 1] ?? 0;
+      ldata[i] = (a + b) / 512;
+    }
+    emit({ type: "fftData", data: { ldata, rdata: [...ldata] } });
+  } catch {
+    // 忽略单帧异常
+  }
+};
+
+const startFftLoop = (): void => {
+  if (fftTimer !== null) return;
+  fftTimer = setInterval(pushFftFrame, 66);
+};
+
+const stopFftLoop = (): void => {
+  if (fftTimer !== null) {
+    clearInterval(fftTimer);
+    fftTimer = null;
+  }
+};
+
 const getAudio = (): HTMLAudioElement => {
   if (!audio) {
     const el = new Audio();
     el.preload = "auto";
     el.addEventListener("play", () => {
       publishState("playing");
+      if (audioCtx) void audioCtx.resume().catch(() => {});
+      if (fftWanted) startFftLoop();
       emit({ type: "play" });
     });
     el.addEventListener("pause", () => {
       publishState("paused");
+      stopFftLoop();
       emit({ type: "pause" });
     });
     el.addEventListener("ended", () => {
@@ -185,6 +277,8 @@ export const htmlAudioPlayer: PlayerApi = {
     const el = getAudio();
     publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
     el.src = source;
+    // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
+    void ensureFftGraph(el);
     if (options?.autoPlay !== false) {
       try {
         await el.play();
@@ -239,8 +333,32 @@ export const htmlAudioPlayer: PlayerApi = {
   setPauseOnDeviceSwitch: async () => ok(),
   getVolume: async () => ok(getAudio().volume),
   getStatus: async () => ok(snapshot()),
-  setFftEnabled: async () => ok(),
-  getFftData: async () => ok({ ldata: [], rdata: [] }),
+  setFftEnabled: async (enabled: boolean) => {
+    fftWanted = enabled;
+    if (enabled) {
+      void ensureFftGraph(getAudio());
+      const el = audio;
+      if (el && !el.paused) startFftLoop();
+    } else {
+      stopFftLoop();
+    }
+    return ok();
+  },
+  getFftData: async () => {
+    const el = audio;
+    if (!el || !analyser || el.paused) return ok({ ldata: [], rdata: [] });
+    try {
+      const raw = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(raw);
+      const ldata = new Array<number>(FFT_BINS);
+      for (let i = 0; i < FFT_BINS; i++) {
+        ldata[i] = ((raw[i * 2] ?? 0) + (raw[i * 2 + 1] ?? 0)) / 512;
+      }
+      return ok({ ldata, rdata: [...ldata] });
+    } catch {
+      return ok({ ldata: [], rdata: [] });
+    }
+  },
   setFadeDuration: async () => ok(),
   getFadeDuration: async () => ok(0),
   getCoverRaw: async () => ok(null),
