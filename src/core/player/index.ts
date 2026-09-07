@@ -794,7 +794,7 @@ export const prevTrack = async (): Promise<void> => {
 };
 
 /** 队列播放结束，通知主进程停止并更新状态 */
-const onQueueEnded = async (): Promise<void> => {
+export const onQueueEnded = async (): Promise<void> => {
   const status = useStatusStore();
   status.trackLoading = false;
   playback.setPlaying(false);

@@ -1,5 +1,6 @@
 import type { PlayerEvent } from "@shared/types/player";
 import { useMediaStore } from "@/stores/media";
+import * as queue from "@/stores/queue";
 import { useStatusStore } from "@/stores/status";
 import { useFavorite } from "@/composables/useFavorite";
 import * as playback from "@/services/playback";
@@ -13,6 +14,7 @@ import {
   isSeeking,
   markSeek,
   nextTrack,
+  onQueueEnded,
   pause,
   play,
   playNow,
@@ -46,6 +48,8 @@ const finishCurrentTrack = async (): Promise<void> => {
       await play();
     } else {
       await nextTrack();
+      // 队列真结束（队列空）：清停播并下系统状态，否则通知会卡在上一首的 paused
+      if (queue.queueLength.value === 0) await onQueueEnded();
     }
   } finally {
     endedGuard = false;
