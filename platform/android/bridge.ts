@@ -56,6 +56,17 @@ import {
   removePlaylistTracks,
   updatePlaylist,
 } from "./db/playlists";
+import {
+  getLibraryStats,
+  getPlayHistoryDaily,
+  getPlayHistoryHourly,
+  getStatsSummary,
+  getTopAlbums,
+  getTopArtists,
+  getTopTracks,
+  insertFavoriteEvent,
+  insertPlayEvent,
+} from "./db/playStats";
 import { fetchWithProxy } from "./vendor/shim/proxy";
 
 const unsupported = "Android bridge capability is not implemented";
@@ -285,31 +296,19 @@ const lyrics: LyricsApi = {
 };
 
 const stats: StatsApi = {
-  recordPlay: () => {},
-  recordFavorite: () => {},
-  getStatsSummary: async () => ({
-    todayListenedMs: 0,
-    weekListenedMs: 0,
-    lastWeekListenedMs: 0,
-    totalListenedMs: 0,
-    weekPlayCount: 0,
-    totalPlayCount: 0,
-    weekFavoriteAdds: 0,
-    streakDays: 0,
-  }),
-  getTopTracks: async () => [],
-  getLibraryStats: async () => ({
-    trackCount: 0,
-    albumCount: 0,
-    artistCount: 0,
-    totalDurationMs: 0,
-    totalFileSize: 0,
-    codecs: [],
-  }),
-  getPlayHistoryDaily: async () => [],
-  getPlayHistoryHourly: async () => [],
-  getTopAlbums: async () => [],
-  getTopArtists: async () => [],
+  recordPlay: (event) => {
+    void insertPlayEvent(event);
+  },
+  recordFavorite: (event) => {
+    void insertFavoriteEvent(event);
+  },
+  getStatsSummary: () => getStatsSummary(),
+  getTopTracks: (limit) => getTopTracks(limit),
+  getLibraryStats: () => getLibraryStats(),
+  getPlayHistoryDaily: (days) => getPlayHistoryDaily(days),
+  getPlayHistoryHourly: () => getPlayHistoryHourly(),
+  getTopAlbums: (limit) => getTopAlbums(limit),
+  getTopArtists: (limit) => getTopArtists(limit),
 };
 
 const hotkey: HotkeyApi = {
