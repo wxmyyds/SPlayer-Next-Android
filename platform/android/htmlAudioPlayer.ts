@@ -36,14 +36,88 @@ const emit = (event: PlayerEvent): void => {
 
 let audio: HTMLAudioElement | null = null;
 let lastPositionPush = 0;
+let mediaSessionWired = false;
+
+/** 系统媒体会话：接通后通知栏/锁屏/蓝牙可感知播放并反控（Chromium WebView 原生桥接） */
+const wireMediaSession = (): void => {
+  if (mediaSessionWired) return;
+  try {
+    const ms = navigator.mediaSession;
+    if (!ms || typeof ms.setActionHandler !== "function") return;
+    mediaSessionWired = true;
+    ms.setActionHandler("play", () => emit({ type: "play" }));
+    ms.setActionHandler("pause", () => emit({ type: "pause" }));
+    ms.setActionHandler("previoustrack", () => emit({ type: "prev" }));
+    ms.setActionHandler("nexttrack", () => emit({ type: "next" }));
+    ms.setActionHandler("seekto", (details) => {
+      const el = audio;
+      if (el && typeof details.seekTime === "number") {
+        el.currentTime = Math.max(0, details.seekTime);
+      }
+    });
+  } catch {
+    // 不支持则静默跳过，播放本身不受影响
+  }
+};
+
+/** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
+const publishMetadata = (meta?: { title?: string; artists?: Array<{ name?: string }>; album?: { name?: string }; cover?: string; coverOriginal?: string }): void => {
+  try {
+    const ms = navigator.mediaSession;
+    if (!ms || typeof MediaMetadata === "undefined") return;
+    if (!meta) {
+      ms.metadata = null;
+      return;
+    }
+    const artwork: Array<{ src: string }> = [];
+    if (meta.coverOriginal) artwork.push({ src: meta.coverOriginal });
+    if (meta.cover && meta.cover !== meta.coverOriginal) artwork.push({ src: meta.cover });
+    ms.metadata = new MediaMetadata({
+      title: meta.title ?? "",
+      artist: (meta.artists ?? []).map((a) => a.name).filter(Boolean).join(" / "),
+      album: meta.album?.name ?? "",
+      artwork: artwork as MediaMetadata["artwork"],
+    });
+  } catch {
+    // 忽略
+  }
+};
+
+/** 同步播放状态与进度到系统 */
+const publishState = (state: "playing" | "paused" | "none", positionMs?: number, durationMs?: number): void => {
+  try {
+    const ms = navigator.mediaSession;
+    if (!ms) return;
+    ms.playbackState = state;
+    if (
+      positionMs !== undefined &&
+      durationMs !== undefined &&
+      durationMs > 0 &&
+      typeof ms.setPositionState === "function"
+    ) {
+      ms.setPositionState({ duration: durationMs / 1000, position: Math.min(positionMs, durationMs) / 1000 });
+    }
+  } catch {
+    // 忽略
+  }
+};
 
 const getAudio = (): HTMLAudioElement => {
   if (!audio) {
     const el = new Audio();
     el.preload = "auto";
-    el.addEventListener("play", () => emit({ type: "play" }));
-    el.addEventListener("pause", () => emit({ type: "pause" }));
-    el.addEventListener("ended", () => emit({ type: "ended" }));
+    el.addEventListener("play", () => {
+      publishState("playing");
+      emit({ type: "play" });
+    });
+    el.addEventListener("pause", () => {
+      publishState("paused");
+      emit({ type: "pause" });
+    });
+    el.addEventListener("ended", () => {
+      publishState("none");
+      emit({ type: "ended" });
+    });
     el.addEventListener("error", () => {
       // 错误码进 logcat（adb 抓 console），定位断点用；事件形状保持与桌面一致
       console.warn(
@@ -59,11 +133,14 @@ const getAudio = (): HTMLAudioElement => {
       if (now - lastPositionPush < 200) return;
       lastPositionPush = now;
       const duration = Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0;
+      const position = Math.round(el.currentTime * 1000);
+      publishState(el.paused ? "paused" : "playing", position, duration);
       emit({
         type: "position",
-        data: { position: Math.round(el.currentTime * 1000), duration },
+        data: { position, duration },
       });
     });
+    wireMediaSession();
     try {
       const saved = localStorage.getItem("splayer.android.player.volume");
       if (saved !== null) el.volume = Math.min(1, Math.max(0, Number(saved) || 0));
@@ -92,6 +169,7 @@ export const htmlAudioPlayer: PlayerApi = {
   load: async (source: string, options?: LoadOptions) => {
     if (!/^https?:\/\//i.test(source)) return fail("unsupported source");
     const el = getAudio();
+    publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
     el.src = source;
     if (options?.autoPlay !== false) {
       try {
@@ -126,6 +204,8 @@ export const htmlAudioPlayer: PlayerApi = {
     el.pause();
     el.removeAttribute("src");
     el.load();
+    publishMetadata(undefined);
+    publishState("none");
     return ok();
   },
   seek: async (positionMs: number) => {
