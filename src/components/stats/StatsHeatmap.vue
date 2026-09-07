@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DailyPlayStats, HourlyPlayStats, LibraryStats } from "@shared/types/stats";
 import { isLosslessCodec } from "@/utils/quality";
+import { isAndroid } from "@/utils/platform";
 import StatsDonutChart from "./StatsDonutChart.vue";
 import IconLucideMusic from "~icons/lucide/music";
 
@@ -208,7 +209,14 @@ const codecLabel = (codec: string): string => {
 </script>
 
 <template>
-  <div class="grid grid-cols-[300px_minmax(0,1fr)] gap-5 xl:grid-cols-[300px_minmax(0,1fr)_400px]">
+  <div
+    class="gap-5"
+    :class="
+      isAndroid
+        ? 'flex flex-col'
+        : 'grid grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_400px]'
+    "
+  >
     <!-- 近 90 天热力图 -->
     <SCard radius="xl" class="flex h-52 min-w-0 flex-col gap-3">
       <div class="flex items-baseline justify-between gap-3">
