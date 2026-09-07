@@ -120,15 +120,19 @@ const stackedLayout = computed(() => isAndroid && isPortrait.value);
 
 /** 堆叠双页（参照 SPlayer-for-Android）：0 封面控制页，1 歌词频谱页，轨道滑动跟手 */
 const stackPage = ref(0);
-const coverPaneRef = useTemplateRef("coverPaneRef");
+const page1Ref = useTemplateRef("page1Ref");
 const lyricPaneRef = useTemplateRef("lyricPaneRef");
 const goStackPage = (page: number): void => {
   stackPage.value = Math.max(0, Math.min(1, page));
 };
-const coverSwipe = useSwipe(coverPaneRef, {
+/** 第一页整页左滑（按钮/滑杆/输入框上起始的手势留给控件） */
+const page1Swipe = useSwipe(page1Ref, {
   threshold: 40,
-  onSwipeEnd: (_e, direction) => {
-    if (stackedLayout.value && direction === "left") goStackPage(1);
+  onSwipeEnd: (e, direction) => {
+    if (!stackedLayout.value || direction !== "left") return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("button, input, a, [role='slider']")) return;
+    goStackPage(1);
   },
 });
 const lyricSwipe = useSwipe(lyricPaneRef, {
@@ -138,12 +142,12 @@ const lyricSwipe = useSwipe(lyricPaneRef, {
   },
 });
 const isStackSwiping = computed(
-  () => coverSwipe.isSwiping.value || lyricSwipe.isSwiping.value,
+  () => page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value,
 );
 /** 手指跟随偏移（px，左滑为负），竖滑不跟 */
 const stackDragPx = computed(() => {
-  const active = coverSwipe.isSwiping.value
-    ? coverSwipe
+  const active = page1Swipe.isSwiping.value
+    ? page1Swipe
     : lyricSwipe.isSwiping.value
       ? lyricSwipe
       : null;
@@ -349,11 +353,10 @@ const showComments = (): void => {
                 : undefined
             "
           >
-          <div :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col overflow-y-auto' : 'contents'">
+          <div ref="page1Ref" :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col overflow-y-auto pb-10' : 'contents'">
           <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
           <div
             v-if="!fullscreenCover"
-            ref="coverPaneRef"
             class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
@@ -630,16 +633,16 @@ const showComments = (): void => {
           </div>
           </div>
           </div>
-          <!-- 堆叠分页点（参照：6px 圆点，激活 16px 胶囊） -->
+          <!-- 堆叠分页点（参照：白 20% 圆点，激活封面主色 16px 胶囊，悬浮底部） -->
           <div
             v-if="stackedLayout"
-            class="shrink-0 flex items-center justify-center gap-2 py-2 pointer-events-none"
+            class="absolute inset-x-0 bottom-[calc(16px+env(safe-area-inset-bottom))] z-10 flex items-center justify-center gap-2 pointer-events-none"
           >
             <button
               v-for="i in 2"
               :key="i"
-              class="h-1.5 rounded-full transition-all duration-300 pointer-events-auto"
-              :class="stackPage === i - 1 ? 'w-4 bg-cover' : 'w-1.5 bg-cover/25'"
+              class="h-1.5 transition-all duration-300 pointer-events-auto"
+              :class="stackPage === i - 1 ? 'w-4 rounded-[4px] bg-cover opacity-80' : 'w-1.5 rounded-full bg-white/20'"
               :aria-label="`page ${i}`"
               @click="goStackPage(i - 1)"
             />
