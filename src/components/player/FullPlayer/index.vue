@@ -283,7 +283,7 @@ const showComments = (): void => {
             class="absolute flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
-                ? 'top-0 inset-x-0 flex items-start justify-center px-4 pt-1'
+                ? 'top-0 inset-x-0 flex items-start justify-center px-4 pt-6'
                 : 'inset-y-0 left-0 flex items-center justify-center px-12'
             "
             :style="

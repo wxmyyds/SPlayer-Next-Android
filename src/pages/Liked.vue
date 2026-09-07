@@ -158,20 +158,23 @@ const handleMoreMenu = (key: string): void => {
             </template>
           </SDropdownMenu>
         </div>
-        <div class="flex items-center" :class="isAndroid ? 'flex-1 flex-wrap gap-2' : 'gap-3'">
+        <div
+          class="flex items-center"
+          :class="isAndroid ? 'w-full flex-col items-stretch gap-2' : 'gap-3'"
+        >
           <SInput
             v-model="searchQuery"
             :placeholder="t('common.search')"
             clearable
             round
-            :class="isAndroid ? 'min-w-32 flex-1' : 'w-40 focus-within:w-56'"
+            :class="isAndroid ? 'w-full' : 'w-40 focus-within:w-56'"
             data-search-input
           >
             <template #prefix>
               <IconLucideSearch class="size-4 text-on-surface-variant/40 shrink-0" />
             </template>
           </SInput>
-          <div :class="isAndroid ? 'flex-1 min-w-44' : 'w-48'">
+          <div :class="isAndroid ? 'w-full' : 'w-48'">
             <STabs v-model="tab" :tabs="tabs" type="segment" round />
           </div>
         </div>
