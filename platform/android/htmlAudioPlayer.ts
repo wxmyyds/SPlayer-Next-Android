@@ -318,7 +318,13 @@ const getAudio = (): HTMLAudioElement => {
       emit({ type: "pause" });
     });
     el.addEventListener("ended", () => {
-      publishState("none");
+      // 切歌间隙保活 MediaSession（不 setActive(false)），否则后台切歌时通知消失
+      // WebView 会被 Android 冷下来，下一首 el.play() 实际失败（NotAllowedError 或无声）
+      publishState(
+        "paused",
+        Math.round(el.currentTime * 1000),
+        Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0,
+      );
       emit({ type: "ended" });
     });
     el.addEventListener("error", () => {
@@ -373,6 +379,15 @@ export const htmlAudioPlayer: PlayerApi = {
     if (!/^https?:\/\//i.test(source)) return fail("unsupported source");
     const el = getAudio();
     const switchSrc = async (): Promise<Awaited<ReturnType<PlayerApi["load"]>>> => {
+      // 切歌间隙 AudioContext 在后台会被自动挂起（Chrome 政策），先 resume
+      // 让 el.play() 能真正走通 fadeGain 输出声音，否则 el.play() 不报错但无声
+      if (audioCtx && audioCtx.state === "suspended") {
+        try {
+          await audioCtx.resume();
+        } catch {
+          // 忽略，后果是 fadeGain 这段不出声，el 直出声会硬切
+        }
+      }
       publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
       el.src = source;
       // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
@@ -409,6 +424,14 @@ export const htmlAudioPlayer: PlayerApi = {
   },
   play: async () => {
     try {
+      // 后台时 AudioContext 常处于 suspended，先 resume 保证淡入能走通 fadeGain
+      if (audioCtx && audioCtx.state === "suspended") {
+        try {
+          await audioCtx.resume();
+        } catch {
+          // 忽略
+        }
+      }
       const el = getAudio();
       await el.play();
       fadeIn(el);
