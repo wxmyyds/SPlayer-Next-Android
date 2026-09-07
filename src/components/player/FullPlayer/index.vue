@@ -263,8 +263,8 @@ const showComments = (): void => {
       >
         <!-- 背景 -->
         <PlayerBackground />
-        <!-- 全屏封面 -->
-        <div v-if="fullscreenCover" class="absolute inset-y-0 left-0 w-[60%]">
+        <!-- 全屏封面（横屏精简布局忽略全屏封面设置，避免与右列歌词重叠） -->
+        <div v-if="fullscreenCover && !landscapeLayout" class="absolute inset-y-0 left-0 w-[60%]">
           <PlayerCover fullscreen />
         </div>
         <!-- 底部频谱：堆叠时只在歌词页展示，横屏精简布局不展示 -->
@@ -274,12 +274,12 @@ const showComments = (): void => {
         />
         <!-- 顶/底栏渐变遮罩（全屏封面模式） -->
         <div
-          v-if="fullscreenCover"
+          v-if="fullscreenCover && !landscapeLayout"
           class="cover-mask-top absolute top-0 inset-x-0 h-20 z-5 pointer-events-none transition-opacity duration-400"
           :class="immersive ? 'opacity-0' : 'opacity-100'"
         />
         <div
-          v-if="fullscreenCover"
+          v-if="fullscreenCover && !landscapeLayout"
           class="cover-mask-bottom absolute bottom-0 inset-x-0 h-48 z-5 pointer-events-none transition-opacity duration-400"
           :class="immersive ? 'opacity-0' : 'opacity-100'"
         />
@@ -335,6 +335,18 @@ const showComments = (): void => {
             </SButton>
           </div>
         </div>
+        <!-- 横屏精简布局唯一收起锚点（顶/底栏均不渲染，否则无退出途径） -->
+        <SButton
+          v-if="landscapeLayout"
+          type="cover"
+          variant="ghost"
+          circle
+          :size="36"
+          class="absolute top-2.5 right-2.5 z-10"
+          @click="collapse"
+        >
+          <template #icon><IconLucideChevronDown /></template>
+        </SButton>
         <!-- 主区域：堆叠时文档流（封面区+歌词区上下排），横屏精简为左右分栏，桌面左右绝对分栏 -->
         <div
           class="absolute inset-x-0"
@@ -374,7 +386,7 @@ const showComments = (): void => {
             >
               <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
               <div
-                v-if="!fullscreenCover"
+                v-if="!fullscreenCover || landscapeLayout"
                 class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
                 :class="
                   landscapeLayout
@@ -581,7 +593,7 @@ const showComments = (): void => {
               >
                 <!-- 全屏封面 -->
                 <div
-                  v-if="fullscreenCover"
+                  v-if="fullscreenCover && !landscapeLayout"
                   class="shrink-0 pt-2 pb-6 pl-[calc(1em-0.5rem)]"
                   :style="{ fontSize: lyricFontSize }"
                 >
@@ -734,7 +746,7 @@ const showComments = (): void => {
                 : 'inset-y-0 right-0 pl-4 py-6 pointer-events-none',
             ]"
             :style="
-              stackedLayout
+              stackedLayout || landscapeLayout
                 ? { width: '100%' }
                 : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }
             "
