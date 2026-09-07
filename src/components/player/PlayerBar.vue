@@ -17,7 +17,7 @@ const status = useStatusStore();
 const settings = useSettingsStore();
 const media = useMediaStore();
 const fav = useFavorite();
-const { position, duration } = storeToRefs(status);
+const { position, duration, isPlaying, isLoading } = storeToRefs(status);
 const { formatTooltip, snapToNearestLyric } = useProgressLyric();
 
 /** 是否是浮动模式 */
@@ -117,7 +117,10 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   </div>
   <!-- 默认模式 -->
   <div v-else class="relative h-full">
-    <div class="absolute left-0 right-0 top-0 -translate-y-1/2 z-10">
+    <div
+      class="absolute top-0 -translate-y-1/2 z-10"
+      :class="isAndroid ? 'left-4 right-4' : 'left-0 right-0'"
+    >
       <SSlider
         :model-value="position"
         :min="0"
@@ -132,18 +135,67 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <!-- Android：上行 56px 封面 + 歌名/歌手（行尾队列与更多），下行居中完整控件 -->
-    <div v-if="isAndroid" class="flex flex-col justify-center h-full px-3 gap-1">
-      <TrackInfo class="w-full min-w-0">
+    <!-- Android：悬浮岛单行布局（参考 splayer-for-android 手机播放栏，上下首交由通知栏/全屏页） -->
+    <div v-if="isAndroid" class="flex items-center h-full gap-2 px-3">
+      <TrackInfo compact class="flex-1 min-w-0">
         <template #title-trailing>
-          <div class="ml-auto flex items-center shrink-0">
-            <Toolbar :hide-volume="isAndroid" />
+          <div class="flex items-center shrink-0">
+            <SButton
+              class="-my-1"
+              type="primary"
+              variant="text"
+              circle
+              :size="24"
+              :icon-size="16"
+              @click="fav.toggle(media.track)"
+            >
+              <template #icon>
+                <SIconSwap :active="fav.isLiked(media.track)">
+                  <template #on><IconFavorite /></template>
+                  <template #off><IconFavoriteOutline /></template>
+                </SIconSwap>
+              </template>
+            </SButton>
+            <SDropdownMenu
+              v-if="media.track"
+              :items="menuItems"
+              side="top"
+              align="start"
+              @select="onMenuSelect"
+            >
+              <template #trigger>
+                <SButton
+                  class="-my-1"
+                  type="primary"
+                  variant="text"
+                  circle
+                  :size="24"
+                  :icon-size="16"
+                >
+                  <template #icon><IconLucideMoreHorizontal /></template>
+                </SButton>
+              </template>
+            </SDropdownMenu>
           </div>
         </template>
       </TrackInfo>
-      <div class="flex justify-center">
-        <PlayerControls />
-      </div>
+      <PlayerTimeInfo compact class="shrink-0" />
+      <SButton
+        type="primary"
+        variant="secondary"
+        circle
+        :size="40"
+        :loading="isLoading"
+        :disabled="!media.track && !isLoading"
+        @click="player.togglePlay()"
+      >
+        <template #icon>
+          <SIconSwap :active="isPlaying">
+            <template #on><IconLucidePause /></template>
+            <template #off><IconLucidePlay /></template>
+          </SIconSwap>
+        </template>
+      </SButton>
     </div>
     <div v-else class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
       <TrackInfo>

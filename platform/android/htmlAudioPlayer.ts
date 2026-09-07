@@ -137,13 +137,28 @@ const probeCors = async (source: string): Promise<boolean> => {
   }
 };
 
+/** CORS 探测结果按 origin 缓存：同一 CDN 的曲目不必重复预检 */
+const corsCache = new Map<string, boolean>();
+
+/**
+ * 源是否可安全接入 Web Audio 图（跨域且无 CORS 头的媒体建图会被污染静音）
+ * @param source 音源地址
+ */
+const probeSourceCors = async (source: string): Promise<boolean> => {
+  if (!/^https?:\/\//i.test(source)) return true;
+  const cached = corsCache.get(new URL(source).origin);
+  if (cached !== undefined) return cached;
+  const ok = await probeCors(source);
+  corsCache.set(new URL(source).origin, ok);
+  return ok;
+};
+
 /** 音频链：source → fadeGain → destination，频谱需要时 analyser 挂 fadeGain（只建一次） */
-const ensureAudioGraph = async (el: HTMLAudioElement): Promise<boolean> => {
+const buildGraph = (el: HTMLAudioElement): boolean => {
   if (mediaSource && fadeGain) return true;
-  if (!el.src) return false;
   try {
     audioCtx ??= new AudioContext();
-    await audioCtx.resume().catch(() => {});
+    void audioCtx.resume().catch(() => {});
     mediaSource = audioCtx.createMediaElementSource(el);
     fadeGain = audioCtx.createGain();
     fadeGain.gain.value = 1;
@@ -158,17 +173,40 @@ const ensureAudioGraph = async (el: HTMLAudioElement): Promise<boolean> => {
   }
 };
 
+/**
+ * 按当前源同步音频图：CORS 干净则建图（淡入淡出走增益节点，Android 部分场景
+ * 忽略 el.volume）；被污染风险时丢弃旧图换新裸元素直出（MediaElementSource 不可解绑）
+ * @param source 即将播放的音源地址
+ */
+const syncPlaybackGraph = async (source: string): Promise<void> => {
+  if (await probeSourceCors(source)) {
+    if (audio && !mediaSource) buildGraph(audio);
+    return;
+  }
+  if (!mediaSource) return;
+  const old = audio;
+  old?.pause();
+  old?.removeAttribute("src");
+  old?.load();
+  mediaSource = null;
+  fadeGain = null;
+  analyser = null;
+  stopFftLoop();
+  audio = null;
+  getAudio();
+};
+
 /** 为当前音频建分析图（仅 CORS 安全时；否则保持直出，频谱持平但不断声） */
 const ensureFftGraph = async (el: HTMLAudioElement): Promise<void> => {
   if (analyser || !fftWanted || !el.src) return;
-  if (!(await probeCors(el.src))) return;
+  if (!(await probeSourceCors(el.src))) return;
+  if (!buildGraph(el)) return;
   try {
     el.crossOrigin = "anonymous";
     // crossOrigin 需在 src 赋值前生效，改完重载一次
     const url = el.src;
     const position = el.currentTime;
     const wasPlaying = !el.paused;
-    if (!(await ensureAudioGraph(el))) return;
     analyser = audioCtx!.createAnalyser();
     analyser.fftSize = FFT_BINS * 4;
     analyser.smoothingTimeConstant = 0.75;
@@ -377,8 +415,11 @@ const snapshot = (): PlayerStatus => {
 export const htmlAudioPlayer: PlayerApi = {
   load: async (source: string, options?: LoadOptions) => {
     if (!/^https?:\/\//i.test(source)) return fail("unsupported source");
-    const el = getAudio();
     const switchSrc = async (): Promise<Awaited<ReturnType<PlayerApi["load"]>>> => {
+      // 淡入淡出经 Web Audio 增益实现（Android 部分 WebView 忽略 el.volume），
+      // 先按源同步图状态再换源（可能重建元素，el 需重新获取）
+      await syncPlaybackGraph(source);
+      const el = getAudio();
       // 切歌间隙 AudioContext 在后台会被自动挂起（Chrome 政策），异步触发 resume；
       // 不能阻塞等待：后台时 resume 可能迟迟不返回，会卡死整条切歌链，
       // 后果仅是 fadeGain 段短暂无声，resume 落地后恢复
@@ -406,16 +447,17 @@ export const htmlAudioPlayer: PlayerApi = {
         mediaInfo: { duration },
       });
     };
-    // 切歌时旧曲快速淡出再换源，避免硬切爆音
-    if (!el.paused && el.src && fadeMs > 0) {
+    // 切歌时旧曲快速淡出再换源，避免硬切爆音（目标仍是旧元素；换源在 switchSrc 内）
+    const old = getAudio();
+    if (!old.paused && old.src && fadeMs > 0) {
       const run = fadeRun + 1;
       fadeRun = run;
-      await rampVolume(el, 0, Math.min(fadeMs, 250), run);
+      await rampVolume(old, 0, Math.min(fadeMs, 250), run);
       if (run !== fadeRun) return fail("interrupted");
-      el.pause();
-      setFadeLevel(el, 1);
+      old.pause();
+      setFadeLevel(old, 1);
     } else {
-      cancelFade(el);
+      cancelFade(old);
     }
     return switchSrc();
   },

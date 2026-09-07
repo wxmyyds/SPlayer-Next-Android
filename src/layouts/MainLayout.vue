@@ -84,11 +84,11 @@ const sidebarClass = computed(() => {
 
 /** 主界面底部边距 */
 const mainMarginClass = computed(() => {
-  // Android：底部 Tab 栏常驻；有曲目时播放栏再叠加其上（7.5rem）
+  // Android：底部 Tab 栏（50px）常驻；有曲目时悬浮岛播放栏（64px + 8px 间隙）再叠加其上
   if (isAndroid) {
     return showPlayerBar.value
-      ? "mb-[calc(11rem+env(safe-area-inset-bottom))]"
-      : "mb-[calc(3.5rem+env(safe-area-inset-bottom))]";
+      ? "mb-[calc(7.625rem+env(safe-area-inset-bottom))]"
+      : "mb-[calc(3.125rem+env(safe-area-inset-bottom))]";
   }
   if (!showPlayerBar.value || appearance.layoutMode === "floating") return "";
   return "mb-20";
@@ -120,8 +120,10 @@ const asideClass = computed(() => {
 /** 外层播放条样式 */
 const playerBarWrapperClass = computed(() => {
   const base = "fixed z-50 transition-[left] duration-300 pointer-events-none";
-  // Android：侧边栏为覆盖式抽屉，播放栏全宽，底边让位给常驻 Tab 栏
-  if (isAndroid) return `${base} bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0`;
+  // Android：播放栏为悬浮岛样式，底边让位给常驻 Tab 栏并留 8px 间隙
+  if (isAndroid) {
+    return `${base} bottom-[calc(3.625rem+env(safe-area-inset-bottom))] left-2.5 right-2.5`;
+  }
   const collapsed = appearance.sidebarCollapsed;
   switch (appearance.layoutMode) {
     case "sidebar-full":
@@ -141,8 +143,12 @@ const playerBarInnerClass = computed(() => {
     case "floating":
       return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10`;
     default:
-      // 底部安全区由 Android 的 Tab 栏承担，播放栏不再重复避让
-      return `${base} ${isAndroid ? "h-30" : "h-20"} bg-surface-panel border-t border-t-solid border-t-primary/10`;
+      // 底部安全区由 Android 的 Tab 栏承担，播放栏不再重复避让；Android 为悬浮岛圆角样式
+      return `${base} ${
+        isAndroid
+          ? "h-16 bg-surface-panel rounded-[18px] shadow-[0_6px_20px_rgba(0,0,0,0.18),0_1px_3px_rgba(0,0,0,0.08)]"
+          : "h-20 bg-surface-panel border-t border-t-solid border-t-primary/10"
+      }`;
   }
 });
 </script>

@@ -97,7 +97,7 @@ onMounted(() => {
             </template>
           </SDropdownMenu>
         </div>
-        <div class="flex items-center" :class="isAndroid ? 'flex-1' : 'gap-3'">
+        <div class="flex items-center" :class="isAndroid ? 'min-w-0 flex-1' : 'gap-3'">
           <SInput
             v-model="searchQuery"
             :placeholder="t('common.search')"
