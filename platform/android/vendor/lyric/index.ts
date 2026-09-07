@@ -7,13 +7,12 @@
  */
 
 import { coreLog } from "@main/utils/logger";
-import type {
-  LyricMatchResponse,
-  LyricTTMLResponse,
-} from "@shared/types/lyrics";
+import type { LyricMatchResponse, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { Platform } from "@shared/types/platform";
 import type { Track } from "@shared/types/player";
 import * as netease from "./netease";
+import * as qqmusic from "./qqmusic";
+import * as kugou from "./kugou";
 
 /** 进行中请求映射 */
 const inflight = new Map<string, Promise<unknown>>();
@@ -38,14 +37,17 @@ const dedup = <T>(key: string, run: () => Promise<T>): Promise<T> => {
  * @param platform 平台
  * @param id 平台 id
  */
-export const matchLyricById = (
-  platform: Platform,
-  id: string,
-): Promise<LyricMatchResponse> =>
+export const matchLyricById = (platform: Platform, id: string): Promise<LyricMatchResponse> =>
   dedup(`id:${platform}:${id}`, async () => {
     try {
       if (platform === "netease") {
         return { ok: true, data: await netease.getByPlatformId(id) };
+      }
+      if (platform === "qqmusic") {
+        return { ok: true, data: await qqmusic.getByPlatformId(id) };
+      }
+      if (platform === "kugou") {
+        return { ok: true, data: await kugou.getByPlatformId(id) };
       }
       return { ok: false, error: `unsupported platform: ${platform}` };
     } catch (err) {
@@ -59,14 +61,17 @@ export const matchLyricById = (
  * @param platform 平台
  * @param track 歌曲信息
  */
-export const matchLyricByQuery = (
-  platform: Platform,
-  track: Track,
-): Promise<LyricMatchResponse> =>
+export const matchLyricByQuery = (platform: Platform, track: Track): Promise<LyricMatchResponse> =>
   dedup(`query:${platform}:${track.source}:${track.id}`, async () => {
     try {
       if (platform === "netease") {
         return { ok: true, data: await netease.getByQuery(track) };
+      }
+      if (platform === "qqmusic") {
+        return { ok: true, data: await qqmusic.getByQuery(track) };
+      }
+      if (platform === "kugou") {
+        return { ok: true, data: await kugou.getByQuery(track) };
       }
       return { ok: false, error: `unsupported platform: ${platform}` };
     } catch (err) {
