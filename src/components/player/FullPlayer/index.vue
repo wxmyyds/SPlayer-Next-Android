@@ -16,6 +16,7 @@ import AMLLLyrics from "@/components/player/Lyrics/AMLLLyrics.vue";
 import PlaylistPickerDialog from "@/components/modals/PlaylistPickerDialog.vue";
 import * as player from "@/core/player";
 import { openExternal } from "@/utils/url";
+import { isAndroid } from "@/utils/platform";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 import IconLucideListPlus from "~icons/lucide/list-plus";
@@ -112,6 +113,10 @@ const coverCentered = computed(() => {
   if (fullscreenCover.value || status.fullQueueOpen) return false;
   return !showLyric.value || (settings.player.autoCenterCover && !hasLyric.value);
 });
+
+/** 竖屏堆叠布局：仅 Android 竖屏，封面上歌词中控制下，桌面左右分栏不变 */
+const isPortrait = useMediaQuery("(orientation: portrait)");
+const stackedLayout = computed(() => isAndroid && isPortrait.value);
 
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
   await player.seek(timeMs);
@@ -252,8 +257,14 @@ const showComments = (): void => {
             </SButton>
           </div>
           <div class="app-no-drag flex items-center gap-3">
-            <SButton type="cover" variant="ghost" circle :size="40" @click="toggleFullscreen">
-              <template #icon>
+            <SButton
+              v-if="!isAndroid"
+              type="cover"
+              variant="ghost"
+              circle
+              :size="40"
+              @click="toggleFullscreen"
+            >              <template #icon>
                 <IconLucideMinimize v-if="isFullscreen" />
                 <IconLucideMaximize v-else />
               </template>
@@ -261,32 +272,51 @@ const showComments = (): void => {
           </div>
         </div>
         <!-- 主区域 -->
-        <div class="absolute top-14 inset-x-0 bottom-20" @mousemove="onMainMove">
-          <!-- 左侧 -->
+        <div
+          class="absolute inset-x-0"
+          :class="stackedLayout ? 'top-14 bottom-28' : 'top-14 bottom-20'"
+          @mousemove="onMainMove"
+        >
+          <!-- 左侧（堆叠时为顶部封面区） -->
           <div
             v-if="!fullscreenCover"
-            class="absolute inset-y-0 left-0 flex items-center justify-center px-12 transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            :style="{
-              width: coverWidth,
-              transform: coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
-            }"
+            class="absolute flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            :class="
+              stackedLayout
+                ? 'top-0 inset-x-0 items-start justify-center px-4 pt-1'
+                : 'inset-y-0 left-0 items-center justify-center px-12'
+            "
+            :style="
+              stackedLayout
+                ? { width: '100%' }
+                : {
+                    width: coverWidth,
+                    transform: coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
+                  }
+            "
           >
-            <div class="relative w-[clamp(200px,85%,50vh)] -translate-y-[11vh]">
+            <div
+              class="relative"
+              :class="stackedLayout ? 'w-[min(42vw,20vh)]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
+            >
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id">
                   <PlayerCover />
-                  <div class="absolute top-full left-0 w-full pt-6">
-                    <PlayerData align="left" />
+                  <div class="absolute top-full left-0 w-full" :class="stackedLayout ? 'pt-2' : 'pt-6'">
+                    <PlayerData :align="stackedLayout ? 'center' : 'left'" />
                   </div>
                 </div>
               </Transition>
             </div>
           </div>
-          <!-- 右侧 -->
+          <!-- 右侧（堆叠时为下方歌词区） -->
           <div
-            class="group absolute inset-y-0 right-0 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            :class="coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'"
-            :style="{ width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
+            class="group absolute flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            :class="[
+              coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
+              stackedLayout ? 'inset-x-0 bottom-0 top-[34%] px-4' : 'inset-y-0 right-0 pr-20',
+            ]"
+            :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
           >
             <!-- 全屏封面 -->
             <div
@@ -388,7 +418,7 @@ const showComments = (): void => {
           <div
             class="absolute inset-y-0 right-0 pl-4 py-6 flex items-center"
             :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
-            :style="{ width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
+            :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
           >
             <Transition
               enter-active-class="transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -402,10 +432,13 @@ const showComments = (): void => {
             </Transition>
           </div>
         </div>
-        <!-- 底栏 -->
+        <!-- 底栏：堆叠时收窄，左组只留收起与红心 -->
         <div
-          class="absolute bottom-0 inset-x-0 h-20 z-10 flex items-center gap-4 px-4 transition-opacity duration-400"
-          :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
+          class="absolute bottom-0 inset-x-0 z-10 flex items-center transition-opacity duration-400"
+          :class="[
+            immersive ? 'opacity-0 pointer-events-none' : 'opacity-100',
+            stackedLayout ? 'h-24 gap-2 px-2' : 'h-20 gap-4 px-4',
+          ]"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
@@ -429,6 +462,7 @@ const showComments = (): void => {
               </template>
             </SButton>
             <SButton
+              v-if="!stackedLayout"
               type="cover"
               variant="ghost"
               size="large"
@@ -439,7 +473,7 @@ const showComments = (): void => {
               <template #icon><IconLucideMessageCircle /></template>
             </SButton>
             <SButton
-              v-if="displayTrack?.source === 'local' || displayTrack?.source === 'netease'"
+              v-if="!stackedLayout && (displayTrack?.source === 'local' || displayTrack?.source === 'netease')"
               type="cover"
               variant="ghost"
               size="large"
@@ -463,7 +497,10 @@ const showComments = (): void => {
               </template>
             </SDropdownMenu>
           </div>
-          <div class="shrink-0 flex flex-col items-center gap-1 w-[clamp(360px,35%,480px)]">
+          <div
+            class="shrink-0 flex flex-col items-center gap-1"
+            :class="stackedLayout ? 'min-w-0 flex-1' : 'w-[clamp(360px,35%,480px)]'"
+          >
             <div class="flex items-center gap-3">
               <SButton
                 type="cover"
