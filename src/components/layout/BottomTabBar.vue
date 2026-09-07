@@ -56,7 +56,7 @@ useEventListener(window, "resize", updateIndicator);
       :key="tab.key"
       :ref="(el) => setItemRef(el, idx)"
       type="button"
-      class="relative z-10 flex flex-col items-center justify-center gap-0.5 min-h-[38px] rounded-[10px] bg-transparent transition-[color,transform] duration-300 active:scale-95"
+      class="relative z-10 flex flex-col items-center justify-center gap-0.5 min-h-[38px] rounded-[10px] border-0 bg-transparent outline-none transition-[color,transform] duration-300 active:scale-95 [-webkit-tap-highlight-color:transparent]"
       :class="activeKey === tab.key ? 'text-primary' : 'text-on-surface-variant'"
       @click="onSelect(tab.key)"
     >
