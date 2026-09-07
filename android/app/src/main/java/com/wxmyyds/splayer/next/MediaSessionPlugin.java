@@ -119,6 +119,8 @@ public class MediaSessionPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= 33
                 && getActivity().checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
+            // 权限弹窗期间的新推送会覆盖旧 pending 调用，先 resolve 旧的避免桥上悬挂
+            if (pendingUpdate != null) pendingUpdate.resolve();
             pendingUpdate = call;
             requestPermissionForAlias("notifications", call, "onNotificationPermission");
             return;
@@ -344,11 +346,13 @@ public class MediaSessionPlugin extends Plugin {
     private void registerNoisyReceiver() {
         if (noisyRegistered) return;
         try {
+            // 挂 applicationContext：播放中退出页面时避免 Activity 泄漏接收器
+            Context appContext = getContext().getApplicationContext();
             IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
             if (Build.VERSION.SDK_INT >= 33) {
-                getContext().registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+                appContext.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
             } else {
-                getContext().registerReceiver(noisyReceiver, filter);
+                appContext.registerReceiver(noisyReceiver, filter);
             }
             noisyRegistered = true;
         } catch (Exception ignored) {
@@ -360,7 +364,7 @@ public class MediaSessionPlugin extends Plugin {
         if (!noisyRegistered) return;
         noisyRegistered = false;
         try {
-            getContext().unregisterReceiver(noisyReceiver);
+            getContext().getApplicationContext().unregisterReceiver(noisyReceiver);
         } catch (IllegalArgumentException ignored) {
             // 已被系统注销
         }

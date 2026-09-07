@@ -223,29 +223,31 @@ const ensureFftGraph = async (el: HTMLAudioElement): Promise<void> => {
   if (!(await probeSourceCors(el.src))) return;
   if (!buildGraph(el)) return;
   try {
-    el.crossOrigin = "anonymous";
-    // crossOrigin 需在 src 赋值前生效，改完重载一次
-    const url = el.src;
-    const position = el.currentTime;
-    const wasPlaying = !el.paused;
     analyser = audioCtx!.createAnalyser();
     analyser.fftSize = FFT_BINS * 4;
     analyser.smoothingTimeConstant = 0.75;
     fadeGain!.connect(analyser);
-    el.src = url;
-    el.load();
-    const restore = (): void => {
-      el.removeEventListener("loadedmetadata", restore);
-      if (Number.isFinite(position) && position > 0) {
-        try {
-          el.currentTime = position;
-        } catch {
-          // 忽略
+    if (el.crossOrigin !== "anonymous") {
+      // 兜底：crossOrigin 未在赋 src 前设置时补设并重载一次（syncPlaybackGraph 已设则免重载）
+      const url = el.src;
+      const position = el.currentTime;
+      const wasPlaying = !el.paused;
+      el.crossOrigin = "anonymous";
+      el.src = url;
+      el.load();
+      const restore = (): void => {
+        el.removeEventListener("loadedmetadata", restore);
+        if (Number.isFinite(position) && position > 0) {
+          try {
+            el.currentTime = position;
+          } catch {
+            // 忽略
+          }
         }
-      }
-      if (wasPlaying) void el.play().catch(() => {});
-    };
-    el.addEventListener("loadedmetadata", restore);
+        if (wasPlaying) void el.play().catch(() => {});
+      };
+      el.addEventListener("loadedmetadata", restore);
+    }
   } catch {
     analyser = null;
   }
@@ -544,8 +546,8 @@ export const htmlAudioPlayer: PlayerApi = {
     userVolume = v;
     const el = getAudio();
     fadeRun += 1;
-    el.volume = v;
-    if (fadeGain) fadeGain.gain.value = 1;
+    // 图路径需走 setFadeLevel（先 cancelScheduledValues），直接赋 gain.value 会被排程中的自动化覆盖
+    setFadeLevel(el, 1);
     try {
       localStorage.setItem("splayer.android.player.volume", String(v));
     } catch {
