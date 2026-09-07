@@ -51,6 +51,7 @@ public class MediaSessionPlugin extends Plugin {
 
     private final java.util.concurrent.ExecutorService artLoader = Executors.newSingleThreadExecutor();
     private PluginCall pendingUpdate;
+    private Bitmap lastArt;
 
     @Override
     public void load() {
@@ -128,11 +129,13 @@ public class MediaSessionPlugin extends Plugin {
                         () -> {
                             if (stopped) {
                                 sSession.setActive(false);
+                                lastArt = null;
                                 notificationManager().cancel(NOTIFICATION_ID);
                                 call.resolve();
                                 return;
                             }
                             sSession.setActive(true);
+                            ensureChannel();
                             String title = call.getString("title", "");
                             String artist = call.getString("artist", "");
                             String album = call.getString("album", "");
@@ -141,15 +144,31 @@ public class MediaSessionPlugin extends Plugin {
                             long durationMs = readLong(call, "durationMs", 0);
                             String artworkUrl = call.getString("artworkUrl", null);
 
-                            MediaMetadata.Builder meta =
-                                    new MediaMetadata.Builder()
-                                            .putString(MediaMetadata.METADATA_KEY_TITLE, title)
-                                            .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
-                                            .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
-                                            .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
-                            sSession.setMetadata(meta.build());
-                            publishState(playing, positionMs, durationMs, null);
-                            ensureChannel();
+                            // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
+                            MediaMetadata current =
+                                    sSession.getController() != null
+                                            ? sSession.getController().getMetadata()
+                                            : null;
+                            String currentTitle =
+                                    current != null
+                                            ? current.getString(MediaMetadata.METADATA_KEY_TITLE)
+                                            : null;
+                            boolean metaProvided =
+                                    !title.isEmpty()
+                                            || !artist.isEmpty()
+                                            || !album.isEmpty()
+                                            || (artworkUrl != null && !artworkUrl.isEmpty());
+                            if (!title.isEmpty() && !title.equals(currentTitle)) lastArt = null;
+                            if (metaProvided) {
+                                MediaMetadata.Builder meta =
+                                        new MediaMetadata.Builder()
+                                                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                                                .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
+                                                .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
+                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
+                                sSession.setMetadata(meta.build());
+                            }
+                            publishState(playing, positionMs, durationMs, lastArt);
                             if (artworkUrl != null && !artworkUrl.isEmpty()) {
                                 loadArtworkAsync(artworkUrl, title, artist, album, playing, positionMs, durationMs);
                             }
@@ -238,6 +257,7 @@ public class MediaSessionPlugin extends Plugin {
                                         meta.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, art);
                                         meta.putBitmap(MediaMetadata.METADATA_KEY_ART, art);
                                         sSession.setMetadata(meta.build());
+                                        lastArt = art;
                                         publishState(playing, positionMs, durationMs, art);
                                     });
                 });
