@@ -85,8 +85,8 @@ const sidebarClass = computed(() => {
 /** 主界面底部边距 */
 const mainMarginClass = computed(() => {
   if (!showPlayerBar.value || appearance.layoutMode === "floating") return "";
-  // Android 下播放栏叠加底部手势安全区，主内容同步下移
-  return isAndroid ? "mb-[calc(5rem+env(safe-area-inset-bottom))]" : "mb-20";
+  // Android 下播放栏叠加底部手势安全区，主内容同步下移（双行栏更高）
+  return isAndroid ? "mb-[calc(7rem+env(safe-area-inset-bottom))]" : "mb-20";
 });
 
 /** 顶栏样式：Android 下避开状态栏安全区 */
@@ -137,7 +137,7 @@ const playerBarInnerClass = computed(() => {
     case "floating":
       return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10${safe}`;
     default:
-      return `${base} h-20 bg-surface-panel border-t border-t-solid border-t-primary/10${safe}`;
+      return `${base} ${isAndroid ? "h-28" : "h-20"} bg-surface-panel border-t border-t-solid border-t-primary/10${safe}`;
   }
 });
 </script>

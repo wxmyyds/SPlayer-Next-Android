@@ -132,12 +132,16 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <!-- 竖屏拥挤：Android 用弹性行布局，隐藏时间信息，控件紧凑化 -->
-    <div v-if="isAndroid" class="flex items-center h-full px-2 gap-1">
-      <TrackInfo compact class="flex-1 min-w-0" />
-      <PlayerControls compact class="shrink-0" />
-      <div class="shrink-0">
-        <Toolbar :hide-volume="isAndroid" />
+    <!-- 竖屏拥挤：Android 双行，一行歌名一行控件 -->
+    <div v-if="isAndroid" class="flex flex-col justify-center h-full px-3">
+      <TrackInfo compact class="w-full min-w-0" />
+      <div class="flex items-center">
+        <div class="flex-1 flex justify-center min-w-0">
+          <PlayerControls compact class="shrink-0" />
+        </div>
+        <div class="shrink-0">
+          <Toolbar :hide-volume="isAndroid" />
+        </div>
       </div>
     </div>
     <div v-else class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
