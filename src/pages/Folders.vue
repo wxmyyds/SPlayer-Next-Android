@@ -17,6 +17,7 @@ import IconLucidePlay from "~icons/lucide/play";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideListPlus from "~icons/lucide/list-plus";
 import IconLucideEllipsis from "~icons/lucide/ellipsis";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -112,9 +113,12 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col h-full">
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-baseline gap-4 mt-2 mb-4">
-        <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("folder.label") }}</h1>
+        <h1
+          class="font-bold text-on-surface text-balance"
+          :class="isAndroid ? 'text-xl' : 'text-3xl'"
+        >{{ t("folder.label") }}</h1>
         <div
           v-if="trackCount > 0"
           class="flex items-center gap-3 text-sm text-on-surface-variant/50"
@@ -130,10 +134,17 @@ onMounted(async () => {
         </div>
       </div>
     </div>
-    <div v-if="folderTree.length > 0" class="flex-1 min-h-0 flex">
-      <!-- 文件夹树 -->
+    <div
+      v-if="folderTree.length > 0"
+      class="flex-1 min-h-0"
+      :class="isAndroid ? 'flex flex-col' : 'flex'"
+    >
+      <!-- 文件夹树：竖屏置顶横排，限高滚动 -->
       <div
-        class="w-64 shrink-0 bg-surface-panel border border-solid border-primary/12 rounded-xl ml-3 mb-3 overflow-hidden"
+        class="bg-surface-panel border border-solid border-primary/12 rounded-xl overflow-hidden"
+        :class="
+          isAndroid ? 'w-auto max-h-44 ml-3 mr-3 mb-2 shrink-0' : 'w-64 shrink-0 ml-3 mb-3'
+        "
       >
         <STree
           v-model="selectedFolder"

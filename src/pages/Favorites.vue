@@ -13,6 +13,7 @@ import IconLucideListMusic from "~icons/lucide/list-music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideUser from "~icons/lucide/user";
 import IconMaterialSymbolsFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -91,9 +92,12 @@ const handleClick = (item: CoverItem): void => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-baseline gap-4 mt-2 mb-4 min-w-0">
-        <h1 class="text-3xl font-bold text-on-surface shrink-0 text-balance">
+        <h1
+          class="font-bold text-on-surface shrink-0 text-balance"
+          :class="isAndroid ? 'text-xl' : 'text-3xl'"
+        >
           {{ t("favorites.title") }}
         </h1>
         <Transition name="fade" mode="out-in">

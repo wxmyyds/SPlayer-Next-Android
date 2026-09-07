@@ -9,6 +9,7 @@ import SongList from "@/components/list/SongList.vue";
 import CoverList from "@/components/list/CoverList.vue";
 import { useStatusStore } from "@/stores/status";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -191,10 +192,13 @@ const isEmptyResult = computed(() => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="mt-2 mb-4 flex items-end justify-between gap-4">
         <h1 class="min-w-0 flex items-baseline pr-3">
-          <span class="min-w-0 truncate text-3xl font-bold text-on-surface">
+          <span
+            class="min-w-0 truncate font-bold text-on-surface"
+            :class="isAndroid ? 'text-2xl' : 'text-3xl'"
+          >
             {{ keyword || t("search.title") }}
           </span>
           <span
@@ -205,7 +209,7 @@ const isEmptyResult = computed(() => {
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div class="shrink-0 w-40">
+        <div class="shrink-0" :class="isAndroid ? 'w-32' : 'w-40'">
           <STabs
             :model-value="status.searchPlatform"
             :tabs="platformTabs"

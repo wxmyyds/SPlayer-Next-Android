@@ -10,6 +10,7 @@ import IconLucidePlay from "~icons/lucide/play";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDownload from "~icons/lucide/download";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const downloadStore = useDownloadStore();
@@ -59,9 +60,12 @@ onMounted(() => void downloadStore.init());
 <template>
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-baseline gap-4 mt-2 mb-4 min-w-0">
-        <h1 class="text-3xl font-bold text-on-surface shrink-0 text-balance">
+        <h1
+          class="font-bold text-on-surface shrink-0 text-balance"
+          :class="isAndroid ? 'text-xl' : 'text-3xl'"
+        >
           {{ t("download.title") }}
         </h1>
         <span class="flex items-center gap-1.5 text-sm text-on-surface-variant/50 shrink-0">
@@ -69,7 +73,10 @@ onMounted(() => void downloadStore.init());
           {{ t("common.totalSongs", { count: currentTasks.length }) }}
         </span>
       </div>
-      <div class="flex items-center justify-between gap-4">
+      <div
+        class="flex items-center"
+        :class="isAndroid ? 'flex-col items-stretch gap-2' : 'justify-between gap-4'"
+      >
         <STabs
           :model-value="tab"
           :tabs="tabs"
@@ -77,19 +84,26 @@ onMounted(() => void downloadStore.init());
           size="large"
           @update:model-value="(key) => (tab = key as DownloadTab)"
         />
-        <div class="flex items-center gap-3 shrink-0">
+        <div class="flex items-center gap-2">
           <SButton
             v-if="tab === 'done'"
             type="primary"
             variant="secondary"
             round
+            size="small"
             :disabled="currentTasks.length === 0"
             @click="listRef?.playAll()"
           >
             <template #icon><IconLucidePlay /></template>
             {{ t("common.playAll") }}
           </SButton>
-          <SButton variant="secondary" round :disabled="!hasFinished" @click="requestClearFinished">
+          <SButton
+            variant="secondary"
+            round
+            size="small"
+            :disabled="!hasFinished"
+            @click="requestClearFinished"
+          >
             <template #icon><IconLucideTrash2 /></template>
             {{ t("download.clearFinished") }}
           </SButton>

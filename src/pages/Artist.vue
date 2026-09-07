@@ -11,6 +11,7 @@ import { navigateToAlbum } from "@/utils/navigate";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 import artistFallback from "@/assets/images/artist.jpg";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideListMusic from "~icons/lucide/list-music";
@@ -232,10 +233,10 @@ const albumItems = computed<CoverItem[]>(() => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 头部信息 -->
-    <div v-if="artist" class="shrink-0 px-5 pb-2">
+    <div v-if="artist" class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div
         class="flex mt-2 transition-[gap,margin] duration-300"
-        :class="collapsed ? 'gap-3 mb-3' : 'gap-5 mb-4'"
+        :class="collapsed ? 'gap-3 mb-3' : isAndroid ? 'gap-3 mb-3' : 'gap-5 mb-4'"
       >
         <!-- 头像 -->
         <SImg
@@ -243,17 +244,17 @@ const albumItems = computed<CoverItem[]>(() => {
           :fallback="artistFallback"
           :alt="artist.name"
           class="shrink-0 rounded-full transition-[width,height] duration-300"
-          :class="collapsed ? 'size-20' : 'size-40'"
+          :class="collapsed ? 'size-20' : isAndroid ? 'size-24' : 'size-40'"
         />
         <!-- 信息 -->
         <div class="flex-1 flex flex-col min-w-0 py-1">
           <div
             class="flex flex-col transition-[gap] duration-300"
-            :class="collapsed ? 'gap-0.5' : 'gap-2'"
+            :class="collapsed ? 'gap-0.5' : isAndroid ? 'gap-1' : 'gap-2'"
           >
             <h1
               class="font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
-              :class="collapsed ? 'text-xl' : 'text-3xl'"
+              :class="collapsed ? 'text-xl' : isAndroid ? 'text-xl' : 'text-3xl'"
             >
               {{ artist.name }}
             </h1>
@@ -263,6 +264,7 @@ const albumItems = computed<CoverItem[]>(() => {
             >
               <div
                 class="overflow-hidden flex items-center gap-3 text-sm leading-none text-on-surface-variant/50"
+                :class="isAndroid && 'flex-wrap gap-y-1'"
               >
                 <span class="flex items-center gap-1">
                   <IconLucideListMusic class="shrink-0" />
@@ -280,12 +282,16 @@ const albumItems = computed<CoverItem[]>(() => {
             </div>
           </div>
           <!-- 操作栏 -->
-          <div class="mt-auto flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
+          <div
+            class="mt-auto flex items-center justify-between"
+            :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'"
+          >
+            <div class="flex items-center" :class="isAndroid ? 'gap-2' : 'gap-3'">
               <SButton
                 type="primary"
                 variant="secondary"
                 round
+                :size="isAndroid ? 'small' : 'medium'"
                 :disabled="artist.tracks.length === 0 || activeTab !== 'songs'"
                 @click="handlePlayAll"
               >
@@ -298,6 +304,7 @@ const albumItems = computed<CoverItem[]>(() => {
                 v-if="canSubscribeArtist"
                 variant="secondary"
                 round
+                :size="isAndroid ? 'small' : 'medium'"
                 :disabled="artistSubBusy"
                 @click="handleToggleSubscribe"
               >
@@ -328,7 +335,7 @@ const albumItems = computed<CoverItem[]>(() => {
               :disabled="activeTab !== 'songs'"
               clearable
               round
-              class="w-40 focus-within:w-56"
+              :class="isAndroid ? 'min-w-32 flex-1' : 'w-40 focus-within:w-56'"
               data-search-input
             >
               <template #prefix>

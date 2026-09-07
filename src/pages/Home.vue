@@ -126,7 +126,7 @@ const openAlbum = (item: CoverItem): void => {
             </STag>
             <h2 class="truncate text-xl font-bold text-on-surface">{{ hero?.title }}</h2>
             <p class="truncate text-sm text-on-surface-variant/70">{{ hero?.subtitle }}</p>
-            <div class="mt-0.5 flex items-center gap-2">
+            <div class="mt-0.5 flex items-center gap-2" :class="isAndroid && 'flex-wrap'">
               <SButton type="primary" round :disabled="heroLoading" @click="playHero">
                 <template #icon><IconLucidePlay /></template>
                 {{ t("home.hero.play") }}
@@ -158,8 +158,8 @@ const openAlbum = (item: CoverItem): void => {
           </ul>
         </div>
       </SCard>
-      <!-- 快捷入口 -->
-      <section class="grid grid-cols-4 gap-3">
+      <!-- 快捷入口：竖屏两列 -->
+      <section class="grid gap-3" :class="isAndroid ? 'grid-cols-2' : 'grid-cols-4'">
         <SCard
           v-for="action in quickActions"
           :key="action.title"
@@ -187,7 +187,11 @@ const openAlbum = (item: CoverItem): void => {
             {{ continueSubtitle }}
           </p>
         </div>
-        <div v-if="continueItems.length > 0" class="grid grid-cols-3 gap-3">
+        <div
+          v-if="continueItems.length > 0"
+          class="grid gap-3"
+          :class="isAndroid ? 'grid-cols-1' : 'grid-cols-3'"
+        >
           <SCard
             v-for="(item, index) in continueItems"
             :key="`${item.track.source}:${item.track.id}`"

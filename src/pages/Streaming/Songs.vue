@@ -4,6 +4,7 @@ defineOptions({ name: "StreamingSongs" });
 import { useStreamingStore } from "@/stores/streaming";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const streaming = useStreamingStore();
@@ -34,11 +35,15 @@ const handlePlayAll = (): void => {
 
 <template>
   <div class="flex flex-col h-full">
-    <div class="shrink-0 px-5 py-2 flex items-center justify-between">
+    <div
+      class="shrink-0 py-2 flex items-center justify-between"
+      :class="isAndroid ? 'px-3 flex-wrap gap-2' : 'px-5'"
+    >
       <SButton
         type="primary"
         variant="secondary"
         round
+        :size="isAndroid ? 'small' : 'medium'"
         :disabled="songs.length === 0"
         @click="handlePlayAll"
       >
@@ -52,7 +57,7 @@ const handlePlayAll = (): void => {
         :placeholder="t('common.search')"
         clearable
         round
-        class="w-40 focus-within:w-56"
+        :class="isAndroid ? 'min-w-32 flex-1' : 'w-40 focus-within:w-56'"
         data-search-input
       >
         <template #prefix>

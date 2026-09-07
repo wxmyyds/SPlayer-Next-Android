@@ -12,6 +12,7 @@ import IconLucideUserRound from "~icons/lucide/user-round";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideArrowUpDown from "~icons/lucide/arrow-up-down";
+import { isAndroid } from "@/utils/platform";
 
 type Mode = "artist" | "album";
 type SortMode = "default" | "name" | "trackCount";
@@ -97,10 +98,13 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col h-full">
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-center justify-between gap-4 mt-2 mb-4">
         <div class="flex items-baseline gap-4">
-          <h1 class="text-3xl font-bold text-on-surface text-balance">{{ config.title }}</h1>
+          <h1
+            class="font-bold text-on-surface text-balance"
+            :class="isAndroid ? 'text-xl' : 'text-3xl'"
+          >{{ config.title }}</h1>
           <span
             v-if="items.length > 0"
             class="flex items-center gap-1 text-sm text-on-surface-variant/50"
@@ -114,7 +118,7 @@ onMounted(async () => {
           class="flex items-center gap-2 text-sm text-on-surface-variant/70"
         >
           <IconLucideArrowUpDown class="size-3.5 shrink-0" />
-          <span class="shrink-0">{{ t("songList.sort.mode") }}</span>
+          <span v-if="!isAndroid" class="shrink-0">{{ t("songList.sort.mode") }}</span>
           <div :class="[config.selectWidth, 'shrink-0']">
             <SSelect v-model="sortMode" :options="sortOptions" />
           </div>
