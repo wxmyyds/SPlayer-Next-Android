@@ -205,6 +205,69 @@ const stopFftLoop = (): void => {
   }
 };
 
+/** 淡入淡出：音量斜坡（毫秒，0=关闭；桌面引擎同款语义，HTMLAudio 用 el.volume 实现） */
+let fadeMs = 200;
+let userVolume = 1;
+let fadeRun = 0;
+
+/** 线性 ramp 到目标音量，中途被新一轮取消则停 */
+const rampVolume = (el: HTMLAudioElement, target: number, ms: number, run: number): Promise<void> =>
+  new Promise((resolve) => {
+    if (ms <= 0 || run !== fadeRun) {
+      if (run === fadeRun) el.volume = target;
+      resolve();
+      return;
+    }
+    const from = el.volume;
+    const steps = Math.max(1, Math.round(ms / 25));
+    let step = 0;
+    const timer = setInterval(() => {
+      if (run !== fadeRun) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      step += 1;
+      el.volume = from + ((target - from) * step) / steps;
+      if (step >= steps) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 25);
+  });
+
+/** 取消进行中的淡入淡出，音量回到用户值 */
+const cancelFade = (el: HTMLAudioElement): number => {
+  fadeRun += 1;
+  el.volume = userVolume;
+  return fadeRun;
+};
+
+/** 从 0 淡入到用户音量（起播用） */
+const fadeIn = (el: HTMLAudioElement): void => {
+  if (fadeMs <= 0 || userVolume <= 0) return;
+  const run = fadeRun + 1;
+  fadeRun = run;
+  el.volume = 0;
+  void rampVolume(el, userVolume, fadeMs, run);
+};
+
+/** 淡出到 0 后暂停/停播（UI 立即响应，声音随后收尾） */
+const fadeOutThen = (el: HTMLAudioElement, after: () => void, ms?: number): void => {
+  if (fadeMs <= 0 || el.paused || userVolume <= 0) {
+    cancelFade(el);
+    after();
+    return;
+  }
+  const run = fadeRun + 1;
+  fadeRun = run;
+  void rampVolume(el, 0, ms ?? fadeMs, run).then(() => {
+    if (run !== fadeRun) return;
+    after();
+    el.volume = userVolume;
+  });
+};
+
 const getAudio = (): HTMLAudioElement => {
   if (!audio) {
     const el = new Audio();
@@ -249,7 +312,7 @@ const getAudio = (): HTMLAudioElement => {
     wireMediaBridge();
     try {
       const saved = localStorage.getItem("splayer.android.player.volume");
-      if (saved !== null) el.volume = Math.min(1, Math.max(0, Number(saved) || 0));
+      if (saved !== null) userVolume = el.volume = Math.min(1, Math.max(0, Number(saved) || 0));
     } catch {
       // 忽略存储异常
     }
@@ -275,54 +338,79 @@ export const htmlAudioPlayer: PlayerApi = {
   load: async (source: string, options?: LoadOptions) => {
     if (!/^https?:\/\//i.test(source)) return fail("unsupported source");
     const el = getAudio();
-    publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
-    el.src = source;
-    // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
-    void ensureFftGraph(el);
-    if (options?.autoPlay !== false) {
-      try {
-        await el.play();
-      } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
+    const switchSrc = async (): Promise<IpcResponse> => {
+      publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
+      el.src = source;
+      // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
+      void ensureFftGraph(el);
+      if (options?.autoPlay !== false) {
+        try {
+          await el.play();
+          fadeIn(el);
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
       }
+      const duration = Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0;
+      return ok({
+        detail: {
+          quality: { sampleRate: 0, channels: 0, bitsPerSample: 0, bitRate: 0, codec: "" },
+          externalLyrics: [],
+        },
+        mediaInfo: { duration },
+      });
+    };
+    // 切歌时旧曲快速淡出再换源，避免硬切爆音
+    if (!el.paused && el.src && fadeMs > 0) {
+      const run = fadeRun + 1;
+      fadeRun = run;
+      await rampVolume(el, 0, Math.min(fadeMs, 250), run);
+      if (run !== fadeRun) return fail("interrupted");
+      el.pause();
+      el.volume = userVolume;
+    } else {
+      cancelFade(el);
     }
-    const duration = Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0;
-    return ok({
-      detail: {
-        quality: { sampleRate: 0, channels: 0, bitsPerSample: 0, bitRate: 0, codec: "" },
-        externalLyrics: [],
-      },
-      mediaInfo: { duration },
-    });
+    return switchSrc();
   },
   play: async () => {
     try {
-      await getAudio().play();
+      const el = getAudio();
+      await el.play();
+      fadeIn(el);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
   pause: async () => {
-    getAudio().pause();
+    const el = getAudio();
+    fadeOutThen(el, () => el.pause());
     return ok();
   },
   stop: async () => {
     const el = getAudio();
-    el.pause();
-    el.removeAttribute("src");
-    el.load();
-    publishMetadata(undefined);
-    publishState("none");
+    fadeOutThen(el, () => {
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+      publishMetadata(undefined);
+      publishState("none");
+    });
     return ok();
   },
   seek: async (positionMs: number) => {
-    getAudio().currentTime = Math.max(0, positionMs / 1000);
+    const el = getAudio();
+    cancelFade(el);
+    el.currentTime = Math.max(0, positionMs / 1000);
     return ok();
   },
   setVolume: async (volume: number) => {
     const v = Math.min(1, Math.max(0, volume));
-    getAudio().volume = v;
+    userVolume = v;
+    const el = getAudio();
+    fadeRun += 1;
+    el.volume = v;
     try {
       localStorage.setItem("splayer.android.player.volume", String(v));
     } catch {
@@ -359,8 +447,11 @@ export const htmlAudioPlayer: PlayerApi = {
       return ok({ ldata: [], rdata: [] });
     }
   },
-  setFadeDuration: async () => ok(),
-  getFadeDuration: async () => ok(0),
+  setFadeDuration: async (ms: number) => {
+    fadeMs = Math.max(0, ms || 0);
+    return ok();
+  },
+  getFadeDuration: async () => ok(fadeMs),
   getCoverRaw: async () => ok(null),
   readLyricFile: async () => fail("unsupported"),
   reinit: async () => ok(),
