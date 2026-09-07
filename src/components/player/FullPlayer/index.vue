@@ -271,24 +271,24 @@ const showComments = (): void => {
             </SButton>
           </div>
         </div>
-        <!-- 主区域 -->
+        <!-- 主区域：堆叠时文档流（封面区+歌词区上下排），桌面左右绝对分栏 -->
         <div
           class="absolute inset-x-0"
-          :class="stackedLayout ? 'top-14 bottom-28' : 'top-14 bottom-20'"
+          :class="stackedLayout ? 'top-14 bottom-28 flex flex-col' : 'top-14 bottom-20'"
           @mousemove="onMainMove"
         >
-          <!-- 左侧（堆叠时为顶部封面区） -->
+          <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
           <div
             v-if="!fullscreenCover"
-            class="absolute flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
-                ? 'top-0 inset-x-0 h-[38%] flex items-center justify-center px-4'
-                : 'inset-y-0 left-0 flex items-center justify-center px-12'
+                ? 'w-full flex-col items-center px-5 pt-8 shrink-0'
+                : 'absolute inset-y-0 left-0 items-center justify-center px-12'
             "
             :style="
               stackedLayout
-                ? { width: '100%' }
+                ? undefined
                 : {
                     width: coverWidth,
                     transform: coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
@@ -297,24 +297,31 @@ const showComments = (): void => {
           >
             <div
               class="relative"
-              :class="stackedLayout ? 'w-[min(46vw,22vh)]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
+              :class="
+                stackedLayout
+                  ? 'w-[min(100%,clamp(240px,72vw,380px))]'
+                  : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'
+              "
             >
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id">
                   <PlayerCover />
-                  <div class="absolute top-full left-0 w-full" :class="stackedLayout ? 'pt-2' : 'pt-6'">
+                  <div
+                    class="left-0 w-full"
+                    :class="stackedLayout ? 'pt-4' : 'absolute top-full pt-6'"
+                  >
                     <PlayerData :align="stackedLayout ? 'center' : 'left'" />
                   </div>
                 </div>
               </Transition>
             </div>
           </div>
-          <!-- 右侧（堆叠时为下方歌词区） -->
+          <!-- 右侧（堆叠时为下方歌词区，文档流占满剩余高度） -->
           <div
-            class="group absolute flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="group flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
-              stackedLayout ? 'inset-x-0 bottom-0 top-[38%] px-4' : 'inset-y-0 right-0 pr-20',
+              stackedLayout ? 'relative flex-1 min-h-0 w-full px-4 pt-2' : 'absolute inset-y-0 right-0 pr-20',
             ]"
             :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
           >
