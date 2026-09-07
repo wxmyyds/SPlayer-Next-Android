@@ -331,11 +331,11 @@ const showComments = (): void => {
           </div>
           <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制） -->
           <template v-if="stackedLayout">
-            <div class="w-full flex items-center gap-2 px-5 pt-3 shrink-0">
-              <div class="flex-1 min-w-0">
-                <PlayerData align="left" simple :show-tags="false" />
+            <div class="w-full flex flex-col gap-1 px-5 pt-3 shrink-0">
+              <div class="w-full min-w-0">
+                <PlayerData align="left" simple />
               </div>
-              <div class="flex items-center gap-1 shrink-0">
+              <div class="flex items-center gap-1">
                 <SButton
                   type="cover"
                   variant="ghost"
