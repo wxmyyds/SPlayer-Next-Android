@@ -417,7 +417,10 @@ const showComments = (): void => {
           <!-- 播放队列 -->
           <div
             class="absolute inset-y-0 right-0 pl-4 py-6 flex items-center"
-            :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
+            :class="[
+              status.fullQueueOpen ? '' : 'pointer-events-none',
+              stackedLayout ? 'pr-4 bg-black/60 backdrop-blur-xl' : '',
+            ]"
             :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
           >
             <Transition
