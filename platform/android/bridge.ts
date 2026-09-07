@@ -89,21 +89,49 @@ const defaultStatus: PlayerStatus = {
 
 const emptyConfig = (): SystemConfig => structuredClone(defaultSystemConfig);
 
+const CONFIG_PREFIX = "splayer.android.config.";
+
+/** 按点路径写入嵌套对象（getAll 重建用） */
+const setConfigPath = (root: Record<string, unknown>, keyPath: string, value: unknown): void => {
+  const parts = keyPath.split(".");
+  let node = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    const next = node[part];
+    if (!next || typeof next !== "object" || Array.isArray(next)) {
+      node[part] = {};
+    }
+    node = node[part] as Record<string, unknown>;
+  }
+  node[parts[parts.length - 1]] = value;
+};
+
 const config: ConfigApi = {
   async get(keyPath) {
-    const value = localStorage.getItem(`splayer.android.config.${keyPath}`);
+    const value = localStorage.getItem(`${CONFIG_PREFIX}${keyPath}`);
     return value === null ? undefined : JSON.parse(value);
   },
   async set(keyPath, value) {
-    localStorage.setItem(`splayer.android.config.${keyPath}`, JSON.stringify(value));
+    localStorage.setItem(`${CONFIG_PREFIX}${keyPath}`, JSON.stringify(value));
   },
   async getAll() {
-    return emptyConfig();
+    // 默认值打底，已存键逐条覆盖，否则重启后 system.* 全部回滚
+    const merged = emptyConfig() as unknown as Record<string, unknown>;
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(CONFIG_PREFIX)) continue;
+      try {
+        setConfigPath(merged, key.slice(CONFIG_PREFIX.length), JSON.parse(localStorage.getItem(key) ?? "null"));
+      } catch {
+        // 单键损坏跳过
+      }
+    }
+    return merged as SystemConfig;
   },
   async reset() {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {
       const key = localStorage.key(index);
-      if (key?.startsWith("splayer.android.config.")) localStorage.removeItem(key);
+      if (key?.startsWith(CONFIG_PREFIX)) localStorage.removeItem(key);
     }
   },
   async replaceAll() {},
