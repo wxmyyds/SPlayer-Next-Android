@@ -30,6 +30,17 @@ const onSeekDragEnd = (value: number): void => {
   player.seek(snappedValue);
 };
 
+/** 播放岛手势：左滑下一首、右滑上一首（进度条与播控按钮不参与） */
+const swipeRef = ref<HTMLElement | null>(null);
+useSwipe(swipeRef, {
+  threshold: 50,
+  onSwipeEnd: (e, direction) => {
+    if ((e.target as HTMLElement).closest("[data-no-swipe]")) return;
+    if (direction === "left") player.nextTrack();
+    else if (direction === "right") player.prevTrack();
+  },
+});
+
 /** 添加到歌单 */
 const {
   open: pickerOpen,
@@ -120,6 +131,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
     <div
       class="absolute top-0 -translate-y-1/2 z-10"
       :class="isAndroid ? 'left-4 right-4' : 'left-0 right-0'"
+      data-no-swipe
     >
       <SSlider
         :model-value="position"
@@ -135,48 +147,26 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <!-- Android：悬浮岛单行布局（参考 splayer-for-android 手机播放栏，上下首交由通知栏/全屏页） -->
-    <div v-if="isAndroid" class="flex items-center h-full gap-2 px-3">
+    <!-- Android：悬浮岛单行布局（参考 splayer-for-android 手机播放栏，上下首交由通知栏/全屏页；左滑下一首右滑上一首） -->
+    <div v-if="isAndroid" ref="swipeRef" class="flex items-center h-full gap-2 px-3">
       <TrackInfo compact class="flex-1 min-w-0">
         <template #title-trailing>
-          <div class="flex items-center shrink-0">
-            <SButton
-              class="-my-1"
-              type="primary"
-              variant="text"
-              circle
-              :size="24"
-              :icon-size="16"
-              @click="fav.toggle(media.track)"
-            >
-              <template #icon>
-                <SIconSwap :active="fav.isLiked(media.track)">
-                  <template #on><IconFavorite /></template>
-                  <template #off><IconFavoriteOutline /></template>
-                </SIconSwap>
-              </template>
-            </SButton>
-            <SDropdownMenu
-              v-if="media.track"
-              :items="menuItems"
-              side="top"
-              align="start"
-              @select="onMenuSelect"
-            >
-              <template #trigger>
-                <SButton
-                  class="-my-1"
-                  type="primary"
-                  variant="text"
-                  circle
-                  :size="24"
-                  :icon-size="16"
-                >
-                  <template #icon><IconLucideMoreHorizontal /></template>
-                </SButton>
-              </template>
-            </SDropdownMenu>
-          </div>
+          <SButton
+            class="-my-1"
+            type="primary"
+            variant="text"
+            circle
+            :size="24"
+            :icon-size="16"
+            @click="fav.toggle(media.track)"
+          >
+            <template #icon>
+              <SIconSwap :active="fav.isLiked(media.track)">
+                <template #on><IconFavorite /></template>
+                <template #off><IconFavoriteOutline /></template>
+              </SIconSwap>
+            </template>
+          </SButton>
         </template>
       </TrackInfo>
       <PlayerTimeInfo compact class="shrink-0" />
@@ -187,6 +177,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         :size="40"
         :loading="isLoading"
         :disabled="!media.track && !isLoading"
+        data-no-swipe
         @click="player.togglePlay()"
       >
         <template #icon>
