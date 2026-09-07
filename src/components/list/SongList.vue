@@ -14,6 +14,7 @@ import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
 import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
 import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
+import { isAndroid } from "@/utils/platform";
 import { navigateToAlbum, navigateToArtist } from "@/utils/navigate";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import * as player from "@/core/player";
@@ -486,9 +487,9 @@ defineExpose({
                   {{ t("songList.title") }}
                 </div>
               </div>
-              <div v-if="showAlbum" class="flex-1 min-w-0">{{ t("songList.album") }}</div>
+              <div v-if="showAlbum && !isAndroid" class="flex-1 min-w-0">{{ t("songList.album") }}</div>
               <div class="w-7 shrink-0 text-center">{{ t("songList.actions") }}</div>
-              <div v-if="showDuration" class="w-16 shrink-0 text-center">
+              <div v-if="showDuration && !isAndroid" class="w-16 shrink-0 text-center">
                 {{ t("songList.duration") }}
               </div>
               <div v-if="showSize" class="w-16 shrink-0 text-center">{{ t("songList.size") }}</div>
@@ -645,9 +646,9 @@ defineExpose({
                   </div>
                 </div>
               </div>
-              <!-- 专辑 -->
+              <!-- 专辑：竖屏隐藏，给标题与标签让路 -->
               <div
-                v-if="showAlbum"
+                v-if="showAlbum && !isAndroid"
                 class="flex-1 min-w-0 truncate text-sm"
                 :class="playingId === item.id ? 'text-primary/70' : 'text-on-surface'"
               >
@@ -682,9 +683,9 @@ defineExpose({
                 </SButton>
               </div>
               <div v-else class="w-7 shrink-0" />
-              <!-- 时长 -->
+              <!-- 时长：竖屏隐藏 -->
               <div
-                v-if="showDuration"
+                v-if="showDuration && !isAndroid"
                 class="w-16 shrink-0 text-center text-sm tabular-nums"
                 :class="playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant'"
               >
