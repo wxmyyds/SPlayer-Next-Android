@@ -2,6 +2,7 @@
 import { getContributors, type Contributor } from "@/apis/github";
 import { useCopyText } from "@/composables/useCopyText";
 import { useUpdateStore } from "@/stores/update";
+import { isAndroid } from "@/utils/platform";
 import { openExternal } from "@/utils/url";
 import {
   APP_VERSION,
@@ -133,11 +134,9 @@ onMounted(async () => {
         <div class="flex items-center gap-2 mr-auto">
           <span class="text-lg font-logo text-on-surface">{{ REPO_NAME }}</span>
           <STag type="primary" size="small" round>v{{ APP_VERSION }}</STag>
-          <STag type="primary" size="small" round>
-            Android
-          </STag>
+          <STag type="primary" size="small" round>Android</STag>
         </div>
-        <div class="flex items-center gap-2">
+        <div v-if="!isAndroid" class="flex items-center gap-2">
           <SButton variant="secondary" :loading="checking" @click="handleCheckUpdate">
             <template #icon><IconLucideRefreshCw /></template>
             {{

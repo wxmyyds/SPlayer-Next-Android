@@ -4,6 +4,7 @@ import { toast } from "@/composables/useToast";
 import { dialog } from "@/composables/useDialog";
 import { usePlaylistStore } from "@/stores/playlist";
 import { useSettingsStore } from "@/stores/settings";
+import { isAndroid } from "@/utils/platform";
 import { APP_VERSION } from "@/utils/config";
 
 defineOptions({ inheritAttrs: false });
@@ -19,12 +20,16 @@ interface ActionRow {
   destructive?: boolean;
 }
 
-const rows: ActionRow[] = [
+const allRows: ActionRow[] = [
   { key: "backup", buttonKey: "backup.button" },
   { key: "restore", buttonKey: "restore.button" },
   { key: "resetSettings", buttonKey: "resetSettings.button" },
   { key: "resetAll", buttonKey: "resetAll.button", destructive: true },
 ];
+// Android 无桌面文件对话框：备份/恢复不展示，仅保留重置类操作
+const rows: ActionRow[] = allRows.filter(
+  (row) => !isAndroid || (row.key !== "backup" && row.key !== "restore"),
+);
 
 const running = ref<ActionKey | null>(null);
 
