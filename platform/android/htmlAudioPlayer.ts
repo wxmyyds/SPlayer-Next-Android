@@ -69,14 +69,14 @@ const publishMetadata = (meta?: { title?: string; artists?: Array<{ name?: strin
       ms.metadata = null;
       return;
     }
-    const artwork: Array<{ src: string }> = [];
-    if (meta.coverOriginal) artwork.push({ src: meta.coverOriginal });
-    if (meta.cover && meta.cover !== meta.coverOriginal) artwork.push({ src: meta.cover });
+    const artwork: Array<{ src: string; sizes: string; type: string }> = [];
+    if (meta.coverOriginal) artwork.push({ src: meta.coverOriginal, sizes: "512x512", type: "image/jpeg" });
+    if (meta.cover && meta.cover !== meta.coverOriginal) artwork.push({ src: meta.cover, sizes: "300x300", type: "image/jpeg" });
     ms.metadata = new MediaMetadata({
       title: meta.title ?? "",
       artist: (meta.artists ?? []).map((a) => a.name).filter(Boolean).join(" / "),
       album: meta.album?.name ?? "",
-      artwork: artwork as MediaMetadata["artwork"],
+      artwork,
     });
   } catch {
     // 忽略
