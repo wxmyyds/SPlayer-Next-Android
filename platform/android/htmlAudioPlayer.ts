@@ -137,6 +137,27 @@ const probeCors = async (source: string): Promise<boolean> => {
   }
 };
 
+/** 音频链：source → fadeGain → destination，频谱需要时 analyser 挂 fadeGain（只建一次） */
+const ensureAudioGraph = async (el: HTMLAudioElement): Promise<boolean> => {
+  if (mediaSource && fadeGain) return true;
+  if (!el.src) return false;
+  try {
+    audioCtx ??= new AudioContext();
+    await audioCtx.resume().catch(() => {});
+    mediaSource = audioCtx.createMediaElementSource(el);
+    fadeGain = audioCtx.createGain();
+    fadeGain.gain.value = 1;
+    mediaSource.connect(fadeGain);
+    fadeGain.connect(audioCtx.destination);
+    el.volume = userVolume;
+    return true;
+  } catch {
+    mediaSource = null;
+    fadeGain = null;
+    return false;
+  }
+};
+
 /** 为当前音频建分析图（仅 CORS 安全时；否则保持直出，频谱持平但不断声） */
 const ensureFftGraph = async (el: HTMLAudioElement): Promise<void> => {
   if (analyser || !fftWanted || !el.src) return;
@@ -147,14 +168,11 @@ const ensureFftGraph = async (el: HTMLAudioElement): Promise<void> => {
     const url = el.src;
     const position = el.currentTime;
     const wasPlaying = !el.paused;
-    audioCtx ??= new AudioContext();
-    await audioCtx.resume().catch(() => {});
-    const source = audioCtx.createMediaElementSource(el);
-    analyser = audioCtx.createAnalyser();
+    if (!(await ensureAudioGraph(el))) return;
+    analyser = audioCtx!.createAnalyser();
     analyser.fftSize = FFT_BINS * 4;
     analyser.smoothingTimeConstant = 0.75;
-    source.connect(analyser);
-    analyser.connect(audioCtx.destination);
+    fadeGain!.connect(analyser);
     el.src = url;
     el.load();
     const restore = (): void => {
@@ -205,20 +223,36 @@ const stopFftLoop = (): void => {
   }
 };
 
-/** 淡入淡出：音量斜坡（毫秒，0=关闭；桌面引擎同款语义，HTMLAudio 用 el.volume 实现） */
+/** 淡入淡出：Gain 节点优先（频谱图接管后 el.volume 失效），直出时回退 el.volume */
 let fadeMs = 200;
 let userVolume = 1;
 let fadeRun = 0;
+let mediaSource: MediaElementSourceNode | null = null;
+let fadeGain: GainNode | null = null;
 
-/** 线性 ramp 到目标音量，中途被新一轮取消则停 */
+/** 当前淡入淡出电平 0..1 */
+const getFadeLevel = (el: HTMLAudioElement): number =>
+  fadeGain ? fadeGain.gain.value : userVolume > 0 ? el.volume / userVolume : 1;
+
+/** 写淡入淡出电平 0..1 */
+const setFadeLevel = (el: HTMLAudioElement, level: number): void => {
+  if (fadeGain) {
+    fadeGain.gain.value = Math.min(1, Math.max(0, level));
+    el.volume = userVolume;
+  } else {
+    el.volume = Math.min(1, Math.max(0, level)) * userVolume;
+  }
+};
+
+/** 线性 ramp 到目标电平，中途被新一轮取消则停 */
 const rampVolume = (el: HTMLAudioElement, target: number, ms: number, run: number): Promise<void> =>
   new Promise((resolve) => {
     if (ms <= 0 || run !== fadeRun) {
-      if (run === fadeRun) el.volume = target;
+      if (run === fadeRun) setFadeLevel(el, target);
       resolve();
       return;
     }
-    const from = el.volume;
+    const from = getFadeLevel(el);
     const steps = Math.max(1, Math.round(ms / 25));
     let step = 0;
     const timer = setInterval(() => {
@@ -228,7 +262,7 @@ const rampVolume = (el: HTMLAudioElement, target: number, ms: number, run: numbe
         return;
       }
       step += 1;
-      el.volume = from + ((target - from) * step) / steps;
+      setFadeLevel(el, from + ((target - from) * step) / steps);
       if (step >= steps) {
         clearInterval(timer);
         resolve();
@@ -236,20 +270,20 @@ const rampVolume = (el: HTMLAudioElement, target: number, ms: number, run: numbe
     }, 25);
   });
 
-/** 取消进行中的淡入淡出，音量回到用户值 */
+/** 取消进行中的淡入淡出，电平回到满 */
 const cancelFade = (el: HTMLAudioElement): number => {
   fadeRun += 1;
-  el.volume = userVolume;
+  setFadeLevel(el, 1);
   return fadeRun;
 };
 
-/** 从 0 淡入到用户音量（起播用） */
+/** 从 0 淡入到满电平（起播用） */
 const fadeIn = (el: HTMLAudioElement): void => {
   if (fadeMs <= 0 || userVolume <= 0) return;
   const run = fadeRun + 1;
   fadeRun = run;
-  el.volume = 0;
-  void rampVolume(el, userVolume, fadeMs, run);
+  setFadeLevel(el, 0);
+  void rampVolume(el, 1, fadeMs, run);
 };
 
 /** 淡出到 0 后暂停/停播（UI 立即响应，声音随后收尾） */
@@ -264,7 +298,7 @@ const fadeOutThen = (el: HTMLAudioElement, after: () => void, ms?: number): void
   void rampVolume(el, 0, ms ?? fadeMs, run).then(() => {
     if (run !== fadeRun) return;
     after();
-    el.volume = userVolume;
+    setFadeLevel(el, 1);
   });
 };
 
@@ -367,7 +401,7 @@ export const htmlAudioPlayer: PlayerApi = {
       await rampVolume(el, 0, Math.min(fadeMs, 250), run);
       if (run !== fadeRun) return fail("interrupted");
       el.pause();
-      el.volume = userVolume;
+      setFadeLevel(el, 1);
     } else {
       cancelFade(el);
     }
@@ -411,6 +445,7 @@ export const htmlAudioPlayer: PlayerApi = {
     const el = getAudio();
     fadeRun += 1;
     el.volume = v;
+    if (fadeGain) fadeGain.gain.value = 1;
     try {
       localStorage.setItem("splayer.android.player.volume", String(v));
     } catch {
