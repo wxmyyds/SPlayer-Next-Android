@@ -20,10 +20,13 @@ const props = withDefaults(
     align?: "center" | "left" | "right";
     /** 简单模式 */
     simple?: boolean;
+    /** 是否显示来源/音质标签行（竖屏信息行窄时可关，给歌名歌手让路） */
+    showTags?: boolean;
   }>(),
   {
     align: "center",
     simple: false,
+    showTags: true,
   },
 );
 
@@ -159,7 +162,7 @@ const alignItems = computed(() => {
       {{ displayTrack.comment }}
     </div>
     <!-- 元信息标签行 -->
-    <div class="flex items-center gap-1.5 text-[1em] my-1 text-cover/60">
+    <div v-if="showTags" class="flex items-center gap-1.5 text-[1em] my-1 text-cover/60">
       <span
         class="inline-flex items-center justify-center leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30"
       >

@@ -320,7 +320,7 @@ const showComments = (): void => {
           <template v-if="stackedLayout">
             <div class="w-full flex items-center gap-2 px-5 pt-3 shrink-0">
               <div class="flex-1 min-w-0">
-                <PlayerData align="left" simple />
+                <PlayerData align="left" simple :show-tags="false" />
               </div>
               <div class="flex items-center gap-1 shrink-0">
                 <SButton
@@ -375,7 +375,7 @@ const showComments = (): void => {
                 {{ timeDisplay[1] }}
               </span>
             </div>
-            <div class="w-full flex items-center justify-between px-8 pt-1 pb-2 shrink-0 mx-auto" style="max-width: 420px">
+            <div class="w-full flex items-center justify-between px-8 pt-3 shrink-0 mx-auto" style="max-width: 420px">
               <SButton
                 type="cover"
                 variant="ghost"
