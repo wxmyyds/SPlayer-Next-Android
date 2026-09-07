@@ -17,7 +17,6 @@ import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
-import android.util.Log;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -46,8 +45,6 @@ import okhttp3.Response;
     permissions = @Permission(strings = {Manifest.permission.POST_NOTIFICATIONS}, alias = "notifications"))
 public class MediaSessionPlugin extends Plugin {
 
-    private static final String TAG = "SPlayerFocus";
-
     static final String CHANNEL_ID = "splayer_playback";
     static final int NOTIFICATION_ID = 1;
     private static final String ACTION_MEDIA_KEY = "com.wxmyyds.splayer.next.MEDIA_KEY";
@@ -63,14 +60,9 @@ public class MediaSessionPlugin extends Plugin {
             new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
-                    try {
-                        if (!pauseOnNoisy) return;
-                        // 拔耳机/断蓝牙：暂停，重连后不自动续播
-                        Log.i(TAG, "becoming noisy, pause");
-                        emitMediaKey("pause");
-                    } catch (Exception e) {
-                        Log.e(TAG, "noisy handling failed", e);
-                    }
+                    if (!pauseOnNoisy) return;
+                    // 拔耳机/断蓝牙：暂停，重连后不自动续播
+                    emitMediaKey("pause");
                 }
             };
     private boolean noisyRegistered;
@@ -172,12 +164,8 @@ public class MediaSessionPlugin extends Plugin {
 
                             // 焦点礼让交由 WebView 内部媒体栈处理（原生再申请会与其互斥，元素被瞬时暂停）；
                             // 这里只管拔耳机监听生命周期：播放期注册，暂停/停止注销
-                            try {
-                                if (playing) registerNoisyReceiver();
-                                else unregisterNoisyReceiver();
-                            } catch (Exception e) {
-                                Log.e(TAG, "noisy lifecycle failed", e);
-                            }
+                            if (playing) registerNoisyReceiver();
+                            else unregisterNoisyReceiver();
 
                             // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
                             MediaMetadata current =
@@ -347,7 +335,6 @@ public class MediaSessionPlugin extends Plugin {
 
     /** 经 mediaKey 通道通知 JS 执行播放/暂停（与通知栏按键同一路径） */
     private void emitMediaKey(String action) {
-        Log.i(TAG, "emit mediaKey " + action);
         JSObject data = new JSObject();
         data.put("action", action);
         data.put("position", -1);
@@ -357,7 +344,6 @@ public class MediaSessionPlugin extends Plugin {
     private void registerNoisyReceiver() {
         if (noisyRegistered) return;
         try {
-            Log.i(TAG, "register noisy receiver");
             IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
             if (Build.VERSION.SDK_INT >= 33) {
                 getContext().registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -365,9 +351,8 @@ public class MediaSessionPlugin extends Plugin {
                 getContext().registerReceiver(noisyReceiver, filter);
             }
             noisyRegistered = true;
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             // 部分 ROM 对 NOT_EXPORTED 校验过严会抛异常；监听失败只影响拔耳机暂停，绝不波及播放
-            Log.e(TAG, "register noisy receiver failed", e);
         }
     }
 
@@ -385,29 +370,6 @@ public class MediaSessionPlugin extends Plugin {
     @PluginMethod
     public void setPauseOnDeviceSwitch(PluginCall call) {
         pauseOnNoisy = Boolean.TRUE.equals(call.getBoolean("enabled", true));
-        call.resolve();
-    }
-
-    /** 临时诊断：JS 侧音频状态追加到应用外部文件目录日志（发布版移除） */
-    @PluginMethod
-    public void debugLog(PluginCall call) {
-        String line = call.getString("line", "");
-        if (!line.isEmpty()) {
-            try {
-                java.io.File dir = getContext().getExternalFilesDir(null);
-                if (dir != null) {
-                    String stamp =
-                            new java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS", java.util.Locale.US)
-                                    .format(new java.util.Date());
-                    java.io.FileWriter writer =
-                            new java.io.FileWriter(new java.io.File(dir, "player-debug.log"), true);
-                    writer.append(stamp).append(' ').append(line).append('\n');
-                    writer.close();
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "debug log failed", e);
-            }
-        }
         call.resolve();
     }
 

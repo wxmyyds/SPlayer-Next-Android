@@ -29,7 +29,6 @@ interface MediaBridgePlugin {
     stopped?: boolean;
   }) => Promise<void>;
   setPauseOnDeviceSwitch: (options: { enabled: boolean }) => Promise<void>;
-  debugLog: (options: { line: string }) => Promise<void>;
   addListener: (
     event: "mediaKey",
     callback: (payload: { action: string; position: number }) => void,
@@ -40,27 +39,11 @@ interface MediaBridgePlugin {
 class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
   async updateState(): Promise<void> {}
   async setPauseOnDeviceSwitch(): Promise<void> {}
-  async debugLog(): Promise<void> {}
 }
 
 const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
   web: () => new MediaBridgeWeb(),
 });
-
-/** 临时诊断：关键事件写入原生侧 player-debug.log（文件管理器可读，发布版移除） */
-const dbg = (line: string): void => {
-  try {
-    void MediaBridge.debugLog({ line });
-  } catch {
-    // 诊断不可用时静默
-  }
-};
-
-/** 诊断：音频链关键状态快照（音量/增益/上下文/倍速） */
-const audioState = (): string => {
-  const el = audio;
-  return `paused=${el ? el.paused : "n/a"} elVol=${el ? el.volume.toFixed(2) : "n/a"} userVol=${userVolume.toFixed(2)} gain=${fadeGain ? fadeGain.gain.value.toFixed(2) : "-"} ctx=${audioCtx ? audioCtx.state : "-"} rate=${el ? el.playbackRate : "-"} co=${el ? (el.crossOrigin ?? "-") : "n/a"}`;
-};
 
 const ok = <T>(data?: T): IpcResponse<T> => ({
   success: true,
@@ -93,7 +76,6 @@ const wireMediaBridge = (): void => {
     const addListener = (MediaBridge as Partial<MediaBridgePlugin>).addListener;
     void addListener?.call(MediaBridge, "mediaKey", (payload) => {
       const action = payload.action;
-      dbg(`mediaKey ${action}`);
       if (action === "play") emit({ type: "play" });
       else if (action === "pause") emit({ type: "pause" });
       else if (action === "next") emit({ type: "next" });
@@ -379,7 +361,6 @@ const fadeIn = (el: HTMLAudioElement): void => {
   fadeRun = run;
   setFadeLevel(el, 0);
   void rampVolume(el, 1, fadeMs, run);
-  setTimeout(() => dbg(`fade-done run=${run} ${audioState()}`), fadeMs + 150);
 };
 
 /** 淡出到 0 后暂停/停播（UI 立即响应，声音随后收尾） */
@@ -405,14 +386,12 @@ const getAudio = (): HTMLAudioElement => {
     el.playbackRate = speedRate;
     el.addEventListener("play", () => {
       publishState("playing");
-      dbg(`play ${audioState()}`);
       if (audioCtx) void audioCtx.resume().catch(() => {});
       if (fftWanted) startFftLoop();
       emit({ type: "play" });
     });
     el.addEventListener("pause", () => {
       publishState("paused");
-      dbg(`pause ${audioState()}`);
       stopFftLoop();
       emit({ type: "pause" });
     });
@@ -429,7 +408,6 @@ const getAudio = (): HTMLAudioElement => {
     el.addEventListener("error", () => {
       // 错误码进 logcat（adb 抓 console），定位断点用；事件形状保持与桌面一致
       console.warn(`[player] audio error code=${el.error?.code ?? -1} src=${el.src}`);
-      dbg(`error code=${el.error?.code ?? -1} ${audioState()}`);
       emit({ type: "sourceError" });
     });
     el.addEventListener("seeked", () =>
@@ -488,7 +466,6 @@ export const htmlAudioPlayer: PlayerApi = {
         void audioCtx.resume().catch(() => {});
       }
       publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
-      dbg(`load src=${source.slice(0, 80)} ${audioState()}`);
       el.src = source;
       // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
       void ensureFftGraph(el);
@@ -497,10 +474,7 @@ export const htmlAudioPlayer: PlayerApi = {
           await el.play();
           fadeIn(el);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          dbg(`load play fail ${msg} ${audioState()}`);
-          console.warn(`[player] play failed: ${msg}`);
-          return fail(msg);
+          return fail(err instanceof Error ? err.message : String(err));
         }
       }
       const duration = Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0;
@@ -534,16 +508,10 @@ export const htmlAudioPlayer: PlayerApi = {
       }
       const el = getAudio();
       const wasPaused = el.paused;
-      await el.play().catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        dbg(`play() fail ${msg} ${audioState()}`);
-        console.warn(`[player] play failed: ${msg}`);
-        throw err;
-      });
+      await el.play();
       // "play" 事件会回流再触发一次 play()（渲染层 case "play" → play()），
       // 已播状态不重复淡入，否则两次 fadeIn 互相打断 ramp，电平永久留在 0 导致全图静音
       if (wasPaused) fadeIn(el);
-      dbg(`play() ok ${audioState()}`);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));
@@ -583,7 +551,6 @@ export const htmlAudioPlayer: PlayerApi = {
     } catch {
       // 忽略存储异常
     }
-    dbg(`setVolume ${v} ${audioState()}`);
     return ok();
   },
   setPauseOnDeviceSwitch: async (enabled: boolean) => {
@@ -637,7 +604,6 @@ export const htmlAudioPlayer: PlayerApi = {
   setSpeed: async (speed: number) => {
     speedRate = Number.isFinite(speed) && speed > 0 ? speed : 1;
     getAudio().playbackRate = speedRate;
-    dbg(`setSpeed ${speedRate}`);
     return ok();
   },
   setPitch: async () => ok(),
