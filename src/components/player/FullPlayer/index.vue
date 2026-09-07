@@ -257,6 +257,9 @@ const showComments = (): void => {
             </SButton>
           </div>
           <div class="app-no-drag flex items-center gap-3">
+            <SButton v-if="isAndroid" type="cover" variant="ghost" circle :size="40" @click="collapse">
+              <template #icon><IconLucideChevronDown /></template>
+            </SButton>
             <SButton
               v-if="!isAndroid"
               type="cover"
@@ -274,7 +277,7 @@ const showComments = (): void => {
         <!-- 主区域：堆叠时文档流（封面区+歌词区上下排），桌面左右绝对分栏 -->
         <div
           class="absolute inset-x-0"
-          :class="stackedLayout ? 'top-14 bottom-28 flex flex-col' : 'top-14 bottom-20'"
+          :class="stackedLayout ? 'top-14 bottom-0 flex flex-col' : 'top-14 bottom-20'"
           @mousemove="onMainMove"
         >
           <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
@@ -306,16 +309,146 @@ const showComments = (): void => {
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id">
                   <PlayerCover />
-                  <div
-                    class="left-0 w-full"
-                    :class="stackedLayout ? 'pt-4' : 'absolute top-full pt-6'"
-                  >
-                    <PlayerData :align="stackedLayout ? 'center' : 'left'" />
+                  <div v-if="!stackedLayout" class="absolute top-full left-0 w-full pt-6">
+                    <PlayerData align="left" />
                   </div>
                 </div>
               </Transition>
             </div>
           </div>
+          <!-- 堆叠页内行（参照 SPlayer-for-Android：信息+动作/进度/控制） -->
+          <template v-if="stackedLayout">
+            <div class="w-full flex items-center gap-2 px-5 pt-3 shrink-0">
+              <div class="flex-1 min-w-0">
+                <PlayerData align="left" simple />
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <SButton
+                  type="cover"
+                  variant="ghost"
+                  circle
+                  :size="36"
+                  :disabled="!hasTrack"
+                  @click="fav.toggle(displayTrack)"
+                >
+                  <template #icon>
+                    <SIconSwap :active="fav.isLiked(displayTrack)">
+                      <template #on><IconFavorite /></template>
+                      <template #off><IconFavoriteOutline /></template>
+                    </SIconSwap>
+                  </template>
+                </SButton>
+                <SButton
+                  v-if="displayTrack?.source === 'local' || displayTrack?.source === 'netease'"
+                  type="cover"
+                  variant="ghost"
+                  circle
+                  :size="36"
+                  @click="displayTrack && openPicker([displayTrack])"
+                >
+                  <template #icon><IconLucideListPlus /></template>
+                </SButton>
+                <Toolbar cover hide-volume />
+              </div>
+            </div>
+            <div class="w-full flex items-center gap-2 px-5 pt-2 shrink-0">
+              <span
+                class="text-xs text-cover/50 tabular-nums min-w-9 text-center"
+                @click="toggleTimeFormat"
+              >
+                {{ timeDisplay[0] }}
+              </span>
+              <SSlider
+                :model-value="position"
+                :min="0"
+                :max="duration"
+                :step="100"
+                :always-show-thumb="false"
+                cover
+                class="flex-1"
+                @drag-end="onSeekDragEnd"
+              />
+              <span
+                class="text-xs text-cover/50 tabular-nums min-w-9 text-center"
+                @click="toggleTimeFormat"
+              >
+                {{ timeDisplay[1] }}
+              </span>
+            </div>
+            <div class="w-full flex items-center justify-between px-8 pt-1 pb-2 shrink-0 mx-auto" style="max-width: 420px">
+              <SButton
+                type="cover"
+                variant="ghost"
+                circle
+                :size="40"
+                @click="
+                  fmMode
+                    ? player.dislikeFmTrack()
+                    : heartMode
+                      ? player.exitHeartMode()
+                      : player.toggleShuffleMode()
+                "
+              >
+                <template #icon>
+                  <IconLucideHeartOff v-if="fmMode" />
+                  <IconSpHeartMode v-else-if="heartMode" />
+                  <IconLucideShuffle v-else-if="shuffleMode === 'on'" />
+                  <IconSpPlayOrder v-else />
+                </template>
+              </SButton>
+              <SButton
+                type="cover"
+                variant="ghost"
+                circle
+                :size="50"
+                :disabled="!hasTrack || fmMode"
+                @click="player.prevTrack()"
+              >
+                <template #icon><IconLucideSkipBack /></template>
+              </SButton>
+              <SButton
+                type="cover"
+                variant="secondary"
+                circle
+                :size="60"
+                :loading="isLoading"
+                :disabled="!hasTrack && !isLoading"
+                @click="player.togglePlay()"
+              >
+                <template #icon>
+                  <SIconSwap :active="isPlaying">
+                    <template #on><IconLucidePause /></template>
+                    <template #off><IconLucidePlay /></template>
+                  </SIconSwap>
+                </template>
+              </SButton>
+              <SButton
+                type="cover"
+                variant="ghost"
+                circle
+                :size="50"
+                :disabled="!hasTrack"
+                @click="player.nextTrack()"
+              >
+                <template #icon><IconLucideSkipForward /></template>
+              </SButton>
+              <SButton
+                type="cover"
+                variant="ghost"
+                circle
+                :size="40"
+                :disabled="fmMode"
+                :class="fmMode ? 'opacity-40' : 'opacity-100'"
+                @click="player.cycleRepeatMode()"
+              >
+                <template #icon>
+                  <IconLucideInfinity v-if="fmMode" />
+                  <IconLucideRepeat1 v-else-if="repeatMode === 'one'" />
+                  <IconLucideRepeat v-else />
+                </template>
+              </SButton>
+            </div>
+          </template>
           <!-- 右侧（堆叠时为下方歌词区，文档流占满剩余高度） -->
           <div
             class="group flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -427,7 +560,7 @@ const showComments = (): void => {
             :class="[
               status.fullQueueOpen
                 ? stackedLayout
-                  ? 'inset-0 z-20 p-4 pt-16 pb-32 bg-black/60 backdrop-blur-xl'
+                  ? 'inset-0 z-20 p-4 pt-16 pb-6 bg-black/60 backdrop-blur-xl'
                   : 'inset-y-0 right-0 pl-4 py-6'
                 : 'inset-y-0 right-0 pl-4 py-6 pointer-events-none',
             ]"
@@ -445,138 +578,14 @@ const showComments = (): void => {
             </Transition>
           </div>
         </div>
-        <!-- 底栏：竖屏双行（进度独占一行，按键一行排开），桌面三段式 -->
+        <!-- 底栏（仅桌面；竖屏控制已移入页面） -->
         <div
-          class="absolute bottom-0 inset-x-0 z-10 flex transition-opacity duration-400"
-          :class="[
-            immersive ? 'opacity-0 pointer-events-none' : 'opacity-100',
-            stackedLayout
-              ? 'h-28 flex-col justify-center gap-1 px-3'
-              : 'h-20 items-center gap-4 px-4',
-          ]"
+          v-if="!stackedLayout"
+          class="absolute bottom-0 inset-x-0 z-10 flex items-center transition-opacity duration-400 h-20 gap-4 px-4"
+          :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
-          <template v-if="stackedLayout">
-            <div class="flex items-center gap-2 w-full">
-              <span
-                class="text-xs text-cover/50 tabular-nums min-w-9 text-center px-1 py-0.5"
-                @click="toggleTimeFormat"
-              >
-                {{ timeDisplay[0] }}
-              </span>
-              <SSlider
-                :model-value="position"
-                :min="0"
-                :max="duration"
-                :step="100"
-                :always-show-thumb="false"
-                cover
-                class="flex-1"
-                @drag-end="onSeekDragEnd"
-              />
-              <span
-                class="text-xs text-cover/50 tabular-nums min-w-9 text-center px-1 py-0.5"
-                @click="toggleTimeFormat"
-              >
-                {{ timeDisplay[1] }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between w-full">
-              <div class="flex items-center gap-1 shrink-0">
-                <SButton type="cover" variant="ghost" circle @click="collapse">
-                  <template #icon><IconLucideChevronDown /></template>
-                </SButton>
-                <SButton
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  :disabled="!hasTrack"
-                  @click="fav.toggle(displayTrack)"
-                >
-                  <template #icon>
-                    <SIconSwap :active="fav.isLiked(displayTrack)">
-                      <template #on><IconFavorite /></template>
-                      <template #off><IconFavoriteOutline /></template>
-                    </SIconSwap>
-                  </template>
-                </SButton>
-              </div>
-              <div class="flex items-center gap-1 shrink-0">
-                <SButton
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  @click="
-                    fmMode
-                      ? player.dislikeFmTrack()
-                      : heartMode
-                        ? player.exitHeartMode()
-                        : player.toggleShuffleMode()
-                  "
-                >
-                  <template #icon>
-                    <IconLucideHeartOff v-if="fmMode" />
-                    <IconSpHeartMode v-else-if="heartMode" />
-                    <IconLucideShuffle v-else-if="shuffleMode === 'on'" />
-                    <IconSpPlayOrder v-else />
-                  </template>
-                </SButton>
-                <SButton
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  :disabled="!hasTrack || fmMode"
-                  @click="player.prevTrack()"
-                >
-                  <template #icon><IconLucideSkipBack /></template>
-                </SButton>
-                <SButton
-                  type="cover"
-                  variant="secondary"
-                  size="large"
-                  circle
-                  :loading="isLoading"
-                  :disabled="!hasTrack && !isLoading"
-                  @click="player.togglePlay()"
-                >
-                  <template #icon>
-                    <SIconSwap :active="isPlaying">
-                      <template #on><IconLucidePause /></template>
-                      <template #off><IconLucidePlay /></template>
-                    </SIconSwap>
-                  </template>
-                </SButton>
-                <SButton
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  :disabled="!hasTrack"
-                  @click="player.nextTrack()"
-                >
-                  <template #icon><IconLucideSkipForward /></template>
-                </SButton>
-                <SButton
-                  type="cover"
-                  variant="ghost"
-                  circle
-                  :disabled="fmMode"
-                  :class="fmMode ? 'opacity-40' : 'opacity-100'"
-                  @click="player.cycleRepeatMode()"
-                >
-                  <template #icon>
-                    <IconLucideInfinity v-if="fmMode" />
-                    <IconLucideRepeat1 v-else-if="repeatMode === 'one'" />
-                    <IconLucideRepeat v-else />
-                  </template>
-                </SButton>
-              </div>
-              <div class="shrink-0">
-                <Toolbar cover hide-volume />
-              </div>
-            </div>
-          </template>
-          <template v-else>
           <div class="flex-1 min-w-0 flex items-center justify-start gap-2">
             <SButton type="cover" variant="ghost" size="large" circle @click="collapse">
               <template #icon><IconLucideChevronDown /></template>
@@ -732,7 +741,6 @@ const showComments = (): void => {
           <div class="flex-1 min-w-0 flex items-center justify-end">
             <Toolbar cover hide-volume />
           </div>
-          </template>
         </div>
       </div>
     </Transition>
