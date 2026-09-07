@@ -126,13 +126,13 @@ if (typeof useSwipe === "function") {
   useSwipe(coverPaneRef, {
     threshold: 60,
     onSwipeEnd: (_e, direction) => {
-      if (stackedLayout.value && direction === "LEFT") stackPage.value = 1;
+      if (stackedLayout.value && direction === "left") stackPage.value = 1;
     },
   });
   useSwipe(lyricPaneRef, {
     threshold: 60,
     onSwipeEnd: (_e, direction) => {
-      if (stackedLayout.value && direction === "RIGHT") stackPage.value = 0;
+      if (stackedLayout.value && direction === "right") stackPage.value = 0;
     },
   });
 }
