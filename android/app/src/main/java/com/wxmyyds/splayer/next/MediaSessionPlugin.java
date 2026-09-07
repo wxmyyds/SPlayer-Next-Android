@@ -388,6 +388,29 @@ public class MediaSessionPlugin extends Plugin {
         call.resolve();
     }
 
+    /** 临时诊断：JS 侧音频状态追加到应用外部文件目录日志（发布版移除） */
+    @PluginMethod
+    public void debugLog(PluginCall call) {
+        String line = call.getString("line", "");
+        if (!line.isEmpty()) {
+            try {
+                java.io.File dir = getContext().getExternalFilesDir(null);
+                if (dir != null) {
+                    String stamp =
+                            new java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS", java.util.Locale.US)
+                                    .format(new java.util.Date());
+                    java.io.FileWriter writer =
+                            new java.io.FileWriter(new java.io.File(dir, "player-debug.log"), true);
+                    writer.append(stamp).append(' ').append(line).append('\n');
+                    writer.close();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "debug log failed", e);
+            }
+        }
+        call.resolve();
+    }
+
     private static long readLong(PluginCall call, String key, long fallback) {
         Object value = call.getData().opt(key);
         if (value instanceof Number) return ((Number) value).longValue();

@@ -29,6 +29,7 @@ interface MediaBridgePlugin {
     stopped?: boolean;
   }) => Promise<void>;
   setPauseOnDeviceSwitch: (options: { enabled: boolean }) => Promise<void>;
+  debugLog: (options: { line: string }) => Promise<void>;
   addListener: (
     event: "mediaKey",
     callback: (payload: { action: string; position: number }) => void,
@@ -39,11 +40,27 @@ interface MediaBridgePlugin {
 class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
   async updateState(): Promise<void> {}
   async setPauseOnDeviceSwitch(): Promise<void> {}
+  async debugLog(): Promise<void> {}
 }
 
 const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
   web: () => new MediaBridgeWeb(),
 });
+
+/** 临时诊断：关键事件写入原生侧 player-debug.log（文件管理器可读，发布版移除） */
+const dbg = (line: string): void => {
+  try {
+    void MediaBridge.debugLog({ line });
+  } catch {
+    // 诊断不可用时静默
+  }
+};
+
+/** 诊断：音频链关键状态快照（音量/增益/上下文/倍速） */
+const audioState = (): string => {
+  const el = audio;
+  return `paused=${el ? el.paused : "n/a"} elVol=${el ? el.volume.toFixed(2) : "n/a"} userVol=${userVolume.toFixed(2)} gain=${fadeGain ? fadeGain.gain.value.toFixed(2) : "-"} ctx=${audioCtx ? audioCtx.state : "-"} rate=${el ? el.playbackRate : "-"}`;
+};
 
 const ok = <T>(data?: T): IpcResponse<T> => ({
   success: true,
@@ -76,6 +93,7 @@ const wireMediaBridge = (): void => {
     const addListener = (MediaBridge as Partial<MediaBridgePlugin>).addListener;
     void addListener?.call(MediaBridge, "mediaKey", (payload) => {
       const action = payload.action;
+      dbg(`mediaKey ${action}`);
       if (action === "play") emit({ type: "play" });
       else if (action === "pause") emit({ type: "pause" });
       else if (action === "next") emit({ type: "next" });
@@ -364,12 +382,14 @@ const getAudio = (): HTMLAudioElement => {
     el.playbackRate = speedRate;
     el.addEventListener("play", () => {
       publishState("playing");
+      dbg(`play ${audioState()}`);
       if (audioCtx) void audioCtx.resume().catch(() => {});
       if (fftWanted) startFftLoop();
       emit({ type: "play" });
     });
     el.addEventListener("pause", () => {
       publishState("paused");
+      dbg(`pause ${audioState()}`);
       stopFftLoop();
       emit({ type: "pause" });
     });
@@ -386,6 +406,7 @@ const getAudio = (): HTMLAudioElement => {
     el.addEventListener("error", () => {
       // 错误码进 logcat（adb 抓 console），定位断点用；事件形状保持与桌面一致
       console.warn(`[player] audio error code=${el.error?.code ?? -1} src=${el.src}`);
+      dbg(`error code=${el.error?.code ?? -1} ${audioState()}`);
       emit({ type: "sourceError" });
     });
     el.addEventListener("seeked", () =>
@@ -444,6 +465,7 @@ export const htmlAudioPlayer: PlayerApi = {
         void audioCtx.resume().catch(() => {});
       }
       publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
+      dbg(`load src=${source.slice(0, 80)} ${audioState()}`);
       el.src = source;
       // 频谱需要时异步挂分析图（直出先播，不阻塞起播）
       void ensureFftGraph(el);
@@ -452,8 +474,10 @@ export const htmlAudioPlayer: PlayerApi = {
           await el.play();
           fadeIn(el);
         } catch (err) {
-          console.warn(`[player] play failed: ${err instanceof Error ? err.message : String(err)}`);
-          return fail(err instanceof Error ? err.message : String(err));
+          const msg = err instanceof Error ? err.message : String(err);
+          dbg(`load play fail ${msg} ${audioState()}`);
+          console.warn(`[player] play failed: ${msg}`);
+          return fail(msg);
         }
       }
       const duration = Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0;
@@ -487,9 +511,12 @@ export const htmlAudioPlayer: PlayerApi = {
       }
       const el = getAudio();
       await el.play().catch((err: unknown) => {
-        console.warn(`[player] play failed: ${err instanceof Error ? err.message : String(err)}`);
+        const msg = err instanceof Error ? err.message : String(err);
+        dbg(`play() fail ${msg} ${audioState()}`);
+        console.warn(`[player] play failed: ${msg}`);
         throw err;
       });
+      dbg(`play() ok ${audioState()}`);
       fadeIn(el);
       return ok();
     } catch (err) {
@@ -530,6 +557,7 @@ export const htmlAudioPlayer: PlayerApi = {
     } catch {
       // 忽略存储异常
     }
+    dbg(`setVolume ${v} ${audioState()}`);
     return ok();
   },
   setPauseOnDeviceSwitch: async (enabled: boolean) => {
@@ -583,6 +611,7 @@ export const htmlAudioPlayer: PlayerApi = {
   setSpeed: async (speed: number) => {
     speedRate = Number.isFinite(speed) && speed > 0 ? speed : 1;
     getAudio().playbackRate = speedRate;
+    dbg(`setSpeed ${speedRate}`);
     return ok();
   },
   setPitch: async () => ok(),
