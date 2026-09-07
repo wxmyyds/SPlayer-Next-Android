@@ -19,6 +19,8 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import okio.Buffer;
+import okio.BufferedSource;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -118,10 +120,21 @@ public class NativeHttpPlugin extends Plugin {
                     ret.put("headers", headers);
                     ret.put("setCookies", setCookies);
                     ResponseBody rb = r.body();
-                    byte[] bytes = rb != null ? rb.bytes() : new byte[0];
-                    if (bytes.length > MAX_BODY) {
-                        call.reject("response too large");
-                        return;
+                    byte[] bytes;
+                    if (rb == null) {
+                        bytes = new byte[0];
+                    } else {
+                        // 边读边限长：超大响应先拦截，避免整读进内存再判 OOM
+                        Buffer sink = new Buffer();
+                        try (BufferedSource source = rb.source()) {
+                            while (source.read(sink, 65536) != -1) {
+                                if (sink.size() > MAX_BODY) {
+                                    call.reject("response too large");
+                                    return;
+                                }
+                            }
+                        }
+                        bytes = sink.readByteArray();
                     }
                     ret.put("bodyBase64", Base64.encodeToString(bytes, Base64.NO_WRAP));
                     call.resolve(ret);
