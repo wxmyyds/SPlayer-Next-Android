@@ -283,8 +283,8 @@ const showComments = (): void => {
             class="absolute flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
-                ? 'top-0 inset-x-0 items-start justify-center px-4 pt-1'
-                : 'inset-y-0 left-0 items-center justify-center px-12'
+                ? 'top-0 inset-x-0 flex items-start justify-center px-4 pt-1'
+                : 'inset-y-0 left-0 flex items-center justify-center px-12'
             "
             :style="
               stackedLayout
@@ -418,8 +418,11 @@ const showComments = (): void => {
           <div
             class="absolute inset-y-0 right-0 pl-4 py-6 flex items-center"
             :class="[
-              status.fullQueueOpen ? '' : 'pointer-events-none',
-              stackedLayout ? 'pr-4 bg-black/60 backdrop-blur-xl' : '',
+              status.fullQueueOpen
+                ? stackedLayout
+                  ? 'pr-4 bg-black/60 backdrop-blur-xl'
+                  : ''
+                : 'pointer-events-none',
             ]"
             :style="stackedLayout ? { width: '100%' } : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
           >
