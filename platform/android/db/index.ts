@@ -40,7 +40,6 @@ const SPlayerDb = registerPlugin<SPlayerDbPlugin>("SPlayerDb", {
 /** 与上游一致的建表语句（tracks 空表占位供校验；playlists / history 先行，其余随功能补） */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tracks (
-CREATE TABLE IF NOT EXISTS tracks (
   id TEXT PRIMARY KEY,
   path TEXT NOT NULL UNIQUE,
   cue_path TEXT,
