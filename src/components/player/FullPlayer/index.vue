@@ -283,7 +283,7 @@ const showComments = (): void => {
             class="absolute flex transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="
               stackedLayout
-                ? 'top-0 inset-x-0 flex items-start justify-center px-4 pt-10'
+                ? 'top-0 inset-x-0 h-[38%] flex items-center justify-center px-4'
                 : 'inset-y-0 left-0 flex items-center justify-center px-12'
             "
             :style="
@@ -297,7 +297,7 @@ const showComments = (): void => {
           >
             <div
               class="relative"
-              :class="stackedLayout ? 'w-[min(44vw,20vh)]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
+              :class="stackedLayout ? 'w-[min(46vw,22vh)]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
             >
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id">
