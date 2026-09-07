@@ -59,7 +59,7 @@ const dbg = (line: string): void => {
 /** 诊断：音频链关键状态快照（音量/增益/上下文/倍速） */
 const audioState = (): string => {
   const el = audio;
-  return `paused=${el ? el.paused : "n/a"} elVol=${el ? el.volume.toFixed(2) : "n/a"} userVol=${userVolume.toFixed(2)} gain=${fadeGain ? fadeGain.gain.value.toFixed(2) : "-"} ctx=${audioCtx ? audioCtx.state : "-"} rate=${el ? el.playbackRate : "-"}`;
+  return `paused=${el ? el.paused : "n/a"} elVol=${el ? el.volume.toFixed(2) : "n/a"} userVol=${userVolume.toFixed(2)} gain=${fadeGain ? fadeGain.gain.value.toFixed(2) : "-"} ctx=${audioCtx ? audioCtx.state : "-"} rate=${el ? el.playbackRate : "-"} co=${el ? (el.crossOrigin ?? "-") : "n/a"}`;
 };
 
 const ok = <T>(data?: T): IpcResponse<T> => ({
@@ -213,7 +213,13 @@ const buildGraph = (el: HTMLAudioElement): boolean => {
  */
 const syncPlaybackGraph = async (source: string): Promise<void> => {
   if (await probeSourceCors(source)) {
-    if (audio && !mediaSource) buildGraph(audio);
+    // 图路径必须以 CORS 模式取流：元素不带 crossorigin 属性时，跨域资源对
+    // MediaElementSourceNode 恒为 tainted（按规范静音），与 CDN 是否回 ACAO 无关；
+    // 必须在赋 src 之前设好（此前仅频谱开启时 ensureFftGraph 会设，频谱关闭则必然无声）
+    if (audio) {
+      audio.crossOrigin = "anonymous";
+      if (!mediaSource) buildGraph(audio);
+    }
     return;
   }
   if (!mediaSource) return;
