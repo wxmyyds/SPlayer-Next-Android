@@ -28,6 +28,7 @@ interface MediaBridgePlugin {
     durationMs?: number;
     stopped?: boolean;
   }) => Promise<void>;
+  setPauseOnDeviceSwitch: (options: { enabled: boolean }) => Promise<void>;
   addListener: (
     event: "mediaKey",
     callback: (payload: { action: string; position: number }) => void,
@@ -37,6 +38,7 @@ interface MediaBridgePlugin {
 /** 非原生环境回退：空实现（开发/测试用） */
 class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
   async updateState(): Promise<void> {}
+  async setPauseOnDeviceSwitch(): Promise<void> {}
 }
 
 const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
@@ -523,7 +525,14 @@ export const htmlAudioPlayer: PlayerApi = {
     }
     return ok();
   },
-  setPauseOnDeviceSwitch: async () => ok(),
+  setPauseOnDeviceSwitch: async (enabled: boolean) => {
+    try {
+      void MediaBridge.setPauseOnDeviceSwitch({ enabled });
+    } catch {
+      // 插件不可用时静默（Web 回退）
+    }
+    return ok();
+  },
   getVolume: async () => ok(getAudio().volume),
   getStatus: async () => ok(snapshot()),
   setFftEnabled: async (enabled: boolean) => {

@@ -5,11 +5,16 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -52,6 +57,28 @@ public class MediaSessionPlugin extends Plugin {
     private final java.util.concurrent.ExecutorService artLoader = Executors.newSingleThreadExecutor();
     private PluginCall pendingUpdate;
     private Bitmap lastArt;
+
+    private final AudioManager.OnAudioFocusChangeListener focusListener = this::onAudioFocusChanged;
+    private final BroadcastReceiver noisyReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (!pauseOnNoisy) return;
+                    // 拔耳机/断蓝牙：暂停并让出焦点，重连后不自动续播
+                    resumeOnFocusGain = false;
+                    emitMediaKey("pause");
+                    abandonAudioFocus();
+                }
+            };
+    private AudioFocusRequest focusRequest;
+    private boolean focusHeld;
+    private boolean noisyRegistered;
+    /** 焦点短暂丢失（来电/导航）自动暂停期间为 true，焦点归还后据此恢复并清零 */
+    private boolean resumeOnFocusGain;
+    /** 最近一次推送的播放态：焦点丢失回调发生时 JS 侧真实在播才标记自动恢复 */
+    private boolean lastPlaying;
+    /** 拔出设备是否暂停（settings.player.pauseOnDeviceSwitch 同步而来，默认开） */
+    private boolean pauseOnNoisy = true;
 
     @Override
     public void load() {
@@ -128,6 +155,8 @@ public class MediaSessionPlugin extends Plugin {
                 .runOnUiThread(
                         () -> {
                             if (stopped) {
+                                resumeOnFocusGain = false;
+                                abandonAudioFocus();
                                 sSession.setActive(false);
                                 lastArt = null;
                                 notificationManager().cancel(NOTIFICATION_ID);
@@ -144,6 +173,11 @@ public class MediaSessionPlugin extends Plugin {
                             long positionMs = readLong(call, "positionMs", 0);
                             long durationMs = readLong(call, "durationMs", 0);
                             String artworkUrl = call.getString("artworkUrl", null);
+
+                            // 焦点生命周期：起播申请；用户暂停让出；焦点丢失自动暂停期间保留等 GAIN 恢复
+                            lastPlaying = playing;
+                            if (playing) requestAudioFocusIfNeeded();
+                            else if (!resumeOnFocusGain) abandonAudioFocus();
 
                             // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
                             MediaMetadata current =
@@ -309,6 +343,117 @@ public class MediaSessionPlugin extends Plugin {
 
     private NotificationManager notificationManager() {
         return (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+    }
+
+    private AudioManager audioManager() {
+        return (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+    }
+
+    /** 经 mediaKey 通道通知 JS 执行播放/暂停（与通知栏按键同一路径） */
+    private void emitMediaKey(String action) {
+        JSObject data = new JSObject();
+        data.put("action", action);
+        data.put("position", -1);
+        notifyListeners("mediaKey", data);
+    }
+
+    /** 起播时申请音频焦点：与其他应用礼让，来电/导航/抢焦点时收到系统回调 */
+    private void requestAudioFocusIfNeeded() {
+        if (focusHeld) return;
+        AudioManager am = audioManager();
+        boolean granted;
+        if (Build.VERSION.SDK_INT >= 26) {
+            if (focusRequest == null) {
+                focusRequest =
+                        new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                                .setAudioAttributes(
+                                        new AudioAttributes.Builder()
+                                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                                .build())
+                                .setOnAudioFocusChangeListener(focusListener)
+                                .build();
+            }
+            granted = am.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        } else {
+            granted =
+                    am.requestAudioFocus(
+                                    focusListener,
+                                    AudioManager.STREAM_MUSIC,
+                                    AudioManager.AUDIOFOCUS_GAIN)
+                            == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        }
+        if (!granted) return;
+        focusHeld = true;
+        registerNoisyReceiver();
+    }
+
+    /** 暂停/停止时释放焦点并注销拔耳机监听 */
+    private void abandonAudioFocus() {
+        if (!focusHeld) return;
+        focusHeld = false;
+        unregisterNoisyReceiver();
+        AudioManager am = audioManager();
+        if (Build.VERSION.SDK_INT >= 26 && focusRequest != null) {
+            am.abandonAudioFocusRequest(focusRequest);
+        } else {
+            am.abandonAudioFocus(focusListener);
+        }
+    }
+
+    private void onAudioFocusChanged(int change) {
+        switch (change) {
+            case AudioManager.AUDIOFOCUS_LOSS:
+                // 永久失去（被其他播放器抢占）：暂停且不自动恢复
+                resumeOnFocusGain = false;
+                emitMediaKey("pause");
+                abandonAudioFocus();
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                // duck 场景降音量需跨 WebView 控制增益，v1 从简：同样暂停、归还后续播
+                if (lastPlaying) {
+                    resumeOnFocusGain = true;
+                    emitMediaKey("pause");
+                }
+                break;
+            case AudioManager.AUDIOFOCUS_GAIN:
+                if (resumeOnFocusGain) {
+                    resumeOnFocusGain = false;
+                    emitMediaKey("play");
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void registerNoisyReceiver() {
+        if (noisyRegistered) return;
+        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        if (Build.VERSION.SDK_INT >= 33) {
+            getContext().registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            getContext().registerReceiver(noisyReceiver, filter);
+        }
+        noisyRegistered = true;
+    }
+
+    private void unregisterNoisyReceiver() {
+        if (!noisyRegistered) return;
+        noisyRegistered = false;
+        try {
+            getContext().unregisterReceiver(noisyReceiver);
+        } catch (IllegalArgumentException ignored) {
+            // 已被系统注销
+        }
+    }
+
+    /** 同步"拔出设备暂停"设置（settings.player.pauseOnDeviceSwitch） */
+    @PluginMethod
+    public void setPauseOnDeviceSwitch(PluginCall call) {
+        pauseOnNoisy = Boolean.TRUE.equals(call.getBoolean("enabled", true));
+        call.resolve();
     }
 
     private static long readLong(PluginCall call, String key, long fallback) {
