@@ -42,8 +42,8 @@ import okhttp3.Response;
     permissions = @Permission(strings = {Manifest.permission.POST_NOTIFICATIONS}, alias = "notifications"))
 public class MediaSessionPlugin extends Plugin {
 
-    private static final String CHANNEL_ID = "splayer_playback";
-    private static final int NOTIFICATION_ID = 1;
+    static final String CHANNEL_ID = "splayer_playback";
+    static final int NOTIFICATION_ID = 1;
     private static final String ACTION_MEDIA_KEY = "com.wxmyyds.splayer.next.MEDIA_KEY";
 
     private static MediaSession sSession;
@@ -131,6 +131,7 @@ public class MediaSessionPlugin extends Plugin {
                                 sSession.setActive(false);
                                 lastArt = null;
                                 notificationManager().cancel(NOTIFICATION_ID);
+                                PlaybackService.stop(getContext());
                                 call.resolve();
                                 return;
                             }
@@ -221,7 +222,10 @@ public class MediaSessionPlugin extends Plugin {
                         playing ? "pause" : "play",
                         positionMs));
         builder.addAction(action(android.R.drawable.ic_media_next, "下一首", "next", positionMs));
-        notificationManager().notify(NOTIFICATION_ID, builder.build());
+        Notification notification = builder.build();
+        notificationManager().notify(NOTIFICATION_ID, notification);
+        // 同步拉起前台服务：进程保持前台优先级，后台不被冻结，WebView 自动切歌链路存活
+        PlaybackService.startForegroundWith(getContext(), notification);
     }
 
     private Notification.Action action(int iconRes, String label, String key, long positionMs) {

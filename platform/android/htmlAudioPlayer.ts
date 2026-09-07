@@ -379,14 +379,11 @@ export const htmlAudioPlayer: PlayerApi = {
     if (!/^https?:\/\//i.test(source)) return fail("unsupported source");
     const el = getAudio();
     const switchSrc = async (): Promise<Awaited<ReturnType<PlayerApi["load"]>>> => {
-      // 切歌间隙 AudioContext 在后台会被自动挂起（Chrome 政策），先 resume
-      // 让 el.play() 能真正走通 fadeGain 输出声音，否则 el.play() 不报错但无声
+      // 切歌间隙 AudioContext 在后台会被自动挂起（Chrome 政策），异步触发 resume；
+      // 不能阻塞等待：后台时 resume 可能迟迟不返回，会卡死整条切歌链，
+      // 后果仅是 fadeGain 段短暂无声，resume 落地后恢复
       if (audioCtx && audioCtx.state === "suspended") {
-        try {
-          await audioCtx.resume();
-        } catch {
-          // 忽略，后果是 fadeGain 这段不出声，el 直出声会硬切
-        }
+        void audioCtx.resume().catch(() => {});
       }
       publishMetadata(options?.meta as Parameters<typeof publishMetadata>[0]);
       el.src = source;
@@ -424,13 +421,9 @@ export const htmlAudioPlayer: PlayerApi = {
   },
   play: async () => {
     try {
-      // 后台时 AudioContext 常处于 suspended，先 resume 保证淡入能走通 fadeGain
+      // 后台时 AudioContext 常处于 suspended，异步 resume（不阻塞，理由同 load）
       if (audioCtx && audioCtx.state === "suspended") {
-        try {
-          await audioCtx.resume();
-        } catch {
-          // 忽略
-        }
+        void audioCtx.resume().catch(() => {});
       }
       const el = getAudio();
       await el.play();
