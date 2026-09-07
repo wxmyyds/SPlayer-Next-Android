@@ -45,6 +45,17 @@ import {
   matchLyricById,
   matchLyricByQuery,
 } from "./vendor/lyric/index";
+import {
+  addPlaylistTracks,
+  clearPlaylists,
+  createPlaylist,
+  deletePlaylist,
+  getPlaylist,
+  getPlaylists,
+  importLegacyPlaylists,
+  removePlaylistTracks,
+  updatePlaylist,
+} from "./db/playlists";
 import { fetchWithProxy } from "./vendor/shim/proxy";
 
 const unsupported = "Android bridge capability is not implemented";
@@ -393,12 +404,25 @@ const mcpApi: {
   onStatus: noopUnsubscribe,
 };
 
+/** 本地歌单：SQLite 持久化（db/playlists） */
+const playlist: PlaylistApi = {
+  list: () => getPlaylists(),
+  get: (id) => getPlaylist(id),
+  create: (input) => createPlaylist(input),
+  update: (id, input) => updatePlaylist(id, input),
+  remove: (id) => deletePlaylist(id),
+  addTracks: (id, trackIds) => addPlaylistTracks(id, trackIds),
+  removeTracks: (id, trackIds) => removePlaylistTracks(id, trackIds),
+  importLegacy: (records) => importLegacyPlaylists(records),
+  clear: () => clearPlaylists(),
+};
+
 const api = {
   config,
   player,
   system,
   library,
-  playlist: emptyApi<PlaylistApi>(),
+  playlist,
   nowPlaying,
   plugins,
   apis,

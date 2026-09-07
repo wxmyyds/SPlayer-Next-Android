@@ -37,8 +37,34 @@ const SPlayerDb = registerPlugin<SPlayerDbPlugin>("SPlayerDb", {
   web: () => new SPlayerDbWeb(),
 });
 
-/** 与上游一致的建表语句（playlists / play_history / favorite_history 先行，其余随功能补） */
+/** 与上游一致的建表语句（tracks 空表占位供校验；playlists / history 先行，其余随功能补） */
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS tracks (
+CREATE TABLE IF NOT EXISTS tracks (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL UNIQUE,
+  cue_path TEXT,
+  cue_audio_path TEXT,
+  cue_start_ms INTEGER,
+  cue_end_ms INTEGER,
+  title TEXT NOT NULL,
+  track INTEGER,
+  artists TEXT NOT NULL DEFAULT '[]',
+  album TEXT,
+  duration INTEGER NOT NULL,
+  cover TEXT,
+  codec TEXT,
+  sample_rate INTEGER,
+  bit_rate INTEGER,
+  channels INTEGER,
+  bits_per_sample INTEGER,
+  file_size INTEGER NOT NULL,
+  file_mtime INTEGER,
+  file_ctime INTEGER,
+  scanned_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
+CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE TABLE IF NOT EXISTS play_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   track_id TEXT NOT NULL,
