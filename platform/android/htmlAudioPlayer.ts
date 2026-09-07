@@ -307,22 +307,38 @@ let fadeGain: GainNode | null = null;
 const getFadeLevel = (el: HTMLAudioElement): number =>
   fadeGain ? fadeGain.gain.value : userVolume > 0 ? el.volume / userVolume : 1;
 
-/** 写淡入淡出电平 0..1 */
+/** 写淡入淡出电平 0..1（图路径需先取消时间线上已排程的自动淡变，直接设置才能生效） */
 const setFadeLevel = (el: HTMLAudioElement, level: number): void => {
-  if (fadeGain) {
-    fadeGain.gain.value = Math.min(1, Math.max(0, level));
+  if (fadeGain && audioCtx) {
+    const clamped = Math.min(1, Math.max(0, level));
+    const now = audioCtx.currentTime;
+    const gain = fadeGain.gain;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(clamped, now);
     el.volume = userVolume;
   } else {
     el.volume = Math.min(1, Math.max(0, level)) * userVolume;
   }
 };
 
-/** 线性 ramp 到目标电平，中途被新一轮取消则停 */
+/** 线性 ramp 到目标电平，中途被新一轮取消则停；图路径走 AudioContext 时间线，不受定时器节流影响 */
 const rampVolume = (el: HTMLAudioElement, target: number, ms: number, run: number): Promise<void> =>
   new Promise((resolve) => {
     if (ms <= 0 || run !== fadeRun) {
       if (run === fadeRun) setFadeLevel(el, target);
       resolve();
+      return;
+    }
+    if (fadeGain && audioCtx) {
+      const now = audioCtx.currentTime;
+      const gain = fadeGain.gain;
+      gain.cancelScheduledValues(now);
+      gain.setValueAtTime(Math.max(0, Math.min(1, gain.value)), now);
+      gain.linearRampToValueAtTime(Math.min(1, Math.max(0, target)), now + ms / 1000);
+      setTimeout(() => {
+        if (run === fadeRun) setFadeLevel(el, target);
+        resolve();
+      }, ms);
       return;
     }
     const from = getFadeLevel(el);
@@ -357,6 +373,7 @@ const fadeIn = (el: HTMLAudioElement): void => {
   fadeRun = run;
   setFadeLevel(el, 0);
   void rampVolume(el, 1, fadeMs, run);
+  setTimeout(() => dbg(`fade-done run=${run} ${audioState()}`), fadeMs + 150);
 };
 
 /** 淡出到 0 后暂停/停播（UI 立即响应，声音随后收尾） */
@@ -510,14 +527,17 @@ export const htmlAudioPlayer: PlayerApi = {
         void audioCtx.resume().catch(() => {});
       }
       const el = getAudio();
+      const wasPaused = el.paused;
       await el.play().catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
         dbg(`play() fail ${msg} ${audioState()}`);
         console.warn(`[player] play failed: ${msg}`);
         throw err;
       });
+      // "play" 事件会回流再触发一次 play()（渲染层 case "play" → play()），
+      // 已播状态不重复淡入，否则两次 fadeIn 互相打断 ramp，电平永久留在 0 导致全图静音
+      if (wasPaused) fadeIn(el);
       dbg(`play() ok ${audioState()}`);
-      fadeIn(el);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));
