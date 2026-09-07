@@ -227,7 +227,7 @@ const stopFftLoop = (): void => {
 let fadeMs = 200;
 let userVolume = 1;
 let fadeRun = 0;
-let mediaSource: MediaElementSourceNode | null = null;
+let mediaSource: MediaElementAudioSourceNode | null = null;
 let fadeGain: GainNode | null = null;
 
 /** 当前淡入淡出电平 0..1 */
