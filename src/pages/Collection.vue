@@ -151,8 +151,8 @@ const handlePlayAll = () => {
 
 const searchQuery = ref("");
 
-/** 专辑页 Android：播放/收藏按钮搬到封面下方从左往右排，桌面与其他类型不动 */
-const actionsBelowCover = isAndroid && type === "album";
+/** 专辑/歌单页 Android：播放/收藏按钮搬到封面下方从左往右排，桌面与其他类型不动 */
+const actionsBelowCover = isAndroid && (type === "album" || type === "playlist");
 
 /** 歌曲列表引用 */
 const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
@@ -415,7 +415,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-      <!-- 专辑 Android：封面下方从左往右的操作行 -->
+      <!-- 专辑/歌单 Android：封面下方从左往右的操作行 -->
       <div v-if="actionsBelowCover" class="mt-2 flex items-center flex-wrap gap-2">
         <div class="flex items-center gap-2">
           <SButton
