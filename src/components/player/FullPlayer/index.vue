@@ -633,17 +633,49 @@ const showComments = (): void => {
           </div>
           </div>
           </div>
-          <!-- 堆叠分页点（参照：白 20% 圆点，激活封面主色 16px 胶囊，悬浮底部） -->
+          <!-- 堆叠分页点（逐像素对照参照：白 20% 圆点 / 主色 16px 胶囊，内联样式锁定） -->
           <div
             v-if="stackedLayout"
-            class="absolute inset-x-0 bottom-[calc(16px+env(safe-area-inset-bottom))] z-10 flex items-center justify-center gap-2 pointer-events-none"
+            :style="{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 'calc(16px + env(safe-area-inset-bottom))',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '8px',
+              zIndex: 10,
+              pointerEvents: 'none',
+            }"
           >
             <button
               v-for="i in 2"
               :key="i"
-              class="h-1.5 transition-all duration-300 pointer-events-auto"
-              :class="stackPage === i - 1 ? 'w-4 rounded-[4px] bg-cover opacity-80' : 'w-1.5 rounded-full bg-white/20'"
               :aria-label="`page ${i}`"
+              :style="
+                stackPage === i - 1
+                  ? {
+                      width: '16px',
+                      height: '6px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgb(var(--s-cover))',
+                      opacity: 0.8,
+                      border: 'none',
+                      padding: 0,
+                      pointerEvents: 'auto',
+                      transition: 'all 0.3s',
+                    }
+                  : {
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      border: 'none',
+                      padding: 0,
+                      pointerEvents: 'auto',
+                      transition: 'all 0.3s',
+                    }
+              "
               @click="goStackPage(i - 1)"
             />
           </div>
