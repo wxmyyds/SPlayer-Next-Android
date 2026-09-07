@@ -30,9 +30,7 @@ const ANDROID_HIDDEN_CATEGORIES = new Set([
  * 补齐对应能力后从清单移除即可。
  */
 const ANDROID_HIDDEN_ITEMS = new Set([
-  // 播放：启动行为无消费方；响度归一/输出设备待原生引擎
-  "autoPlay",
-  "rememberLastTrack",
+  // 播放：响度归一/输出设备待原生引擎（autoPlay/rememberLastTrack 由 restoreLastTrack 消费，可用）
   "loudnessNormalization",
   "outputDevice",
   // 外观：背景图依赖桌面文件选择；布局与侧栏折叠仅作用于桌面分支
