@@ -10,6 +10,7 @@ import IconFolderOpen from "~icons/lucide/folder-open";
 import IconRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
@@ -107,10 +108,13 @@ onUnmounted(() => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pb-2">
+    <div class="shrink-0 pb-2" :class="isAndroid ? 'px-3' : 'px-5'">
       <div class="flex items-center justify-between mt-2 mb-4">
         <div class="flex items-baseline gap-4">
-          <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("library.title") }}</h1>
+          <h1
+            class="font-bold text-on-surface text-balance"
+            :class="isAndroid ? 'text-xl' : 'text-3xl'"
+          >{{ t("library.title") }}</h1>
           <!-- 统计或进度 -->
           <Transition name="fade" mode="out-in">
             <div
@@ -146,12 +150,13 @@ onUnmounted(() => {
           </Transition>
         </div>
       </div>
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
+      <div class="flex items-center justify-between" :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'">
+        <div class="flex items-center gap-2">
           <SButton
             type="primary"
             variant="secondary"
             round
+            :size="isAndroid ? 'small' : 'medium'"
             :disabled="tracks.length === 0"
             @click="handlePlayAll"
           >
@@ -185,7 +190,7 @@ onUnmounted(() => {
           :placeholder="t('common.search')"
           clearable
           round
-          class="w-40 focus-within:w-56"
+          :class="isAndroid ? 'min-w-32 flex-1' : 'w-40 focus-within:w-56'"
           data-search-input
         >
           <template #prefix>

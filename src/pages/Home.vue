@@ -11,6 +11,7 @@ import { useHomeDiscover } from "@/composables/home/useHomeDiscover";
 import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
 import { navigateToPlaylist, navigateToArtist, navigateToAlbum } from "@/utils/navigate";
 import * as player from "@/core/player";
+import { isAndroid } from "@/utils/platform";
 
 const { t } = useI18n();
 const { isFloatingBar } = useFloatingPlayerBar();
@@ -82,15 +83,28 @@ const openAlbum = (item: CoverItem): void => {
       class="mx-auto flex max-w-[1400px] flex-col gap-6 px-6 pt-6"
       :class="isFloatingBar ? 'pb-28' : 'pb-10'"
     >
-      <!-- 问候 -->
-      <header class="flex items-start justify-between gap-6">
+      <!-- 问候：窄屏问候语独占一行，统计挪到下方 -->
+      <header class="flex items-start justify-between" :class="isAndroid ? 'flex-col gap-3' : 'gap-6'">
         <div class="min-w-0">
-          <h1 class="text-3xl font-bold text-on-surface text-balance">{{ greetingTitle }}</h1>
+          <h1
+            class="font-bold text-on-surface text-balance"
+            :class="isAndroid ? 'text-2xl' : 'text-3xl'"
+          >{{ greetingTitle }}</h1>
           <p class="mt-2 text-sm text-on-surface-variant/70">{{ greetingSub }}</p>
         </div>
-        <div class="shrink-0 flex items-center gap-6">
-          <div v-for="stat in headerStats" :key="stat.label" class="text-right">
-            <div class="flex items-baseline justify-end gap-0.5">
+        <div
+          class="flex items-center"
+          :class="isAndroid ? 'w-full justify-start gap-5' : 'shrink-0 gap-6'"
+        >
+          <div
+            v-for="stat in headerStats"
+            :key="stat.label"
+            :class="isAndroid ? 'text-left' : 'text-right'"
+          >
+            <div
+              class="flex items-baseline gap-0.5"
+              :class="isAndroid ? 'justify-start' : 'justify-end'"
+            >
               <span class="text-2xl font-bold text-on-surface tabular-nums">{{ stat.value }}</span>
               <span class="text-sm text-on-surface-variant">{{ stat.unit }}</span>
             </div>
