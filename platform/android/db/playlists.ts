@@ -78,7 +78,6 @@ export const getPlaylist = async (id: string): Promise<PlaylistDetail | null> =>
   const trackRows = await dbQuery<{ track_id: string }>(
     `SELECT pt.track_id
      FROM playlist_tracks pt
-     INNER JOIN tracks t ON t.id = pt.track_id
      WHERE pt.playlist_id = ?
      ORDER BY pt.position, pt.added_at, pt.track_id`,
     [id],
@@ -153,9 +152,9 @@ export const deletePlaylist = async (id: string): Promise<void> => {
 };
 
 /**
- * 添加本地歌曲到歌单
+ * 添加歌曲到歌单
  * @param id 歌单 ID
- * @param trackIds 本地歌曲 ID
+ * @param trackIds 歌曲 ID
  * @returns 实际新增数量
  */
 export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise<number> => {
@@ -168,14 +167,8 @@ export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise
     [id],
   );
   const existingIds = new Set(existing.map((item) => item.track_id));
-  const validIds: string[] = [];
-  for (const trackId of uniqueIds) {
-    if (existingIds.has(trackId)) continue;
-    const hit = await dbQuery<{ one: number }>("SELECT 1 AS one FROM tracks WHERE id = ?", [
-      trackId,
-    ]);
-    if (hit.length > 0) validIds.push(trackId);
-  }
+  // 直接过滤已存在项，不校验 tracks 表（Android 无 MediaStore 扫描，tracks 表始终为空）
+  const validIds = uniqueIds.filter((trackId) => !existingIds.has(trackId));
   if (validIds.length === 0) return 0;
   await dbRun("UPDATE playlist_tracks SET position = position + ? WHERE playlist_id = ?", [
     validIds.length,
@@ -254,8 +247,8 @@ export const importLegacyPlaylists = async (records: LegacyPlaylistRecord[]): Pr
     for (const [position, trackId] of record.trackIds.entries()) {
       await dbRun(
         `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at)
-         SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM tracks WHERE id = ?)`,
-        [record.id, trackId, position, updatedAt, trackId],
+         VALUES (?, ?, ?, ?)`,
+        [record.id, trackId, position, updatedAt],
       );
     }
   }
