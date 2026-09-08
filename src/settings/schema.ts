@@ -22,7 +22,6 @@ const ANDROID_HIDDEN_CATEGORIES = new Set([
   "mediaSource",
   "download",
   "localCache",
-  "plugins",
 ]);
 
 /**
@@ -42,10 +41,7 @@ const ANDROID_HIDDEN_ITEMS = new Set([
   "updateChannel",
   "autoCheckUpdate",
   "checkUpdate",
-  // 歌词：opencc/TTML/插件匹配未接
-  "preferPluginLyric",
-  "cjkTransform",
-  "enableOnlineTTMLLyric",
+  // 歌词：TTML 本地/在线覆盖未接
   "enableLocalTTMLOverride",
   // 服务：代理/Discord/Last.fm/外部 API 未实现
   "networkProxyProtocol",

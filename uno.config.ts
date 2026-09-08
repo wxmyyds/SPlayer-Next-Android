@@ -51,6 +51,11 @@ export default defineConfig({
         "drawer-out-left":
           "{ from { transform: translateX(0) } to { transform: translateX(-100%) } }",
       },
+
+
+
+
+      
       durations: {
         "popover-in": "200ms",
         "popover-out": "150ms",

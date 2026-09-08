@@ -40,11 +40,7 @@ import {
   openVendorLoginWeb,
   setVendorCookie,
 } from "./vendor/dispatch";
-import {
-  fetchLyricTTMLOverlay,
-  matchLyricById,
-  matchLyricByQuery,
-} from "./vendor/lyric/index";
+import { fetchLyricTTMLOverlay, matchLyricById, matchLyricByQuery } from "./vendor/lyric/index";
 import {
   addPlaylistTracks,
   clearPlaylists,
@@ -68,9 +64,57 @@ import {
   insertPlayEvent,
 } from "./db/playStats";
 import { fetchWithProxy } from "./vendor/shim/proxy";
+import { callAction } from "./plugins/runtime";
+import { matchCover, matchLyric } from "./plugins/metadata";
+import {
+  applyUpdate,
+  checkUpdate,
+  ensureInitialized,
+  installFromSource,
+  listInfo,
+  onStatus,
+  setEnabled,
+  setSetting,
+  uninstall,
+} from "./plugins/registry";
+import { fetchMarket, fetchScript } from "./plugins/net";
+import { Converter } from "opencc-js";
+import type { ConverterFunction } from "opencc-js";
+
+/** 简繁转换映射；OpenCC 缓存按模式复用 */
+const openccConverters = new Map<string, ConverterFunction>();
+const openccConvert = (text: string, mode: CjkTransformMode): string => {
+  if (!mode || mode === "none") return text;
+  let converter = openccConverters.get(mode);
+  if (!converter) {
+    const localeMap: Record<string, { from: string; to: string }> = {
+      s2t: { from: "cn", to: "t" },
+      t2s: { from: "t", to: "cn" },
+      s2tw: { from: "cn", to: "tw" },
+      tw2s: { from: "tw", to: "cn" },
+      s2hk: { from: "cn", to: "hk" },
+      hk2s: { from: "hk", to: "cn" },
+      s2twp: { from: "cn", to: "twp" },
+      tw2sp: { from: "twp", to: "cn" },
+      t2tw: { from: "t", to: "tw" },
+      tw2t: { from: "tw", to: "t" },
+      t2hk: { from: "t", to: "hk" },
+      hk2t: { from: "hk", to: "t" },
+      jp2t: { from: "jp", to: "t" },
+      t2jp: { from: "t", to: "jp" },
+    };
+    const locale = localeMap[mode];
+    if (!locale) return text;
+    converter = Converter(locale);
+    openccConverters.set(mode, converter);
+  }
+  return converter(text);
+};
 
 const unsupported = "Android bridge capability is not implemented";
-const noopUnsubscribe = (..._args: unknown[]): (() => void) => () => {};
+const noopUnsubscribe =
+  (..._args: unknown[]): (() => void) =>
+  () => {};
 const ok = <T = void>(data?: T): IpcResponse<T> => ({
   success: true,
   ...(data === undefined ? {} : { data }),
@@ -121,7 +165,11 @@ const config: ConfigApi = {
       const key = localStorage.key(index);
       if (!key?.startsWith(CONFIG_PREFIX)) continue;
       try {
-        setConfigPath(merged, key.slice(CONFIG_PREFIX.length), JSON.parse(localStorage.getItem(key) ?? "null"));
+        setConfigPath(
+          merged,
+          key.slice(CONFIG_PREFIX.length),
+          JSON.parse(localStorage.getItem(key) ?? "null"),
+        );
       } catch {
         // 单键损坏跳过
       }
@@ -287,22 +335,123 @@ const nowPlaying: NowPlayingApi = {
   onLyricOffsetChange: noopUnsubscribe,
 };
 
+/** 插件：与共享类型一致的全量实现（WebView 直跑运行时） */
 const plugins: PluginsApi = {
-  list: async () => [],
-  install: async () => ({ ok: false, error: unsupported }),
-  pickAndInstall: async () => ({ ok: false, error: unsupported }),
-  installFromUrl: async () => ({ ok: false, error: unsupported }),
-  uninstall: async () => ({ ok: false, error: unsupported }),
-  setEnabled: async () => {},
-  setSetting: async () => {},
-  checkUpdate: async () => ({ ok: false, hasUpdate: false, error: unsupported }),
-  applyUpdate: async () => ({ ok: false, error: unsupported }),
-  resolveUrl: async () => ({ url: "" }),
-  invokeMenu: async () => ({ ok: false, error: unsupported }),
-  matchLyric: async () => ({ ok: false, error: unsupported }),
-  matchCover: async () => ({ ok: false, error: unsupported }),
-  market: async () => ({ ok: false, plugins: [], error: unsupported }),
-  onStatus: noopUnsubscribe,
+  list: async () => {
+    const items = await listInfo();
+    return items;
+  },
+  install: async () => ({ ok: false, error: "当前平台不支持按路径导入" }),
+  pickAndInstall: async () => {
+    try {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".js";
+      const file = await new Promise<File | null>((resolve) => {
+        input.onchange = () => resolve(input.files?.[0] ?? null);
+        input.oncancel = () => resolve(null);
+        input.click();
+      });
+      if (!file) return { ok: false, cancelled: true };
+      const source = await file.text();
+      const info = await installFromSource(source);
+      return { ok: true, id: info.manifest.id };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+  installFromUrl: async (url: string) => {
+    try {
+      const source = await fetchScript(url);
+      const info = await installFromSource(source);
+      return { ok: true, id: info.manifest.id };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+  uninstall: async (id: string) => {
+    try {
+      await uninstall(id);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+  setEnabled: async (id: string, enabled: boolean) => {
+    await setEnabled(id, enabled);
+  },
+  setSetting: async (id: string, key: string, value: unknown) => {
+    await setSetting(id, key, value);
+  },
+  checkUpdate: async (id: string) => {
+    await ensureInitialized();
+    return checkUpdate(id);
+  },
+  applyUpdate: async (id: string) => {
+    await ensureInitialized();
+    return applyUpdate(id);
+  },
+  resolveUrl: async (args) => {
+    await ensureInitialized();
+    const { ACTION_TIMEOUTS } = await import("@shared/defaults/plugin-api");
+    return callAction(
+      args.pluginId,
+      "musicUrl",
+      {
+        source: args.source,
+        quality: args.quality ?? "hq",
+        musicInfo: args.musicInfo,
+      },
+      ACTION_TIMEOUTS.musicUrl,
+    );
+  },
+  invokeMenu: async (args) => {
+    try {
+      await ensureInitialized();
+      const { ACTION_TIMEOUTS } = await import("@shared/defaults/plugin-api");
+      const result = await callAction<{
+        toast?: string;
+        openUrl?: string;
+        copyText?: string;
+      }>(
+        args.pluginId,
+        "menuClick",
+        { menuId: args.menuId, track: args.track },
+        ACTION_TIMEOUTS.menuClick,
+      );
+      return {
+        ok: true,
+        toast: result?.toast,
+        openUrl: result?.openUrl,
+        copyText: result?.copyText,
+      };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+  matchLyric: async (args) => {
+    await ensureInitialized();
+    const data = await matchLyric(args);
+    return data ? { ok: true, data } : { ok: false };
+  },
+  matchCover: async (args) => {
+    await ensureInitialized();
+    const data = await matchCover(args);
+    return data ? { ok: true, data } : { ok: false };
+  },
+  market: async () => {
+    try {
+      const list = await fetchMarket();
+      return { ok: true, plugins: list };
+    } catch (error) {
+      return {
+        ok: false,
+        plugins: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
+  onStatus: (callback) => onStatus(callback),
 };
 
 /** 音源 API：直调上游 dev 同款 vendor 实现（platform/android/vendor） */
@@ -368,11 +517,7 @@ interface AndroidCacheApi {
   resetDir: () => Promise<string>;
   song: {
     lookup: (cacheKey: string) => Promise<string | null>;
-    fetch: (
-      cacheKey: string,
-      source: TrackSource,
-      streamUrl: string,
-    ) => Promise<string | null>;
+    fetch: (cacheKey: string, source: TrackSource, streamUrl: string) => Promise<string | null>;
     cancel: (cacheKey: string) => Promise<void>;
   };
 }
@@ -456,8 +601,9 @@ const api = {
   cloud: emptyApi<CloudUploadApi>(),
   lyrics,
   opencc: {
-    convert: async (text: string) => text,
-    convertBatch: async (texts: string[], _mode: CjkTransformMode) => texts,
+    convert: async (text: string, mode: CjkTransformMode) => openccConvert(text, mode),
+    convertBatch: async (texts: string[], mode: CjkTransformMode) =>
+      Promise.all(texts.map((text) => openccConvert(text, mode))),
   } satisfies OpenccApi,
   comments: emptyApi<CommentsApi>(),
   download: emptyApi<DownloadApi>(),
@@ -479,7 +625,6 @@ const api = {
     onEvent: noopUnsubscribe,
   } satisfies UpdateApi,
 };
-
 
 export type AndroidApi = typeof api;
 

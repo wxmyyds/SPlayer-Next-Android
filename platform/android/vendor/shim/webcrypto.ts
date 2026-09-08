@@ -218,7 +218,7 @@ const AES_RCON = new Uint8Array([0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,
 
 const xtime = (b: number): number => ((b << 1) ^ (b & 0x80 ? 0x1b : 0)) & 0xff;
 
-const aesExpandKey = (key: Uint8Array): Uint8Array => {
+export const aesExpandKey = (key: Uint8Array): Uint8Array => {
   const nk = key.length / 4;
   const nr = nk + 6;
   const w = new Uint8Array(16 * (nr + 1));
@@ -240,7 +240,7 @@ const aesExpandKey = (key: Uint8Array): Uint8Array => {
   return w;
 };
 
-const aesEncryptBlock = (block: Uint8Array, expanded: Uint8Array, nr: number): Uint8Array => {
+export const aesEncryptBlock = (block: Uint8Array, expanded: Uint8Array, nr: number): Uint8Array => {
   const s = new Uint8Array(16);
   for (let i = 0; i < 16; i++) s[i] = block[i] ^ expanded[i];
   for (let round = 1; round <= nr; round++) {
@@ -292,7 +292,7 @@ const gmul = (a: number, b: number): number => {
   return p;
 };
 
-const aesDecryptBlock = (block: Uint8Array, expanded: Uint8Array, nr: number): Uint8Array => {
+export const aesDecryptBlock = (block: Uint8Array, expanded: Uint8Array, nr: number): Uint8Array => {
   const s = new Uint8Array(16);
   const off0 = nr * 16;
   for (let i = 0; i < 16; i++) s[i] = block[i] ^ expanded[off0 + i];
