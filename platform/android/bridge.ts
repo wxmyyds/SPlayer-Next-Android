@@ -33,7 +33,7 @@ import type { CommentsApi } from "@shared/types/comment";
 import type { AiModelApi } from "@shared/types/ai";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { CjkTransformMode, OpenccApi } from "@shared/types/opencc";
-import { htmlAudioPlayer } from "./htmlAudioPlayer";
+import { nativeAudioPlayer } from "./nativeAudioPlayer";
 import {
   callVendorApi,
   clearVendorSession,
@@ -191,8 +191,8 @@ const config: ConfigApi = {
   },
 };
 
-/** 播放器：过渡期用 HTMLAudio 实现可听闭环，后续替换为 Rust 引擎 */
-const player: PlayerApi = htmlAudioPlayer;
+/** 播放器：Media3 ExoPlayer 原生引擎（后台播放/均衡器/变速/频谱） */
+const player: PlayerApi = nativeAudioPlayer;
 
 /** Android 系统桥接 API：与旧桌面 preload 的 system 形状兼容，均为无操作或空实现 */
 interface AndroidSystemApi {
