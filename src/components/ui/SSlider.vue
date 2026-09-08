@@ -255,6 +255,7 @@ const onPointerUp = (): void => {
 <template>
   <div
     ref="sliderRef"
+    role="slider"
     class="s-slider relative select-none"
     :class="[
       disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',

@@ -82,18 +82,10 @@ const sidebarClass = computed(() => {
   return classes.join(" ");
 });
 
-/** 主界面底部边距（桌面端为播放栏预留；Android 改由主滚动区 padding 预留，见 mainPadClass） */
+/** 主界面底部边距（桌面端为播放栏预留；Android 内容延伸到悬浮岛下方，不预留） */
 const mainMarginClass = computed(() => {
   if (!showPlayerBar.value || appearance.layoutMode === "floating") return "";
   return "mb-20";
-});
-
-/** Android 主滚动区底部留白：Tab 栏 50px 常驻，有曲目时让出悬浮岛顶边（58px + 64px） */
-const mainPadClass = computed(() => {
-  if (!isAndroid) return "";
-  return showPlayerBar.value
-    ? "pb-[calc(7.625rem+env(safe-area-inset-bottom))]"
-    : "pb-[calc(3.5rem+env(safe-area-inset-bottom))]";
 });
 
 /** 顶栏样式：Android 下避开状态栏安全区 */
@@ -181,11 +173,7 @@ const playerBarInnerClass = computed(() => {
       </header>
 
       <!-- 主内容区 -->
-      <main
-        ref="mainContainerRef"
-        class="flex-1 overflow-y-auto overflow-x-hidden"
-        :class="mainPadClass"
-      >
+      <main ref="mainContainerRef" class="flex-1 overflow-y-auto overflow-x-hidden">
         <RouterView v-slot="{ Component }">
           <Transition :name="routeTransitionName" mode="out-in" @after-enter="handleAfterEnter">
             <KeepAlive :max="10" :include="cachedViews">
