@@ -505,6 +505,8 @@ export const isSeeking = (): boolean => seekTarget !== null;
  */
 export const seek = async (posMs: number): Promise<void> => {
   const status = useStatusStore();
+  // 临时诊断：定位“拖动进度条后从头播放”（与 native AudioEngine seekTo 日志对照）
+  console.log("[seek] target=", posMs, "loading=", status.trackLoading);
   // 歌曲加载中 seek 无意义：引擎此刻没有可 seek 的解码线程，
   // 且 seekTarget 残留会让加载完成后的 position 推送被持续丢弃
   if (status.trackLoading) return;

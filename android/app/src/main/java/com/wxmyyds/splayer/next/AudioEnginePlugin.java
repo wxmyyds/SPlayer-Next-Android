@@ -198,7 +198,11 @@ public class AudioEnginePlugin extends Plugin {
     public void seek(PluginCall call) {
         long position = call.getLong("position", 0L);
         mainHandler.post(() -> {
+            // 歌曲播完停在末尾后拖动：ExoPlayer 不会自动恢复播放，主动续播
+            boolean wasEnded = player.getPlaybackState() == Player.STATE_ENDED;
             player.seekTo(position);
+            if (wasEnded) player.play();
+            Log.i(TAG, "seekTo=" + position + (wasEnded ? " (ended->resume)" : ""));
             call.resolve();
         });
     }
