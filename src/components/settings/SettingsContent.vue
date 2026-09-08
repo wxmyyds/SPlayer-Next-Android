@@ -19,6 +19,12 @@ const isSearchActive = ref(false);
 
 const activeCategory = computed(() => settingsSchema.find((c) => c.id === activeId.value));
 
+// Android：弹窗打开后 WebView 会把焦点从被移除的菜单项转移到搜索框，主动回落避免顶起键盘
+onMounted(() => {
+  if (!isAndroid) return;
+  setTimeout(() => (document.activeElement as HTMLElement | null)?.blur?.(), 80);
+});
+
 /** Android 详情页开关：分类列表与详情二选一全屏展示 */
 const detailOpen = ref(false);
 

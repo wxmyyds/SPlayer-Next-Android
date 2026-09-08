@@ -55,6 +55,10 @@ public class MediaSessionPlugin extends Plugin {
     private final java.util.concurrent.ExecutorService artLoader = Executors.newSingleThreadExecutor();
     private PluginCall pendingUpdate;
     private Bitmap lastArt;
+    /** 上次渲染通知的签名：曲目/播放态/封面变化才重建通知（见 publishState） */
+    private String lastNotifiedTitle = "";
+    private boolean lastNotifiedPlaying = false;
+    private Bitmap lastNotifiedArt;
 
     private final BroadcastReceiver noisyReceiver =
             new BroadcastReceiver() {
@@ -149,6 +153,9 @@ public class MediaSessionPlugin extends Plugin {
                                 unregisterNoisyReceiver();
                                 sSession.setActive(false);
                                 lastArt = null;
+                                lastNotifiedTitle = "";
+                                lastNotifiedPlaying = false;
+                                lastNotifiedArt = null;
                                 notificationManager().cancel(NOTIFICATION_ID);
                                 PlaybackService.stop(getContext());
                                 call.resolve();
@@ -231,7 +238,18 @@ public class MediaSessionPlugin extends Plugin {
                         .setActions(actions)
                         .setState(state, Math.max(0, positionMs), 1.0f);
         sSession.setPlaybackState(builder.build());
-        showNotification(playing, positionMs, durationMs, art);
+        // 系统媒体卡片进度由 PlaybackState 实时推算，纯进度推送不重建通知；
+        // 200ms 级 notify 会被系统节流，表现为通知栏控件“一会有一会没”
+        MediaMetadata meta = sSession.getController().getMetadata();
+        String title = meta != null ? meta.getString(MediaMetadata.METADATA_KEY_TITLE) : "";
+        if (!title.equals(lastNotifiedTitle)
+                || playing != lastNotifiedPlaying
+                || art != lastNotifiedArt) {
+            showNotification(playing, positionMs, durationMs, art);
+            lastNotifiedTitle = title;
+            lastNotifiedPlaying = playing;
+            lastNotifiedArt = art;
+        }
     }
 
     private void showNotification(boolean playing, long positionMs, long durationMs, Bitmap art) {

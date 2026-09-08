@@ -120,7 +120,9 @@ const handleMoreMenu = (key: string): void => {
           <h1
             class="font-bold text-on-surface text-balance"
             :class="isAndroid ? 'text-xl' : 'text-3xl'"
-          >{{ t("liked.title") }}</h1>
+          >
+            {{ t("liked.title") }}
+          </h1>
           <span
             v-if="currentTracks.length > 0"
             class="text-sm text-on-surface-variant/50 flex items-center gap-1"
@@ -163,6 +165,7 @@ const handleMoreMenu = (key: string): void => {
           :class="isAndroid ? 'w-full flex-col items-stretch gap-2' : 'gap-3'"
         >
           <SInput
+            v-if="!isAndroid"
             v-model="searchQuery"
             :placeholder="t('common.search')"
             clearable

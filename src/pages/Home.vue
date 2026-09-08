@@ -84,12 +84,17 @@ const openAlbum = (item: CoverItem): void => {
       :class="isFloatingBar ? 'pb-28' : 'pb-10'"
     >
       <!-- 问候：窄屏问候语独占一行，统计挪到下方 -->
-      <header class="flex items-start justify-between" :class="isAndroid ? 'flex-col gap-3' : 'gap-6'">
+      <header
+        class="flex items-start justify-between"
+        :class="isAndroid ? 'flex-col gap-3' : 'gap-6'"
+      >
         <div class="min-w-0">
           <h1
             class="font-bold text-on-surface text-balance"
             :class="isAndroid ? 'text-2xl' : 'text-3xl'"
-          >{{ greetingTitle }}</h1>
+          >
+            {{ greetingTitle }}
+          </h1>
           <p class="mt-2 text-sm text-on-surface-variant/70">{{ greetingSub }}</p>
         </div>
         <div
@@ -138,9 +143,10 @@ const openAlbum = (item: CoverItem): void => {
             </div>
           </div>
           <!-- 队列预览 -->
+          <!-- 队列预览：lg 以下隐藏，否则固定宽度会挤压信息列导致按钮文字竖排 -->
           <ul
             v-if="heroPreview.length > 0"
-            class="w-100 shrink-0 flex-col border-l border-on-surface/8 pl-4 lg:flex"
+            class="hidden w-100 shrink-0 flex-col border-l border-on-surface/8 pl-4 lg:flex"
           >
             <li
               v-for="(track, index) in heroPreview"

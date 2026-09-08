@@ -114,7 +114,9 @@ onUnmounted(() => {
           <h1
             class="font-bold text-on-surface text-balance"
             :class="isAndroid ? 'text-xl' : 'text-3xl'"
-          >{{ t("library.title") }}</h1>
+          >
+            {{ t("library.title") }}
+          </h1>
           <!-- 统计或进度 -->
           <Transition name="fade" mode="out-in">
             <div
@@ -150,7 +152,10 @@ onUnmounted(() => {
           </Transition>
         </div>
       </div>
-      <div class="flex items-center justify-between" :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'">
+      <div
+        class="flex items-center justify-between"
+        :class="isAndroid ? 'flex-wrap gap-2' : 'gap-4'"
+      >
         <div class="flex items-center gap-2">
           <SButton
             type="primary"
@@ -186,6 +191,7 @@ onUnmounted(() => {
           </SDropdownMenu>
         </div>
         <SInput
+          v-if="!isAndroid"
           v-model="searchQuery"
           :placeholder="t('common.search')"
           clearable

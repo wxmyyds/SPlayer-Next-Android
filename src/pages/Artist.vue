@@ -330,6 +330,7 @@ const albumItems = computed<CoverItem[]>(() => {
               </SDropdownMenu>
             </div>
             <SInput
+              v-if="!isAndroid"
               v-model="searchQuery"
               :placeholder="t('common.search')"
               :disabled="activeTab !== 'songs'"

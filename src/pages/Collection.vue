@@ -337,7 +337,10 @@ onBeforeUnmount(() => {
                     <IconLucideHourglass class="shrink-0" />
                     {{ t("collection.totalDuration", { time: totalDuration }) }}
                   </span>
-                  <span v-if="updateTimeText && !isAndroid" class="flex items-center gap-1 shrink-0">
+                  <span
+                    v-if="updateTimeText && !isAndroid"
+                    class="flex items-center gap-1 shrink-0"
+                  >
                     <IconLucideCalendar class="shrink-0" />
                     {{ updateTimeText }}
                   </span>
@@ -401,6 +404,7 @@ onBeforeUnmount(() => {
               </SDropdownMenu>
             </div>
             <SInput
+              v-if="!isAndroid"
               v-model="searchQuery"
               :placeholder="t('common.search')"
               clearable
@@ -444,11 +448,7 @@ onBeforeUnmount(() => {
               <IconMaterialSymbolsFavoriteOutlineRounded v-else />
             </template>
             {{
-              t(
-                subscribe.isSubscribed.value
-                  ? "collection.unsubscribe"
-                  : "collection.subscribe",
-              )
+              t(subscribe.isSubscribed.value ? "collection.unsubscribe" : "collection.subscribe")
             }}
           </SButton>
           <SDropdownMenu
@@ -467,6 +467,7 @@ onBeforeUnmount(() => {
           </SDropdownMenu>
         </div>
         <SInput
+          v-if="!isAndroid"
           v-model="searchQuery"
           :placeholder="t('common.search')"
           clearable

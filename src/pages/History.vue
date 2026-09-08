@@ -101,6 +101,7 @@ onMounted(() => {
         </div>
         <div class="flex items-center" :class="isAndroid ? 'min-w-0 flex-1' : 'gap-3'">
           <SInput
+            v-if="!isAndroid"
             v-model="searchQuery"
             :placeholder="t('common.search')"
             clearable
