@@ -1,9 +1,7 @@
 package com.wxmyyds.splayer.next;
 
-import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -26,35 +24,23 @@ import org.json.JSONObject;
  * - query: SELECT 返回行数组（列值仅含 string/number/null，与 JSON 兼容）
  *
  * 库文件：getFilesDir()/database/library.db（与上游 library.db 同名），WAL 模式。
- * 全部请求串行在一个单线程池里，避免 SQLite 线程竞争。
+ * SQLiteOpenHelper 不接受含路径分隔符的库名，改为手动 openOrCreateDatabase；
+ * 单连接长持有，请求串行在单线程池里，无线程竞争。
  */
 @CapacitorPlugin(name = "SPlayerDb")
 public class DbPlugin extends Plugin {
 
-    private static class Helper extends SQLiteOpenHelper {
-        Helper(Context context) {
-            super(context, "database" + File.separator + "library.db", null, 1);
-        }
-
-        @Override
-        public void onCreate(SQLiteDatabase db) {
-        }
-
-        @Override
-        public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        }
-    }
-
     private final ExecutorService queue = Executors.newSingleThreadExecutor();
-    private Helper helper;
+    private SQLiteDatabase db;
 
     @Override
     public void load() {
-        helper = new Helper(getContext());
-        // 预热建库，避免首次调用时在工作线程冷建
         queue.execute(
                 () -> {
-                    try (SQLiteDatabase db = helper.getWritableDatabase()) {
+                    try {
+                        File dir = new File(getContext().getFilesDir(), "database");
+                        if (!dir.exists()) dir.mkdirs();
+                        db = SQLiteDatabase.openOrCreateDatabase(new File(dir, "library.db"), null);
                         db.enableWriteAheadLogging();
                     } catch (Exception ignored) {
                     }
@@ -71,8 +57,11 @@ public class DbPlugin extends Plugin {
         }
         queue.execute(
                 () -> {
-                    try (SQLiteDatabase db = helper.getWritableDatabase()) {
-                        db.enableWriteAheadLogging();
+                    if (db == null) {
+                        call.reject("database not ready");
+                        return;
+                    }
+                    try {
                         for (String stmt : sql.split(";")) {
                             String trimmed = stmt.trim();
                             if (!trimmed.isEmpty()) db.execSQL(trimmed);
@@ -95,8 +84,11 @@ public class DbPlugin extends Plugin {
         List<Object> values = toList(call.getArray("values", new JSArray()));
         queue.execute(
                 () -> {
-                    try (SQLiteDatabase db = helper.getWritableDatabase()) {
-                        db.enableWriteAheadLogging();
+                    if (db == null) {
+                        call.reject("database not ready");
+                        return;
+                    }
+                    try {
                         SQLiteStatement stmt = db.compileStatement(sql);
                         bind(stmt, values);
                         long rowId = stmt.executeInsert();
@@ -121,7 +113,11 @@ public class DbPlugin extends Plugin {
         List<Object> values = toList(call.getArray("values", new JSArray()));
         queue.execute(
                 () -> {
-                    try (SQLiteDatabase db = helper.getReadableDatabase()) {
+                    if (db == null) {
+                        call.reject("database not ready");
+                        return;
+                    }
+                    try {
                         String[] args = new String[values.size()];
                         for (int i = 0; i < values.size(); i++) {
                             Object v = values.get(i);
