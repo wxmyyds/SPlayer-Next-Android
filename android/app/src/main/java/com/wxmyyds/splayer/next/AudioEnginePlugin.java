@@ -305,7 +305,9 @@ public class AudioEnginePlugin extends Plugin {
             for (int i = 0; i < numBands; i++) {
                 try {
                     double gain = gains.getDouble(i);
-                    short level = (short) Math.max(min, Math.min(max, (short) (gain * 100)));
+                    int clamped = Math.max(min, Math.min(max, (int) (gain * 100)));
+                    short level = (short) clamped;
+                    equalizer.setBandLevel(i, level);
                     equalizer.setBandLevel(i, level);
                 } catch (Exception ignored) {}
             }
@@ -534,7 +536,7 @@ public class AudioEnginePlugin extends Plugin {
             builder = new Notification.Builder(getContext());
         }
         return builder
-                .setSmallIcon(getApplicationInfo().icon)
+                .setSmallIcon(getContext().getApplicationInfo().icon)
                 .setContentTitle(currentTitle)
                 .setContentText(currentArtist)
                 .build();
