@@ -12,7 +12,7 @@ import type {
 import { randomBytes } from "../vendor/shim/webcrypto";
 import { aesEncryptNode, md5Bytes, rsaEncryptNoPadding, toBytes } from "./crypto";
 import { Buffer, PluginBuffer } from "./buffer";
-import pako from "pako";
+import * as pako from "pako";
 
 const LX_TO_HOST: Record<string, PluginQuality> = {
   "128k": "lq",

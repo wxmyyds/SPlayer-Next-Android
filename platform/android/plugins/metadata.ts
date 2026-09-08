@@ -1,6 +1,6 @@
 /** 插件脚本元数据解析与插件歌词/封面回退匹配。 */
 
-import pako from "pako";
+import * as pako from "pako";
 import type { Track } from "@shared/types/player";
 import type {
   MusicLyricRes,

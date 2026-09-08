@@ -36,7 +36,7 @@ import {
 import { hostRequest } from "./net";
 import { dataGet, dataKeys, dataRemove, dataSet } from "./storage";
 import { installLxShim } from "./lx-shim";
-import pako from "pako";
+import * as pako from "pako";
 
 export interface PluginLoadSpec {
   pluginId: string;
