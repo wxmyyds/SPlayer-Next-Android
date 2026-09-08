@@ -305,7 +305,7 @@ public class AudioEnginePlugin extends Plugin {
             for (int i = 0; i < numBands; i++) {
                 try {
                     double gain = gains.getDouble(i);
-                    short level = (short) Math.max(min, Math.min(max, (int) (gain * 100)));
+                    short level = (short) Math.max(min, Math.min(max, (short) (gain * 100)));
                     equalizer.setBandLevel(i, level);
                 } catch (Exception ignored) {}
             }
@@ -529,6 +529,7 @@ public class AudioEnginePlugin extends Plugin {
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= 26) {
             builder = new Notification.Builder(getContext(), CHANNEL_ID);
+            builder.setOngoing(isPlaying);
         } else {
             builder = new Notification.Builder(getContext());
         }
@@ -536,7 +537,6 @@ public class AudioEnginePlugin extends Plugin {
                 .setSmallIcon(getApplicationInfo().icon)
                 .setContentTitle(currentTitle)
                 .setContentText(currentArtist)
-                .setOngoing(isPlaying)
                 .build();
     }
 
