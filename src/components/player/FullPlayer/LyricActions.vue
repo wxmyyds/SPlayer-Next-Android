@@ -50,9 +50,9 @@ const resetLyricOffset = (): void => writeOffset(0);
 </script>
 
 <template>
+  <!-- 工具条可见性：沉浸隐藏 → 偏移弹层打开 → 触屏常显，hover 设备恢复悬停显示 -->
   <div
     class="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 transition-opacity duration-300"
-    <!-- 工具条可见性：沉浸隐藏 → 偏移弹层打开 → 触屏常显，hover 设备恢复悬停显示 -->
     :class="
       immersive
         ? 'opacity-0 pointer-events-none'
