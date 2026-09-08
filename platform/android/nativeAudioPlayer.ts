@@ -21,7 +21,32 @@ import type {
   PlayerEvent,
   PlayerStatus,
 } from "@shared/types/player";
-import { registerPlugin } from "@capacitor/core";
+import { registerPlugin, WebPlugin } from "@capacitor/core";
+
+/** 系统播放桥（MediaSessionPlugin）：元数据/状态下发 + 通知栏反控事件 */
+interface MediaBridgePlugin {
+  updateState: (options: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    artworkUrl?: string;
+    playing?: boolean;
+    positionMs?: number;
+    durationMs?: number;
+    stopped?: boolean;
+  }) => Promise<void>;
+  setPauseOnDeviceSwitch: (options: { enabled: boolean }) => Promise<void>;
+}
+
+/** 非原生环境回退：空实现（开发/测试用） */
+class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
+  async updateState(): Promise<void> {}
+  async setPauseOnDeviceSwitch(): Promise<void> {}
+}
+
+const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
+  web: () => new MediaBridgeWeb(),
+});
 
 /** 原生音频引擎插件接口 */
 interface AudioEnginePlugin {
@@ -49,12 +74,6 @@ interface AudioEnginePlugin {
   getFftData(): Promise<FftData>;
   getOutputDevices(): Promise<{ devices: AudioDevice[] }>;
   setOutputDevice(options: { deviceId: string }): Promise<void>;
-  updateMetadata(options: {
-    title?: string;
-    artist?: string;
-    album?: string;
-    artwork?: string;
-  }): Promise<void>;
   getStatus(): Promise<PlayerStatus>;
   setPauseOnDeviceSwitch(options: { enabled: boolean }): Promise<void>;
   addListener(
@@ -81,6 +100,46 @@ const emit = (event: PlayerEvent): void => {
     } catch {
       // 单个监听器异常不影响其他
     }
+  }
+};
+
+/** 最近一次原生推送的位置/时长/播放态，作为系统媒体卡片的状态源 */
+let lastPositionMs = 0;
+let lastDurationMs = 0;
+let enginePlaying = false;
+
+/** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
+const publishMetadata = (meta?: LoadOptions["meta"]): void => {
+  try {
+    void MediaBridge.updateState({
+      title: meta?.title ?? "",
+      artist: (meta?.artists ?? [])
+        .map((a) => a.name)
+        .filter(Boolean)
+        .join(" / "),
+      album: meta?.album?.name ?? "",
+      artworkUrl: meta?.coverOriginal ?? meta?.cover,
+    });
+  } catch {
+    // 忽略
+  }
+};
+
+/** 同步播放状态与进度到系统（MediaSession 据此渲染通知栏/锁屏卡片） */
+const publishState = (
+  state: "playing" | "paused" | "none",
+  positionMs?: number,
+  durationMs?: number,
+): void => {
+  try {
+    void MediaBridge.updateState({
+      playing: state === "playing",
+      positionMs,
+      durationMs,
+      stopped: state === "none" || undefined,
+    });
+  } catch {
+    // 忽略
   }
 };
 
@@ -114,7 +173,35 @@ const wireEngine = (): void => {
   if (engineWired) return;
   engineWired = true;
   void AudioEngine.addListener("event", (payload) => {
-    const event = mapNativeEvent(payload as { type: string; data?: any });
+    const data = payload as { type: string; data?: any };
+    switch (data.type) {
+      case "play":
+        enginePlaying = true;
+        publishState("playing", lastPositionMs, lastDurationMs);
+        break;
+      case "pause":
+        enginePlaying = false;
+        publishState("paused", lastPositionMs, lastDurationMs);
+        break;
+      case "ended":
+        enginePlaying = false;
+        publishState("paused", 0, lastDurationMs);
+        break;
+      case "position":
+        lastPositionMs = data.data.position;
+        lastDurationMs = data.data.duration;
+        publishState(
+          enginePlaying ? "playing" : "paused",
+          lastPositionMs,
+          lastDurationMs,
+        );
+        break;
+      case "sourceError":
+        enginePlaying = false;
+        publishState("paused", lastPositionMs, lastDurationMs);
+        break;
+    }
+    const event = mapNativeEvent(data);
     if (event) emit(event);
   });
   void AudioEngine.addListener("mediaKey", (payload) => {
@@ -135,6 +222,9 @@ export const nativeAudioPlayer: PlayerApi = {
   load: async (source: string, options?: LoadOptions) => {
     try {
       wireEngine();
+      publishMetadata(options?.meta);
+      enginePlaying = !!options?.autoPlay;
+      lastPositionMs = 0;
       const result = await AudioEngine.load({
         source,
         autoPlay: options?.autoPlay,
@@ -143,6 +233,12 @@ export const nativeAudioPlayer: PlayerApi = {
         album: options?.meta?.album?.name,
         artwork: options?.meta?.coverOriginal ?? options?.meta?.cover,
       });
+      lastDurationMs = result.duration;
+      publishState(
+        options?.autoPlay ? "playing" : "paused",
+        0,
+        result.duration,
+      );
       return ok({
         detail: {
           quality: { sampleRate: 0, channels: 0, bitsPerSample: 0, bitRate: 0, codec: "" },
@@ -173,6 +269,10 @@ export const nativeAudioPlayer: PlayerApi = {
   stop: async () => {
     try {
       await AudioEngine.stop();
+      enginePlaying = false;
+      lastPositionMs = 0;
+      lastDurationMs = 0;
+      publishState("none");
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));

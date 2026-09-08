@@ -1,26 +1,18 @@
 package com.wxmyyds.splayer.next;
 
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.media.AudioManager;
 import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.LoudnessEnhancer;
 import android.media.audiofx.Virtualizer;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackParameters;
-import androidx.media3.common.Player;
 import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -37,20 +29,18 @@ import org.json.JSONArray;
  * - 均衡器/低音/虚拟器/响度增强（framework AudioEffect）
  * - 变速变调（ExoPlayer PlaybackParameters）
  * - 实时频谱（Visualizer，无 CORS 限制）
- * - 音频焦点冲突处理（自动避让/恢复）
- * - 通知栏/锁屏控制由已有 MediaSessionPlugin 处理
+ * - 音频焦点与拔出设备暂停交给 ExoPlayer 内建处理（setAudioAttributes 第二参 +
+ *   handleAudioBecomingNoisy），不在外层重复申请焦点，避免路由切换时双重避让互卡
+ * - 通知栏/锁屏/MediaSession 由 MediaSessionPlugin 独占（含前台服务）
  */
 @CapacitorPlugin(name = "AudioEngine")
 public class AudioEnginePlugin extends Plugin {
 
-    static final String CHANNEL_ID = "splayer_playback";
-    static final int NOTIFICATION_ID = 1;
+    private static final String TAG = "AudioEngine";
     private static final int FFT_BINS = 128;
 
     private static AudioEnginePlugin sInstance;
     private ExoPlayer player;
-    private AudioManager audioManager;
-    private NotificationManager notificationManager;
     private Handler mainHandler;
 
     // Audio effects
@@ -72,33 +62,12 @@ public class AudioEnginePlugin extends Plugin {
     private float speed = 1.0f;
     private boolean pitchSync = true;
     private int fadeMs = 200;
-    private String currentTitle = "";
-    private String currentArtist = "";
-    private String currentAlbum = "";
-    private String currentArtwork = "";
-
-    // Audio focus
-    private boolean focusLost = false;
-    private boolean pauseOnNoisy = true;
-
-    private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (!pauseOnNoisy) return;
-            emitMediaKey("pause");
-        }
-    };
-    private boolean noisyRegistered;
 
     @Override
     public void load() {
         sInstance = this;
         mainHandler = new Handler(Looper.getMainLooper());
-        audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
-        notificationManager = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        createNotificationChannel();
         initPlayer();
-        registerNoisyReceiver();
     }
 
     private void initPlayer() {
@@ -113,6 +82,7 @@ public class AudioEnginePlugin extends Plugin {
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int state) {
+                Log.i(TAG, "state=" + state);
                 switch (state) {
                     case Player.STATE_READY:
                         currentDuration = player.getDuration();
@@ -133,10 +103,9 @@ public class AudioEnginePlugin extends Plugin {
 
             @Override
             public void onIsPlayingChanged(boolean playing) {
+                Log.i(TAG, "playing=" + playing);
                 isPlaying = playing;
-                updateNotification();
                 if (playing) {
-                    ensureForeground();
                     if (fftEnabled) initVisualizer();
                     emitEvent("play", null);
                 } else {
@@ -147,6 +116,7 @@ public class AudioEnginePlugin extends Plugin {
 
             @Override
             public void onPlayerError(PlaybackException error) {
+                Log.e(TAG, "playerError", error);
                 JSObject data = new JSObject();
                 data.put("message", error.getMessage());
                 emitEvent("sourceError", data);
@@ -171,7 +141,6 @@ public class AudioEnginePlugin extends Plugin {
                     data.put("position", currentPosition);
                     data.put("duration", currentDuration > 0 ? currentDuration : 0);
                     emitEvent("position", data);
-                    updateNotification();
                 }
                 mainHandler.postDelayed(this, 200);
             }
@@ -182,28 +151,13 @@ public class AudioEnginePlugin extends Plugin {
     public void load(PluginCall call) {
         String source = call.getString("source");
         boolean autoPlay = call.getBoolean("autoPlay", true);
-        String title = call.getString("title", "");
-        String artist = call.getString("artist", "");
-        String album = call.getString("album", "");
-        String artwork = call.getString("artwork", "");
 
         if (source == null || source.isEmpty()) {
             call.reject("source required");
             return;
         }
 
-        currentTitle = title;
-        currentArtist = artist;
-        currentAlbum = album;
-        currentArtwork = artwork;
-
-        int result = audioManager.requestAudioFocus(audioFocusListener,
-                AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-        if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            call.reject("audio focus denied");
-            return;
-        }
-
+        Log.i(TAG, "load autoPlay=" + autoPlay);
         MediaItem mediaItem = MediaItem.fromUri(source);
         mainHandler.post(() -> {
             player.setMediaItem(mediaItem);
@@ -236,7 +190,6 @@ public class AudioEnginePlugin extends Plugin {
         mainHandler.post(() -> {
             player.stop();
             player.clearMediaItems();
-            audioManager.abandonAudioFocus(audioFocusListener);
             call.resolve();
         });
     }
@@ -264,11 +217,8 @@ public class AudioEnginePlugin extends Plugin {
     public void setSpeed(PluginCall call) {
         float s = call.getFloat("speed", 1.0f);
         speed = Math.max(0.5f, Math.min(2.0f, s));
-        float pitch = pitchSync ? 1.0f : speed;
-        mainHandler.post(() -> {
-            player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
-            call.resolve();
-        });
+        applyPlaybackParameters();
+        call.resolve();
     }
 
     @PluginMethod
@@ -280,10 +230,14 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void setPitchSync(PluginCall call) {
         pitchSync = call.getBoolean("enabled", true);
+        applyPlaybackParameters();
+        call.resolve();
+    }
+
+    private void applyPlaybackParameters() {
         float pitch = pitchSync ? 1.0f : speed;
         mainHandler.post(() -> {
             player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
-            call.resolve();
         });
     }
 
@@ -389,22 +343,6 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     @PluginMethod
-    public void updateMetadata(PluginCall call) {
-        String title = call.getString("title", "");
-        String artist = call.getString("artist", "");
-        String album = call.getString("album", "");
-        String artwork = call.getString("artwork", "");
-
-        if (!title.isEmpty()) currentTitle = title;
-        if (!artist.isEmpty()) currentArtist = artist;
-        if (!album.isEmpty()) currentAlbum = album;
-        if (!artwork.isEmpty()) currentArtwork = artwork;
-
-        updateNotification();
-        call.resolve();
-    }
-
-    @PluginMethod
     public void getStatus(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("state", isPlaying ? "playing" : "paused");
@@ -420,8 +358,12 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setPauseOnDeviceSwitch(PluginCall call) {
-        pauseOnNoisy = call.getBoolean("enabled", true);
-        call.resolve();
+        boolean enabled = call.getBoolean("enabled", true);
+        // 拔出设备暂停由 ExoPlayer handleAudioBecomingNoisy 承担
+        mainHandler.post(() -> {
+            player.setHandleAudioBecomingNoisy(enabled);
+            call.resolve();
+        });
     }
 
     // Audio effects init/release
@@ -494,7 +436,8 @@ public class AudioEnginePlugin extends Plugin {
                     false,
                     true);
             visualizer.setEnabled(true);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "visualizer init failed", e);
             if (visualizer != null) { visualizer.release(); visualizer = null; }
         }
     }
@@ -507,96 +450,11 @@ public class AudioEnginePlugin extends Plugin {
         }
     }
 
-    // Audio focus listener
-    private final AudioManager.OnAudioFocusChangeListener audioFocusListener =
-            new AudioManager.OnAudioFocusChangeListener() {
-                @Override
-                public void onAudioFocusChange(int focusChange) {
-                    // 焦点回调线程不定（通常主线程），统一投递主线程满足 ExoPlayer 线程约束
-                    mainHandler.post(() -> handleFocusChange(focusChange));
-                }
-            };
-
-    private void handleFocusChange(int focusChange) {
-        switch (focusChange) {
-                        case AudioManager.AUDIOFOCUS_GAIN:
-                            if (focusLost) {
-                                player.play();
-                                focusLost = false;
-                            }
-                            player.setVolume(volume);
-                            break;
-                        case AudioManager.AUDIOFOCUS_LOSS:
-                            focusLost = false;
-                            player.pause();
-                            break;
-                        case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                            focusLost = true;
-                            player.pause();
-                            break;
-                        case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                            player.setVolume(volume * 0.2f);
-                            break;
-                    }
-    }
-
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW);
-            channel.setShowBadge(false);
-            channel.setSound(null, null);
-            notificationManager.createNotificationChannel(channel);
-        }
-    }
-
-    private void updateNotification() {
-        PlaybackService.startForegroundWith(getContext(), buildNotification());
-    }
-
-    private Notification buildNotification() {
-        Notification.Builder builder;
-        if (Build.VERSION.SDK_INT >= 26) {
-            builder = new Notification.Builder(getContext(), CHANNEL_ID);
-            builder.setOngoing(isPlaying);
-        } else {
-            builder = new Notification.Builder(getContext());
-        }
-        return builder
-                .setSmallIcon(getContext().getApplicationInfo().icon)
-                .setContentTitle(currentTitle)
-                .setContentText(currentArtist)
-                .build();
-    }
-
-    private void ensureForeground() {
-        PlaybackService.startForegroundWith(getContext(), buildNotification());
-    }
-
-    private void registerNoisyReceiver() {
-        if (noisyRegistered) return;
-        noisyRegistered = true;
-        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        Context appContext = getContext().getApplicationContext();
-        if (Build.VERSION.SDK_INT >= 33) {
-            appContext.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            appContext.registerReceiver(noisyReceiver, filter);
-        }
-    }
-
     private void emitEvent(String type, JSObject data) {
         JSObject event = new JSObject();
         event.put("type", type);
         if (data != null) event.put("data", data);
         notifyListeners("event", event);
-    }
-
-    private void emitMediaKey(String action) {
-        JSObject data = new JSObject();
-        data.put("action", action);
-        data.put("position", -1);
-        notifyListeners("mediaKey", data);
     }
 
     @Override
@@ -609,10 +467,6 @@ public class AudioEnginePlugin extends Plugin {
         releaseAudioEffects();
         releaseVisualizer();
         mainHandler.removeCallbacksAndMessages(null);
-        try {
-            getContext().getApplicationContext().unregisterReceiver(noisyReceiver);
-        } catch (Exception ignored) {
-        }
         super.handleOnDestroy();
     }
 
