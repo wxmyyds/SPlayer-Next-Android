@@ -46,7 +46,8 @@ const pressScale = computed(() => (props.static ? undefined : "not-disabled:acti
 type SizePreset = "tiny" | "small" | "medium" | "large";
 
 const circleSizePresets: Record<SizePreset, string> = {
-  tiny: "w-6 h-6 text-xs",
+  // 28px 保证触屏可点面积（队列删除等小图标按钮）
+  tiny: "w-7 h-7 text-xs",
   small: "w-8 h-8 text-sm",
   medium: "w-9 h-9 text-sm",
   large: "w-10 h-10 text-base",

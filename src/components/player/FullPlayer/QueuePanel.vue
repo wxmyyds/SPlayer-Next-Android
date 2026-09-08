@@ -112,12 +112,13 @@ const {
                   {{ formatArtists(item.artists) }}
                 </div>
               </div>
+              <!-- 仅在 hover 设备上悬停显示；触屏始终可见可点，否则无法删除单曲 -->
               <SButton
                 type="cover"
                 variant="ghost"
                 circle
                 size="tiny"
-                class="opacity-0 group-hover:opacity-100"
+                class="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                 @click.stop="removeAt(index)"
               >
                 <template #icon><IconLucideX /></template>

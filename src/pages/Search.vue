@@ -208,8 +208,8 @@ const isEmptyResult = computed(() => {
             {{ t("search.titleSuffix") }}
           </span>
         </h1>
-        <!-- 平台切换 -->
-        <div class="shrink-0" :class="isAndroid ? 'w-32' : 'w-40'">
+        <!-- 平台切换；segment 三个 tab（NCM/QM/KG）最小内容宽约 158px，w-32/w-40 会从右缘溢出截断 KG，安卓需 168px -->
+        <div class="shrink-0" :class="isAndroid ? 'w-42' : 'w-40'">
           <STabs
             :model-value="status.searchPlatform"
             :tabs="platformTabs"

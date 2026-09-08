@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useToast, setMaxToasts, type ToastType } from "@/composables/useToast";
+import { isAndroid } from "@/utils/platform";
 
 const props = withDefaults(defineProps<{ max?: number }>(), { max: 5 });
 
@@ -31,7 +32,8 @@ const onBeforeLeave = (el: Element): void => {
 <template>
   <Teleport to="body">
     <div
-      class="fixed bottom-24 inset-x-0 z-999 flex flex-col items-center gap-2 pointer-events-none"
+      class="fixed inset-x-0 z-999 flex flex-col items-center gap-2 pointer-events-none"
+      :class="isAndroid ? 'bottom-[calc(8.5rem+env(safe-area-inset-bottom))]' : 'bottom-24'"
     >
       <TransitionGroup
         enter-active-class="transition-[opacity,transform] duration-250 ease-[cubic-bezier(0.4,0,0.2,1)]"

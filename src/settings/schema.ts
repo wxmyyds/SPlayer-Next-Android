@@ -32,15 +32,19 @@ const ANDROID_HIDDEN_ITEMS = new Set([
   // 播放：响度归一/输出设备待原生引擎（autoPlay/rememberLastTrack 由 restoreLastTrack 消费，可用）
   "loudnessNormalization",
   "outputDevice",
-  // 外观：背景图依赖桌面文件选择；布局与侧栏折叠仅作用于桌面分支
+  // 外观：背景图依赖桌面文件选择；布局与侧栏折叠仅作用于桌面分支；侧栏歌单封面/自定义/统计入口依赖桌面侧栏
   "backgroundImage",
   "layoutMode",
   "sidebarCollapsed",
-  // 常规：协议唤起与自更新为桌面能力
+  "sidebarPlaylistCover",
+  "sidebarCustomize",
+  "showStatsInSidebar",
+  // 常规：协议唤起与自更新为桌面能力，性能监视器为桌面调试悬浮卡片
   "orpheusProtocol",
   "updateChannel",
   "autoCheckUpdate",
   "checkUpdate",
+  "showPerformanceMonitor",
   // 歌词：TTML 本地/在线覆盖未接
   "enableLocalTTMLOverride",
   // 服务：代理/Discord/Last.fm/外部 API 未实现

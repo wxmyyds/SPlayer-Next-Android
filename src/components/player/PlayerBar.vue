@@ -72,7 +72,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
                 type="primary"
                 variant="text"
                 circle
-                :size="24"
+                :size="28"
                 :icon-size="16"
                 @click="fav.toggle(media.track)"
               >
@@ -96,7 +96,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
                     type="primary"
                     variant="text"
                     circle
-                    :size="24"
+                    :size="28"
                     :icon-size="16"
                   >
                     <template #icon><IconLucideMoreHorizontal /></template>
@@ -156,7 +156,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
             type="primary"
             variant="text"
             circle
-            :size="24"
+            :size="28"
             :icon-size="16"
             @click="fav.toggle(media.track)"
           >

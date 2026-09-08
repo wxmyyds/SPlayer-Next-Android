@@ -82,16 +82,18 @@ const sidebarClass = computed(() => {
   return classes.join(" ");
 });
 
-/** 主界面底部边距 */
+/** 主界面底部边距（桌面端为播放栏预留；Android 改由主滚动区 padding 预留，见 mainPadClass） */
 const mainMarginClass = computed(() => {
-  // Android：底部 Tab 栏（50px）常驻；有曲目时悬浮岛播放栏（64px + 8px 间隙）再叠加其上
-  if (isAndroid) {
-    return showPlayerBar.value
-      ? "mb-[calc(7.625rem+env(safe-area-inset-bottom))]"
-      : "mb-[calc(3.125rem+env(safe-area-inset-bottom))]";
-  }
   if (!showPlayerBar.value || appearance.layoutMode === "floating") return "";
   return "mb-20";
+});
+
+/** Android 主滚动区底部留白：Tab 栏 50px 常驻，有曲目时让出悬浮岛顶边（58px + 64px） */
+const mainPadClass = computed(() => {
+  if (!isAndroid) return "";
+  return showPlayerBar.value
+    ? "pb-[calc(7.625rem+env(safe-area-inset-bottom))]"
+    : "pb-[calc(3.5rem+env(safe-area-inset-bottom))]";
 });
 
 /** 顶栏样式：Android 下避开状态栏安全区 */
@@ -105,7 +107,8 @@ const headerClass = computed(() =>
 const asideClass = computed(() => {
   if (isAndroid) {
     return [
-      "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] bg-surface-panel overflow-y-auto pt-[env(safe-area-inset-top)]",
+      // 需盖过常驻 Tab 栏（z-50），又不能压过全屏播放器（z-200）与对话框（z-300）
+      "fixed inset-y-0 left-0 z-[60] w-72 max-w-[85vw] bg-surface-panel overflow-y-auto pt-[env(safe-area-inset-top)]",
       "shadow-2xl transition-transform duration-300",
       status.sidebarDrawerOpen ? "translate-x-0" : "-translate-x-full",
     ].join(" ");
@@ -166,7 +169,7 @@ const playerBarInnerClass = computed(() => {
     <!-- Android 侧边抽屉遮罩 -->
     <div
       v-if="isAndroid && status.sidebarDrawerOpen"
-      class="fixed inset-0 z-30 bg-black/50"
+      class="fixed inset-0 z-[55] bg-black/50"
       @click="status.sidebarDrawerOpen = false"
     />
 
@@ -178,7 +181,11 @@ const playerBarInnerClass = computed(() => {
       </header>
 
       <!-- 主内容区 -->
-      <main ref="mainContainerRef" class="flex-1 overflow-y-auto overflow-x-hidden">
+      <main
+        ref="mainContainerRef"
+        class="flex-1 overflow-y-auto overflow-x-hidden"
+        :class="mainPadClass"
+      >
         <RouterView v-slot="{ Component }">
           <Transition :name="routeTransitionName" mode="out-in" @after-enter="handleAfterEnter">
             <KeepAlive :max="10" :include="cachedViews">

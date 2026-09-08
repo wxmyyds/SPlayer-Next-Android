@@ -43,8 +43,13 @@ const menuItems = computed<DropdownMenuItem[]>(() => [
     disabled: theme.appearanceStyle === "image",
   },
   { key: "uiZoom", label: t("uiZoom.title"), icon: IconScaling },
-  { key: "reload", label: t("nav.reload"), icon: IconRefreshCw, separator: true },
-  { key: "devtools", label: t("nav.devtools"), icon: IconTerminal },
+  // 热重载（Vite HMR）与开发者工具（Electron devtools）在 Android WebView 上无意义
+  ...(isAndroid
+    ? []
+    : [
+        { key: "reload", label: t("nav.reload"), icon: IconRefreshCw, separator: true },
+        { key: "devtools", label: t("nav.devtools"), icon: IconTerminal },
+      ]),
   { key: "settings", label: t("nav.globalSettings"), icon: IconSettings },
 ]);
 
@@ -117,7 +122,13 @@ const onMenuSelect = (key: string): void => {
     <!-- 中间 -->
     <div v-if="!isAndroid" class="flex-1 h-full min-w-4" />
     <!-- 右侧 -->
-    <div :class="isAndroid ? 'flex items-center gap-2 shrink-0 ml-2' : 'flex items-center gap-2 sm:gap-3 shrink-0'">
+    <div
+      :class="
+        isAndroid
+          ? 'flex items-center gap-2 shrink-0 ml-2'
+          : 'flex items-center gap-2 sm:gap-3 shrink-0'
+      "
+    >
       <NavUser />
       <SDropdownMenu :items="menuItems" @select="onMenuSelect">
         <template #trigger>

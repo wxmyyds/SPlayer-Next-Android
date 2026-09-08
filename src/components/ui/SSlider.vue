@@ -128,6 +128,12 @@ const progressRatio = computed(() => {
 /** 进度百分比字符串 */
 const progressPercent = computed(() => `${Math.round(progressRatio.value * 10000) / 100}%`);
 
+/** 水平热区高度拉到至少 24px 保证触屏可点面积；多出的高度用负 margin 抵消，布局占位与原 thumbSize 一致 */
+const horizontalHitboxStyle = computed(() => {
+  const height = Math.max(props.thumbSize, 24);
+  return { height: `${height}px`, margin: `${(props.thumbSize - height) / 2}px 0` };
+});
+
 /** 水平 popover 锚点在滑块内的位置 */
 const popoverAnchorOffset = (width: number): number => {
   const min = 24;
@@ -266,7 +272,7 @@ const onPointerUp = (): void => {
       v-if="!vertical"
       ref="trackRef"
       class="s-slider-hitbox relative flex items-center touch-none"
-      :style="{ height: `${thumbSize}px` }"
+      :style="horizontalHitboxStyle"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
