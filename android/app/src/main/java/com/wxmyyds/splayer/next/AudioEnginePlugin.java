@@ -3,45 +3,31 @@ package com.wxmyyds.splayer.next;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.AudioManager;
-import android.media.audiofx.AudioEffect;
 import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.LoudnessEnhancer;
 import android.media.audiofx.Virtualizer;
-import android.media.session.MediaSession;
-import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import androidx.annotation.OptIn;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
-import androidx.media3.common.util.UnstableApi;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.session.MediaSession.Callback;
-import androidx.media3.session.MediaSession.ConnectionHints;
-import androidx.media3.session.Token;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import java.io.IOException;
-import java.util.concurrent.Executors;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import org.json.JSONArray;
 
 /**
  * 原生音频引擎（Android 对标桌面 Rust audio-engine）。
@@ -52,19 +38,17 @@ import okhttp3.Response;
  * - 变速变调（ExoPlayer PlaybackParameters）
  * - 实时频谱（Visualizer，无 CORS 限制）
  * - 音频焦点冲突处理（自动避让/恢复）
- * - MediaSession 通知栏/锁屏/蓝牙控制
+ * - 通知栏/锁屏控制由已有 MediaSessionPlugin 处理
  */
 @CapacitorPlugin(name = "AudioEngine")
 public class AudioEnginePlugin extends Plugin {
 
     static final String CHANNEL_ID = "splayer_playback";
     static final int NOTIFICATION_ID = 1;
-    private static final String ACTION_MEDIA_KEY = "com.wxmyyds.splayer.next.MEDIA_KEY";
     private static final int FFT_BINS = 128;
 
     private static AudioEnginePlugin sInstance;
     private ExoPlayer player;
-    private MediaSession mediaSession;
     private AudioManager audioManager;
     private NotificationManager notificationManager;
     private Handler mainHandler;
@@ -76,30 +60,24 @@ public class AudioEnginePlugin extends Plugin {
     private LoudnessEnhancer loudnessEnhancer;
     private boolean effectsAttached = false;
 
+    // Visualizer
+    private android.media.audiofx.Visualizer visualizer;
+    private boolean fftEnabled = false;
+
     // State
-    private String currentSource = "";
     private boolean isPlaying = false;
     private long currentPosition = 0;
     private long currentDuration = 0;
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
-    private boolean fadeEnabled = false;
     private int fadeMs = 200;
     private String currentTitle = "";
     private String currentArtist = "";
     private String currentAlbum = "";
     private String currentArtwork = "";
 
-    // Visualizer
-    private boolean fftEnabled = false;
-    private android.media.audiofx.Visualizer visualizer;
-    private Handler visualizerHandler;
-    private Runnable visualizerRunnable;
-    private static final int FFT_BINS = 128;
-
     // Audio focus
-    private int audioFocusState = AudioManager.AUDIOFOCUS_NONE;
     private boolean focusLost = false;
     private boolean pauseOnNoisy = true;
 
@@ -168,7 +146,7 @@ public class AudioEnginePlugin extends Plugin {
             }
 
             @Override
-            public void onPlayerError(androidx.media3.common.PlaybackException error) {
+            public void onPlayerError(PlaybackException error) {
                 JSObject data = new JSObject();
                 data.put("message", error.getMessage());
                 emitEvent("sourceError", data);
@@ -179,39 +157,6 @@ public class AudioEnginePlugin extends Plugin {
                 currentPosition = newPosition.positionMs;
             }
         });
-
-        // Media session for notification/lock screen
-        if (Build.VERSION.SDK_INT >= 21) {
-            mediaSession = new MediaSession(getContext(), "SPlayerAudioEngine");
-            mediaSession.setCallback(new Callback() {
-                @Override
-                public void onPlay(androidx.media3.session.MediaSession session, androidx.media3.session.MediaSession.ControllerInfo controller) {
-                    play();
-                }
-
-                @Override
-                public void onPause(androidx.media3.session.MediaSession session, androidx.media3.session.MediaSession.ControllerInfo controller) {
-                    pause();
-                }
-
-                @Override
-                public void onSkipToNext(androidx.media3.session.MediaSession session, androidx.media3.session.MediaSession.ControllerInfo controller) {
-                    emitMediaKey("next");
-                }
-
-                @Override
-                public void onSkipToPrevious(androidx.media3.session.MediaSession session, androidx.media3.session.MediaSession.ControllerInfo controller) {
-                    emitMediaKey("prev");
-                }
-
-                @Override
-                public void onSeekTo(androidx.media3.session.MediaSession session, androidx.media3.session.MediaSession.ControllerInfo controller, long positionMs) {
-                    seek(positionMs);
-                }
-            });
-        }
-
-        // Start position updates
         startPositionUpdates();
     }
 
@@ -252,7 +197,6 @@ public class AudioEnginePlugin extends Plugin {
         currentAlbum = album;
         currentArtwork = artwork;
 
-        // Request audio focus
         int result = audioManager.requestAudioFocus(audioFocusListener,
                 AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
@@ -260,7 +204,6 @@ public class AudioEnginePlugin extends Plugin {
             return;
         }
 
-        // Load media
         MediaItem mediaItem = MediaItem.fromUri(source);
         player.setMediaItem(mediaItem);
         player.prepare();
@@ -269,7 +212,6 @@ public class AudioEnginePlugin extends Plugin {
             player.play();
         }
 
-        currentSource = source;
         JSObject ret = new JSObject();
         ret.put("duration", player.getDuration() > 0 ? player.getDuration() : 0);
         call.resolve(ret);
@@ -321,15 +263,13 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setPitch(PluginCall call) {
-        // ExoPlayer doesn't support direct pitch shift independent of speed
-        // This is a no-op for now; speed+pitch is handled in setSpeed
+        // ExoPlayer 不支持独立于速度的音高偏移，由 setSpeed 统一处理
         call.resolve();
     }
 
     @PluginMethod
     public void setPitchSync(PluginCall call) {
         pitchSync = call.getBoolean("enabled", true);
-        // Re-apply speed with new pitch sync setting
         float pitch = pitchSync ? 1.0f : speed;
         player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
         call.resolve();
@@ -338,11 +278,9 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void setFadeDuration(PluginCall call) {
         fadeMs = call.getInt("duration", 200);
-        fadeEnabled = fadeMs > 0;
         call.resolve();
     }
 
-    // Equalizer
     @PluginMethod
     public void setEqualizerEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
@@ -367,7 +305,6 @@ public class AudioEnginePlugin extends Plugin {
             for (int i = 0; i < numBands; i++) {
                 try {
                     double gain = gains.getDouble(i);
-                    // Map gain (dB) to band level (millibels)
                     short level = (short) Math.max(min, Math.min(max, (int) (gain * 100)));
                     equalizer.setBandLevel(i, level);
                 } catch (Exception ignored) {}
@@ -378,7 +315,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setPreampGain(PluginCall call) {
-        // ExoPlayer doesn't have a preamp; this is handled by the equalizer
+        // ExoPlayer 无前级增益，由均衡器统一处理
         call.resolve();
     }
 
@@ -396,7 +333,6 @@ public class AudioEnginePlugin extends Plugin {
         call.resolve();
     }
 
-    // FFT / Visualizer
     @PluginMethod
     public void setFftEnabled(PluginCall call) {
         fftEnabled = call.getBoolean("enabled", false);
@@ -410,14 +346,12 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void getFftData(PluginCall call) {
-        // Visualizer data is captured via callback; return empty if not available
         JSObject ret = new JSObject();
         ret.put("ldata", new JSONArray());
         ret.put("rdata", new JSONArray());
         call.resolve(ret);
     }
 
-    // Output devices
     @PluginMethod
     public void getOutputDevices(PluginCall call) {
         JSObject ret = new JSObject();
@@ -433,11 +367,9 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setOutputDevice(PluginCall call) {
-        // Android doesn't support per-app output device selection without special APIs
         call.resolve();
     }
 
-    // Metadata
     @PluginMethod
     public void updateMetadata(PluginCall call) {
         String title = call.getString("title", "");
@@ -454,7 +386,6 @@ public class AudioEnginePlugin extends Plugin {
         call.resolve();
     }
 
-    // Status
     @PluginMethod
     public void getStatus(PluginCall call) {
         JSObject ret = new JSObject();
@@ -473,6 +404,7 @@ public class AudioEnginePlugin extends Plugin {
         call.resolve();
     }
 
+    // Audio effects init/release
     private void initAudioEffects() {
         if (effectsAttached) return;
         effectsAttached = true;
@@ -506,6 +438,7 @@ public class AudioEnginePlugin extends Plugin {
         releaseVisualizer();
     }
 
+    // Visualizer
     private void initVisualizer() {
         if (visualizer != null || !fftEnabled) return;
         int audioSessionId = player.getAudioSessionId();
@@ -516,9 +449,9 @@ public class AudioEnginePlugin extends Plugin {
             visualizer.setDataCaptureListener(
                     new android.media.audiofx.Visualizer.OnDataCaptureListener() {
                         @Override
-                        public void onWaveFormDataCapture(android.media.audiofx.Visualizer visualizer, byte[] waveform, int samplingRate) {}
+                        public void onWaveFormDataCapture(android.media.audiofx.Visualizer v, byte[] waveform, int samplingRate) {}
                         @Override
-                        public void onFftDataCapture(android.media.audiofx.Visualizer visualizer, byte[] fft, int samplingRate) {
+                        public void onFftDataCapture(android.media.audiofx.Visualizer v, byte[] fft, int samplingRate) {
                             if (!fftEnabled) return;
                             JSObject data = new JSObject();
                             int bins = Math.min(FFT_BINS, fft.length / 2);
@@ -549,6 +482,8 @@ public class AudioEnginePlugin extends Plugin {
             visualizer = null;
         }
     }
+
+    // Audio focus listener
     private final AudioManager.OnAudioFocusChangeListener audioFocusListener =
             new AudioManager.OnAudioFocusChangeListener() {
                 @Override
@@ -587,13 +522,10 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     private void updateNotification() {
-        // Build notification with MediaStyle
-        // This is simplified; full implementation would use MediaStyle notification
         PlaybackService.startForegroundWith(getContext(), buildNotification());
     }
 
     private Notification buildNotification() {
-        // Simplified notification
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= 26) {
             builder = new Notification.Builder(getContext(), CHANNEL_ID);
@@ -638,10 +570,6 @@ public class AudioEnginePlugin extends Plugin {
         if (player != null) {
             player.release();
             player = null;
-        }
-        if (mediaSession != null) {
-            mediaSession.release();
-            mediaSession = null;
         }
         releaseAudioEffects();
         releaseVisualizer();
