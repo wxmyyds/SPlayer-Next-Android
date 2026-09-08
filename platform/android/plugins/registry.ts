@@ -11,7 +11,10 @@ import type {
   SourceCapability,
 } from "@shared/types/plugin";
 import { HOST_API_LEVEL, PluginErrorCodes } from "@shared/defaults/plugin-api";
+import { watch, toRaw } from "vue";
 import { APP_VERSION } from "@/utils/config";
+import { useMediaStore } from "@/stores/media";
+import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import {
   dataDrop,
@@ -220,6 +223,7 @@ export const ensureInitialized = async (): Promise<void> => {
         .map(start),
     );
     void Promise.all(Array.from(runtimes.values()).map((item) => checkUpdate(item.manifest.id)));
+    ensureEventBridge();
   })();
   await initPromise;
 };
@@ -412,4 +416,93 @@ export const applyUpdate = async (
       fallbackUrl: runtime.manifest.updateUrl,
     };
   }
+};
+
+/** 控制类插件播放事件桥：上游走 nowPlaying 服务，Android 直连 store watch */
+const attachEventBridge = (): void => {
+  let attached = false;
+  let lyricLines: import("@shared/types/lyrics").LyricLine[] = [];
+  let lyricIndex = -1;
+  let stops: Array<() => void> = [];
+  const prime = (pluginId?: string): void => {
+    const media = useMediaStore();
+    const status = useStatusStore();
+    const position = status.position;
+    const send = pluginId
+      ? (event: PlaybackEventKind, data: unknown) =>
+          sendPlaybackEventTo(pluginId, event, data as never)
+      : broadcastPlaybackEvent;
+    send("trackChange", { track: toRaw(media.track) ?? null });
+    send("lyricChange", { lines: media.parsedLyric });
+    send("playStateChange", { state: status.isPlaying ? "playing" : "paused", position });
+    const index = lyricLines.length
+      ? lyricLines.filter((line) => line.startTime <= position + status.lyricOffsetMs).length - 1
+      : -1;
+    if (index >= 0) send("lineChange", { index, position });
+  };
+  const attach = (): void => {
+    if (attached) return;
+    attached = true;
+    const media = useMediaStore();
+    const status = useStatusStore();
+    stops = [
+      watch(
+        () => media.track?.id,
+        () => {
+          lyricLines = media.parsedLyric;
+          lyricIndex = -1;
+          prime();
+        },
+      ),
+      watch(
+        () => media.parsedLyric,
+        (lines) => {
+          lyricLines = lines;
+          lyricIndex = -1;
+          broadcastPlaybackEvent("lyricChange", { lines });
+        },
+      ),
+      watch(
+        () => status.isPlaying,
+        () => {
+          broadcastPlaybackEvent("playStateChange", {
+            state: status.isPlaying ? "playing" : "paused",
+            position: status.position,
+          });
+        },
+      ),
+      watch(
+        () => status.position,
+        (position) => {
+          if (!lyricLines.length) return;
+          const next =
+            lyricLines.filter((line) => line.startTime <= position + status.lyricOffsetMs).length -
+            1;
+          if (next === lyricIndex) return;
+          lyricIndex = next;
+          broadcastPlaybackEvent("lineChange", { index: next, position });
+        },
+      ),
+    ];
+  };
+  const detach = (): void => {
+    for (const stop of stops) stop();
+    stops = [];
+    attached = false;
+    lyricLines = [];
+    lyricIndex = -1;
+  };
+  onControlActivity((active) => (active ? attach() : detach()));
+  onControlReady((id) => {
+    if (attached) prime(id);
+  });
+  if (hasEnabledControlPlugin()) attach();
+};
+
+let eventBridgeDone = false;
+/** 确保事件桥只挂一次（渲染层无需感知，播放时自动带上） */
+export const ensureEventBridge = (): void => {
+  if (eventBridgeDone) return;
+  eventBridgeDone = true;
+  attachEventBridge();
 };
