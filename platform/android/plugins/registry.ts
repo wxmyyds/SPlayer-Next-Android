@@ -67,10 +67,15 @@ const infoOf = (runtime: RuntimeState): PluginInfo => ({
   enabled: runtime.enabled,
   status: runtime.status,
   updateInfo: runtime.updateInfo,
-  settingsValues: runtime.settings.reduce<Record<string, unknown>>((result, item) => {
-    result[item.key] = runtime.userSettingsCache[item.key] ?? item.default;
-    return result;
-  }, {}),
+  // 双源合并：userSettingsCache 始终打底（含插件注册前从存储读入的值），
+  // 已注册设置项逐条覆盖（缺省值兜底），避免注册前 settingsValues 为空
+  settingsValues: {
+    ...runtime.userSettingsCache,
+    ...runtime.settings.reduce<Record<string, unknown>>((result, item) => {
+      result[item.key] = runtime.userSettingsCache[item.key] ?? item.default;
+      return result;
+    }, {}),
+  },
 });
 
 const emitStatus = (runtime: RuntimeState): void => {
