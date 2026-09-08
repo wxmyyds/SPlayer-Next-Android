@@ -305,11 +305,10 @@ public class AudioEnginePlugin extends Plugin {
             for (int i = 0; i < numBands; i++) {
                 try {
                     double gain = gains.getDouble(i);
-                    int minVal = min & 0xFFFF;
-                    int maxVal = max & 0xFFFF;
+                    int minVal = min;
+                    int maxVal = max;
                     short level = (short) Math.max(minVal, Math.min(maxVal, (int) (gain * 100)));
-                    equalizer.setBandLevel(i, level);
-                    equalizer.setBandLevel(i, level);
+                    equalizer.setBandLevel((short) i, level);
                 } catch (Exception ignored) {}
             }
         }
