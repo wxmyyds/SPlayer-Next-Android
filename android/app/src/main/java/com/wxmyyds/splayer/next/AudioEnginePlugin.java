@@ -458,10 +458,14 @@ public class AudioEnginePlugin extends Plugin {
                             JSObject data = new JSObject();
                             int bins = Math.min(FFT_BINS, fft.length / 2);
                             JSONArray ldata = new JSONArray();
-                            for (int i = 0; i < bins; i++) {
-                                int re = fft[2 * i] & 0xFF;
-                                int im = fft[2 * i + 1] & 0xFF;
-                                ldata.put((re + im) / 512.0);
+                            try {
+                                for (int i = 0; i < bins; i++) {
+                                    int re = fft[2 * i] & 0xFF;
+                                    int im = fft[2 * i + 1] & 0xFF;
+                                    ldata.put((re + im) / 512.0);
+                                }
+                            } catch (org.json.JSONException ignored) {
+                                return;
                             }
                             data.put("ldata", ldata);
                             data.put("rdata", ldata);
