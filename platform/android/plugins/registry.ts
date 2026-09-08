@@ -50,6 +50,7 @@ interface RuntimeState {
   menus: PluginMenuItem[];
   updateInfo: PluginUpdateInfo | null;
   loading: boolean;
+  userSettingsCache: Record<string, unknown>;
 }
 
 type StatusListener = (info: PluginInfo) => void;
@@ -67,18 +68,10 @@ const infoOf = (runtime: RuntimeState): PluginInfo => ({
   status: runtime.status,
   updateInfo: runtime.updateInfo,
   settingsValues: runtime.settings.reduce<Record<string, unknown>>((result, item) => {
-    const values = runtimeSettingsCache(runtime);
-    result[item.key] = values[item.key] ?? item.default;
+    result[item.key] = runtime.userSettingsCache[item.key] ?? item.default;
     return result;
   }, {}),
 });
-
-const runtimeSettingsCache = (runtime: RuntimeState): Record<string, unknown> => {
-  // 读取是异步的；start() 已将值缓存到 manifest runtime 的临时字段中
-  return (
-    (runtime as RuntimeState & { settingsValues?: Record<string, unknown> }).settingsValues ?? {}
-  );
-};
 
 const emitStatus = (runtime: RuntimeState): void => {
   const info = infoOf(runtime);
@@ -180,7 +173,6 @@ const start = async (runtime: RuntimeState): Promise<void> => {
     appVersion: APP_VERSION,
     userSettings: { ...values },
   };
-  (runtime as RuntimeState & { settingsValues?: Record<string, unknown> }).settingsValues = values;
   try {
     loadPlugin(spec, callbacksFor(runtime));
   } catch (error) {
@@ -202,6 +194,7 @@ export const ensureInitialized = async (): Promise<void> => {
     for (const [id, manifest] of Object.entries(manifests)) {
       const source = await readScript(id);
       if (!source) continue;
+      const settings = await readSettings(id);
       const runtime: RuntimeState = {
         manifest,
         source,
@@ -213,6 +206,7 @@ export const ensureInitialized = async (): Promise<void> => {
         menus: [],
         updateInfo: null,
         loading: false,
+        userSettingsCache: { ...settings },
       };
       runtimes.set(id, runtime);
     }
@@ -268,6 +262,7 @@ export const installFromSource = async (source: string): Promise<PluginInfo> => 
   enabled[manifest.id] = true;
   await writeEnabled(enabled);
   if (existing) unloadPlugin(existing.manifest.id);
+  const settings = await readSettings(manifest.id);
   const runtime: RuntimeState = {
     manifest,
     source,
@@ -279,6 +274,7 @@ export const installFromSource = async (source: string): Promise<PluginInfo> => 
     menus: [],
     updateInfo: null,
     loading: false,
+    userSettingsCache: { ...settings },
   };
   runtimes.set(manifest.id, runtime);
   await start(runtime);
@@ -324,7 +320,7 @@ export const setSetting = async (id: string, key: string, value: unknown): Promi
   if (!item) return;
   const values = await readSettings(id);
   values[key] = sanitizeSetting(item, value);
-  (runtime as RuntimeState & { settingsValues?: Record<string, unknown> }).settingsValues = values;
+  runtime.userSettingsCache = { ...values };
   await writeSettings(id, values);
   deliverSettingsUpdate(id, { [key]: values[key] });
   emitStatus(runtime);

@@ -18,7 +18,7 @@ import type {
 } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { NowPlayingApi } from "@shared/types/nowPlaying";
-import type { PluginsApi } from "@shared/types/plugin";
+import type { MusicUrlRes, PluginsApi } from "@shared/types/plugin";
 import type { ApisApi } from "@shared/types/apis";
 import type { LyricsApi } from "@shared/types/lyrics";
 import type { DownloadApi } from "@shared/types/download";
@@ -394,7 +394,7 @@ const plugins: PluginsApi = {
   resolveUrl: async (args) => {
     await ensureInitialized();
     const { ACTION_TIMEOUTS } = await import("@shared/defaults/plugin-api");
-    return callAction(
+    const result = await callAction<MusicUrlRes>(
       args.pluginId,
       "musicUrl",
       {
@@ -404,6 +404,10 @@ const plugins: PluginsApi = {
       },
       ACTION_TIMEOUTS.musicUrl,
     );
+    if (!result || typeof result.url !== "string" || !result.url) {
+      throw new Error("plugin returned invalid URL");
+    }
+    return result;
   },
   invokeMenu: async (args) => {
     try {
