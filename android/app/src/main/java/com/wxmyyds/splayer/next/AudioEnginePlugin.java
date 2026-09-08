@@ -305,8 +305,9 @@ public class AudioEnginePlugin extends Plugin {
             for (int i = 0; i < numBands; i++) {
                 try {
                     double gain = gains.getDouble(i);
-                    int clamped = Math.max(min, Math.min(max, (int) (gain * 100)));
-                    short level = (short) clamped;
+                    int minVal = min & 0xFFFF;
+                    int maxVal = max & 0xFFFF;
+                    short level = (short) Math.max(minVal, Math.min(maxVal, (int) (gain * 100)));
                     equalizer.setBandLevel(i, level);
                     equalizer.setBandLevel(i, level);
                 } catch (Exception ignored) {}
