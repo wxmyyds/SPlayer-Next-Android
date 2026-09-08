@@ -554,7 +554,12 @@ public class AudioEnginePlugin extends Plugin {
         if (noisyRegistered) return;
         noisyRegistered = true;
         IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        getContext().registerReceiver(noisyReceiver, filter);
+        Context appContext = getContext().getApplicationContext();
+        if (Build.VERSION.SDK_INT >= 33) {
+            appContext.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            appContext.registerReceiver(noisyReceiver, filter);
+        }
     }
 
     private void emitEvent(String type, JSObject data) {
@@ -581,7 +586,7 @@ public class AudioEnginePlugin extends Plugin {
         releaseVisualizer();
         mainHandler.removeCallbacksAndMessages(null);
         try {
-            getContext().unregisterReceiver(noisyReceiver);
+            getContext().getApplicationContext().unregisterReceiver(noisyReceiver);
         } catch (Exception ignored) {
         }
         super.handleOnDestroy();
