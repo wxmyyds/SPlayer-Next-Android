@@ -205,51 +205,59 @@ public class AudioEnginePlugin extends Plugin {
         }
 
         MediaItem mediaItem = MediaItem.fromUri(source);
-        player.setMediaItem(mediaItem);
-        player.prepare();
-
-        if (autoPlay) {
-            player.play();
-        }
-
-        JSObject ret = new JSObject();
-        ret.put("duration", player.getDuration() > 0 ? player.getDuration() : 0);
-        call.resolve(ret);
+        mainHandler.post(() -> {
+            player.setMediaItem(mediaItem);
+            player.prepare();
+            if (autoPlay) player.play();
+            JSObject ret = new JSObject();
+            ret.put("duration", player.getDuration() > 0 ? player.getDuration() : 0);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void play(PluginCall call) {
-        player.play();
-        call.resolve();
+        mainHandler.post(() -> {
+            player.play();
+            call.resolve();
+        });
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
-        player.pause();
-        call.resolve();
+        mainHandler.post(() -> {
+            player.pause();
+            call.resolve();
+        });
     }
 
     @PluginMethod
     public void stop(PluginCall call) {
-        player.stop();
-        player.clearMediaItems();
-        audioManager.abandonAudioFocus(audioFocusListener);
-        call.resolve();
+        mainHandler.post(() -> {
+            player.stop();
+            player.clearMediaItems();
+            audioManager.abandonAudioFocus(audioFocusListener);
+            call.resolve();
+        });
     }
 
     @PluginMethod
     public void seek(PluginCall call) {
         long position = call.getLong("position", 0L);
-        player.seekTo(position);
-        call.resolve();
+        mainHandler.post(() -> {
+            player.seekTo(position);
+            call.resolve();
+        });
     }
 
     @PluginMethod
     public void setVolume(PluginCall call) {
         float vol = call.getFloat("volume", 1.0f);
         volume = Math.max(0, Math.min(1, vol));
-        player.setVolume(volume);
-        call.resolve();
+        mainHandler.post(() -> {
+            player.setVolume(volume);
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -257,8 +265,10 @@ public class AudioEnginePlugin extends Plugin {
         float s = call.getFloat("speed", 1.0f);
         speed = Math.max(0.5f, Math.min(2.0f, s));
         float pitch = pitchSync ? 1.0f : speed;
-        player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
-        call.resolve();
+        mainHandler.post(() -> {
+            player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -271,8 +281,10 @@ public class AudioEnginePlugin extends Plugin {
     public void setPitchSync(PluginCall call) {
         pitchSync = call.getBoolean("enabled", true);
         float pitch = pitchSync ? 1.0f : speed;
-        player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
-        call.resolve();
+        mainHandler.post(() -> {
+            player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -284,35 +296,35 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void setEqualizerEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
-        if (equalizer != null) {
-            equalizer.setEnabled(enabled);
-        }
-        call.resolve();
+        mainHandler.post(() -> {
+            if (equalizer != null) {
+                equalizer.setEnabled(enabled);
+            }
+            call.resolve();
+        });
     }
 
     @PluginMethod
     public void setEqualizerBands(PluginCall call) {
-        if (equalizer == null) {
-            call.resolve();
-            return;
-        }
         JSONArray gains = call.getArray("bands");
-        if (gains != null) {
-            int numBands = equalizer.getNumberOfBands();
-            short[] range = equalizer.getBandLevelRange();
-            short min = range[0];
-            short max = range[1];
-            for (int i = 0; i < numBands; i++) {
-                try {
-                    double gain = gains.getDouble(i);
-                    int minVal = min;
-                    int maxVal = max;
-                    short level = (short) Math.max(minVal, Math.min(maxVal, (int) (gain * 100)));
-                    equalizer.setBandLevel((short) i, level);
-                } catch (Exception ignored) {}
+        mainHandler.post(() -> {
+            if (equalizer != null && gains != null) {
+                int numBands = equalizer.getNumberOfBands();
+                short[] range = equalizer.getBandLevelRange();
+                short min = range[0];
+                short max = range[1];
+                for (int i = 0; i < numBands; i++) {
+                    try {
+                        double gain = gains.getDouble(i);
+                        int minVal = min;
+                        int maxVal = max;
+                        short level = (short) Math.max(minVal, Math.min(maxVal, (int) (gain * 100)));
+                        equalizer.setBandLevel((short) i, level);
+                    } catch (Exception ignored) {}
+                }
             }
-        }
-        call.resolve();
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -324,26 +336,30 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void setNormalizationEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
-        if (loudnessEnhancer != null) {
-            loudnessEnhancer.setEnabled(enabled);
-            if (enabled) {
-                try {
-                    loudnessEnhancer.setTargetGain(0);
-                } catch (Exception ignored) {}
+        mainHandler.post(() -> {
+            if (loudnessEnhancer != null) {
+                loudnessEnhancer.setEnabled(enabled);
+                if (enabled) {
+                    try {
+                        loudnessEnhancer.setTargetGain(0);
+                    } catch (Exception ignored) {}
+                }
             }
-        }
-        call.resolve();
+            call.resolve();
+        });
     }
 
     @PluginMethod
     public void setFftEnabled(PluginCall call) {
         fftEnabled = call.getBoolean("enabled", false);
-        if (fftEnabled && isPlaying) {
-            initVisualizer();
-        } else {
-            releaseVisualizer();
-        }
-        call.resolve();
+        mainHandler.post(() -> {
+            if (fftEnabled && isPlaying) {
+                initVisualizer();
+            } else {
+                releaseVisualizer();
+            }
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -396,8 +412,10 @@ public class AudioEnginePlugin extends Plugin {
         ret.put("duration", currentDuration > 0 ? currentDuration : 0);
         ret.put("volume", volume);
         ret.put("speed", speed);
-        ret.put("isFinished", player != null && player.getPlaybackState() == Player.STATE_ENDED);
-        call.resolve(ret);
+        mainHandler.post(() -> {
+            ret.put("isFinished", player != null && player.getPlaybackState() == Player.STATE_ENDED);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
@@ -494,7 +512,13 @@ public class AudioEnginePlugin extends Plugin {
             new AudioManager.OnAudioFocusChangeListener() {
                 @Override
                 public void onAudioFocusChange(int focusChange) {
-                    switch (focusChange) {
+                    // 焦点回调线程不定（通常主线程），统一投递主线程满足 ExoPlayer 线程约束
+                    mainHandler.post(() -> handleFocusChange(focusChange));
+                }
+            };
+
+    private void handleFocusChange(int focusChange) {
+        switch (focusChange) {
                         case AudioManager.AUDIOFOCUS_GAIN:
                             if (focusLost) {
                                 player.play();
@@ -514,8 +538,7 @@ public class AudioEnginePlugin extends Plugin {
                             player.setVolume(volume * 0.2f);
                             break;
                     }
-                }
-            };
+    }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
@@ -578,6 +601,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @Override
     public void handleOnDestroy() {
+        // 生命周期回调在主线程执行，直接释放满足 ExoPlayer 线程约束
         if (player != null) {
             player.release();
             player = null;
