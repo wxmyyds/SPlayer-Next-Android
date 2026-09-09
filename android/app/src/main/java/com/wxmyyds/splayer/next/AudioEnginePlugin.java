@@ -286,6 +286,8 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void setEqualizerEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
+        // 回写字段：IDLE 释放后 initAudioEffects 重建时回灌，否则开关静默丢失
+        equalizerEnabled = enabled;
         mainHandler.post(() -> {
             if (equalizer != null) {
                 equalizer.setEnabled(enabled);

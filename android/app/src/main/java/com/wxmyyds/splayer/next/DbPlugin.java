@@ -90,12 +90,20 @@ public class DbPlugin extends Plugin {
                     }
                     try {
                         SQLiteStatement stmt = db.compileStatement(sql);
-                        bind(stmt, values);
-                        long rowId = stmt.executeInsert();
-                        JSObject ret = new JSObject();
-                        ret.put("lastInsertRowId", rowId);
-                        ret.put("changes", db.compileStatement("SELECT changes()").simpleQueryForLong());
-                        call.resolve(ret);
+                        try {
+                            bind(stmt, values);
+                            JSObject ret = new JSObject();
+                            if (sql.trim().regionMatches(true, 0, "INSERT", 0, 6)) {
+                                long rowId = stmt.executeInsert();
+                                ret.put("lastInsertRowId", rowId);
+                            } else {
+                                // UPDATE/DELETE：executeInsert 会抛异常，用 executeUpdateDelete 取变更行数
+                                ret.put("changes", stmt.executeUpdateDelete());
+                            }
+                            call.resolve(ret);
+                        } finally {
+                            stmt.close();
+                        }
                     } catch (Exception e) {
                         call.reject(e.getMessage(), e);
                     }

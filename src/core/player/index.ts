@@ -377,6 +377,8 @@ export const reloadCurrentTrack = async (forcePlay?: boolean): Promise<boolean> 
     return false;
   }
   if (!loaded.result.ok) return false;
+  // 加载成功即解除 loading：resume seek 在 trackLoading 下会被静默吞掉导致断点丢失
+  status.trackLoading = false;
   if (resumePosition > 0) await seek(resumePosition);
   if (shouldPlay) await play();
   if (loaded.resolved.cacheRequest) {

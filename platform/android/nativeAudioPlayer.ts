@@ -296,7 +296,9 @@ const wireEngine = (): void => {
     else if (action === "next") emit({ type: "next" });
     else if (action === "prev") emit({ type: "prev" });
     else if (action === "seekto" && typeof data.position === "number") {
+      // 锁屏/通知栏拖动：只 markSeek 不调原生 seek 会让 seeking 永久悬挂、进度冻结
       emit({ type: "seek", data: { position: data.position } });
+      void AudioEngine.seek({ position: data.position }).catch(() => {});
     }
   });
 };

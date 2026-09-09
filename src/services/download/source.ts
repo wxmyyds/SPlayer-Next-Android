@@ -47,19 +47,31 @@ export const resolveDownloadSource = async (
       // 官方失败回落插件
     }
   }
-  // 官方播放直链
+  // 官方播放直链：单源异常只回落插件，不打断整条取链
   if (track.source === "qqmusic") {
-    const resolved = await resolveQQMusicUrl(track, level);
-    if (resolved.available) return { url: resolved.url };
+    try {
+      const resolved = await resolveQQMusicUrl(track, level);
+      if (resolved.available) return { url: resolved.url };
+    } catch {
+      // 回落插件
+    }
   }
   if (track.source === "kugou") {
-    const resolved = await resolveKugouUrl(track, level);
-    if (resolved.available) return { url: resolved.url };
+    try {
+      const resolved = await resolveKugouUrl(track, level);
+      if (resolved.available) return { url: resolved.url };
+    } catch {
+      // 回落插件
+    }
   }
   // 其他播放源走插件
   if (isPlatform(track.source)) {
-    const res = await resolveByPlugin(track, level);
-    if (res.ok && !res.isTrial) return { url: res.url };
+    try {
+      const res = await resolveByPlugin(track, level);
+      if (res.ok && !res.isTrial) return { url: res.url };
+    } catch {
+      return null;
+    }
   }
   return null;
 };

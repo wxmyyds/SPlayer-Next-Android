@@ -22,7 +22,12 @@ const coverSrc = computed(() =>
 
 watchEffect(async () => {
   const id = displayTrack.value?.id;
-  if (!status.isPlayerExpanded || status.trackLoading || !id) return;
+  // 收起即丢原图缓存：整张 base64 常驻低端机有 OOM 风险
+  if (!status.isPlayerExpanded) {
+    hdCache.value = null;
+    return;
+  }
+  if (status.trackLoading || !id) return;
   if (displayTrack.value?.source !== "local" || hdCache.value?.id === id) return;
   const r = await window.api.player.getCoverRaw();
   if (displayTrack.value?.id !== id || !r.success || !r.data) return;

@@ -156,8 +156,9 @@ export const updateQueueItem = (index: number, track: Track, context?: PlaybackC
 /**
  * 移除指定服务器的全部流媒体歌曲
  * @param serverId - 服务器 ID
+ * @param currentTrackId - 调用方传入的当前播放曲目 id，用于重排后修正 playIndex
  */
-export const removeServerTracks = (serverId: string): void => {
+export const removeServerTracks = (serverId: string, currentTrackId?: string): void => {
   const belongsToServer = (track: Track): boolean =>
     track.source === "streaming" && track.serverId === serverId;
   const next = queueEntries.value.filter((item) => !belongsToServer(item.track));
@@ -171,6 +172,14 @@ export const removeServerTracks = (serverId: string): void => {
   queueEntries.value = next;
   originalQueue.value = nextOriginal;
   save();
+  // 过滤后 playIndex 会错位：按曲目 id 重定位，否则播到错歌或越界
+  if (currentTrackId !== undefined) {
+    const index = next.findIndex((item) => item.track.id === currentTrackId);
+    // status 静态引用 queue，动态导入避开循环依赖
+    void import("./status").then(({ useStatusStore }) => {
+      useStatusStore().playIndex = index === -1 ? Math.min(next.length - 1, 0) : index;
+    });
+  }
 };
 
 /**

@@ -8,6 +8,7 @@ import type {
 } from "@shared/types/streaming";
 import * as session from "@/services/streaming/session";
 import { removeServerTracks } from "@/stores/queue";
+import { useStatusStore } from "@/stores/status";
 
 export const useStreamingStore = defineStore("streaming", () => {
   /** 服务器列表 */
@@ -84,7 +85,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const removeServer = async (id: string): Promise<void> => {
     await window.api.streaming.removeServer(id);
-    removeServerTracks(id);
+    removeServerTracks(id, useStatusStore().currentTrack?.id);
     servers.value = servers.value.filter((s) => s.id !== id);
     if (activeServerId.value === id) {
       activeServerId.value = null;

@@ -49,6 +49,7 @@ watch(isPlayerExpanded, (open) => {
   if (isAndroid) void window.api.system.setImmersive(open);
 });
 onBeforeUnmount(() => {
+  document.removeEventListener("fullscreenchange", syncFullscreenState);
   if (isAndroid) void window.api.system.setImmersive(false);
 });
 
@@ -217,6 +218,11 @@ const toggleFullscreen = (): void => {
   if (isFullscreen.value) document.documentElement.requestFullscreen?.().catch(() => {});
   else document.exitFullscreen?.().catch(() => {});
 };
+// Esc/手势等外部退出全屏时同步图标状态
+const syncFullscreenState = (): void => {
+  isFullscreen.value = document.fullscreenElement != null;
+};
+onMounted(() => document.addEventListener("fullscreenchange", syncFullscreenState));
 
 const canDownload = computed(
   () =>

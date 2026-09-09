@@ -58,6 +58,11 @@ watch(
     // Android 抽屉：路由切换后自动收起
     if (isAndroid) status.sidebarDrawerOpen = false;
     if (oldPath && mainContainerRef.value) {
+      // 无界增长：含 query 的 fullPath 长期切换会吃掉内存，按 KeepAlive 上限量级截尾
+      if (mainScrollMap.size >= 30) {
+        const oldest = mainScrollMap.keys().next();
+        if (!oldest.done) mainScrollMap.delete(oldest.value);
+      }
       mainScrollMap.set(oldPath, mainContainerRef.value.scrollTop);
     }
   },

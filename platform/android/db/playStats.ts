@@ -117,21 +117,40 @@ export const getStatsSummary = async (): Promise<PlayStatsSummary> => {
       "SELECT DISTINCT date(started_at / 1000, 'unixepoch', 'localtime') AS day FROM play_history ORDER BY day DESC",
     );
 
-    return {
-      todayListenedMs: await scalar(listenedSince, dayStart),
-      weekListenedMs: await scalar(listenedSince, weekStart),
-      lastWeekListenedMs: await scalar(
+    // 8 个独立标量查询并行跨桥，串行在低端机上是秒级
+    const [
+      todayListenedMs,
+      weekListenedMs,
+      lastWeekListenedMs,
+      totalListenedMs,
+      weekPlayCount,
+      totalPlayCount,
+      weekFavoriteAdds,
+    ] = await Promise.all([
+      scalar(listenedSince, dayStart),
+      scalar(listenedSince, weekStart),
+      scalar(
         "SELECT COALESCE(SUM(listened_ms), 0) AS value FROM play_history WHERE started_at >= ? AND started_at < ?",
         lastWeekStart,
         weekStart,
       ),
-      totalListenedMs: await scalar(listenedSince, 0),
-      weekPlayCount: await scalar(playCountSince, weekStart),
-      totalPlayCount: await scalar(playCountSince, 0),
-      weekFavoriteAdds: await scalar(
+      scalar(listenedSince, 0),
+      scalar(playCountSince, weekStart),
+      scalar(playCountSince, 0),
+      scalar(
         "SELECT COUNT(*) AS value FROM favorite_history WHERE action = 'add' AND at >= ?",
         weekStart,
       ),
+    ]);
+
+    return {
+      todayListenedMs,
+      weekListenedMs,
+      lastWeekListenedMs,
+      totalListenedMs,
+      weekPlayCount,
+      totalPlayCount,
+      weekFavoriteAdds,
       streakDays: computeStreak(dayRows.map((row) => row.day)),
     };
   } catch (error) {

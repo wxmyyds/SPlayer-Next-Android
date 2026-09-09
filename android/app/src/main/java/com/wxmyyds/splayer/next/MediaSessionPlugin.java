@@ -54,6 +54,8 @@ public class MediaSessionPlugin extends Plugin {
     private static MediaSessionPlugin sInstance;
 
     private final java.util.concurrent.ExecutorService artLoader = Executors.newSingleThreadExecutor();
+    /** 封面抓取共享客户端（连接池复用，随进程释放） */
+    private static final OkHttpClient ART_HTTP = new OkHttpClient();
     private PluginCall pendingUpdate;
     private Bitmap lastArt;
     /** 上次渲染通知的签名：曲目/播放态/封面变化才重建通知（见 publishState） */
@@ -122,6 +124,7 @@ public class MediaSessionPlugin extends Plugin {
     @PluginMethod
     public void updateState(PluginCall call) {
         if (Build.VERSION.SDK_INT >= 33
+                && getActivity() != null
                 && getActivity().checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
             // 权限弹窗期间的新推送会覆盖旧 pending 调用，先 resolve 旧的避免桥上悬挂
@@ -328,9 +331,9 @@ public class MediaSessionPlugin extends Plugin {
 
     private Bitmap fetchBitmap(String url) {
         try {
-            OkHttpClient client = new OkHttpClient();
+            // 封面抓取复用全局连接池：逐张 new OkHttpClient 会泄漏连接池与派发线程
             Request request = new Request.Builder().url(url).build();
-            try (Response response = client.newCall(request).execute()) {
+            try (Response response = ART_HTTP.newCall(request).execute()) {
                 if (!response.isSuccessful() || response.body() == null) return null;
                 byte[] bytes = response.body().bytes();
                 if (bytes.length > 4 * 1024 * 1024) return null;

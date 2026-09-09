@@ -79,7 +79,10 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
         status.position = playback.setCurrentTime(event.data.position);
       }
       status.duration = event.data.duration;
-      status.volume = event.data.volume;
+      // playingChanged 快照常不带音量：undefined 会覆盖用户音量导致滑杆错乱
+      if (event.data.volume != null) {
+        status.volume = event.data.volume;
+      }
       if (event.data.speed != null) {
         status.speed = event.data.speed;
         playback.setSpeed(event.data.speed);

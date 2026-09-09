@@ -102,7 +102,11 @@ export const captureMicrophone = async (
     stop: async () => {
       if (signal?.aborted || closed) return new Float32Array(0);
       node.port.postMessage({ type: "flush" });
-      await new Promise<void>((resolve) => flushWaiters.push(resolve));
+      // worklet 失联也不悬挂：超时返回已采分片，避免麦克风常亮
+      await Promise.race([
+        new Promise<void>((resolve) => flushWaiters.push(resolve)),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]);
       const merged = new Float32Array(total);
       let offset = 0;
       for (const chunk of chunks) {

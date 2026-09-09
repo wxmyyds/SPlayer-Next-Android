@@ -157,7 +157,8 @@ export const deletePlaylist = async (id: string): Promise<void> => {
  * @param trackIds 歌曲 ID
  * @returns 实际新增数量
  */
-export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise<number> => {
+export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise<number> =>
+  withPlaylistLock(id, async () => {
   const playlist = (await getPlaylists()).find((item) => item.id === id);
   if (!playlist || playlist.type !== "local") return 0;
   const uniqueIds = [...new Set(trackIds)];
@@ -175,14 +176,12 @@ export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise
     id,
   ]);
   const now = Date.now();
-  // INSERT OR IGNORE 应对重复插入（并发添加同一首歌或用户双击添加）
-  for (const [position, trackId] of validIds.entries()) {
-    await dbRun(
-      `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at)
-       VALUES (?, ?, ?, ?)`,
-      [id, trackId, position, now],
-    );
-  }
+  // 单条批量插入：千首导入只走一次跨桥，避免逐条 IPC
+  await dbRun(
+    `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at)
+     VALUES ${validIds.map(() => "(?,?,?,?)").join(",")}`,
+    validIds.flatMap((trackId, position) => [id, trackId, position, now]),
+  );
   const coverRows = await dbQuery<{ cover: string | null }>(
     `SELECT cover FROM tracks WHERE id IN (${validIds.map(() => "?").join(",")}) AND cover IS NOT NULL LIMIT 1`,
     validIds,
@@ -193,14 +192,15 @@ export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise
     id,
   ]);
   return validIds.length;
-};
+});;
 
 /**
  * 从本地歌单移除歌曲
  * @param id 歌单 ID
  * @param trackIds 歌曲 ID
  */
-export const removePlaylistTracks = async (id: string, trackIds: string[]): Promise<number> => {
+export const removePlaylistTracks = async (id: string, trackIds: string[]): Promise<number> =>
+  withPlaylistLock(id, async () => {
   const playlist = (await getPlaylists()).find((item) => item.id === id);
   if (!playlist || playlist.type !== "local") return 0;
   const ids = [...new Set(trackIds)];
@@ -215,19 +215,35 @@ export const removePlaylistTracks = async (id: string, trackIds: string[]): Prom
     "SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position",
     [id],
   );
-  for (const [position, item] of remaining.entries()) {
-    await dbRun("UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?", [
-      position,
-      id,
-      item.track_id,
-    ]);
+  // 单条 CASE 更新重排 position，避免逐条跨桥
+  if (remaining.length > 0) {
+    await dbRun(
+      `UPDATE playlist_tracks SET position = CASE track_id ${remaining.map(() => "WHEN ? THEN ?").join(" ")} END WHERE playlist_id = ?`,
+      [...remaining.flatMap((item, position) => [item.track_id, position]), id],
+    );
   }
   await dbRun(
     "UPDATE playlists SET cover = CASE WHEN ? = 0 THEN NULL ELSE cover END, updated_at = ? WHERE id = ?",
     [remaining.length, Date.now(), id],
   );
   return removed;
-};
+});
+
+/** 按歌单串行的写锁：async 交错会让两次添加读到同一 existing、position 重叠 */
+const playlistWriteLocks = new Map<string, Promise<void>>();
+const withPlaylistLock = <T>(id: string, task: () => Promise<T>): Promise<T> => {
+  const prev = playlistWriteLocks.get(id) ?? Promise.resolve();
+  const current = prev.then(task);
+  const settled: Promise<void> = current.then(
+    () => undefined,
+    () => undefined,
+  );
+  playlistWriteLocks.set(id, settled);
+  void settled.finally(() => {
+    if (playlistWriteLocks.get(id) === settled) playlistWriteLocks.delete(id);
+  });
+  return current;
+};;
 
 /**
  * 导入旧版 renderer 本地歌单

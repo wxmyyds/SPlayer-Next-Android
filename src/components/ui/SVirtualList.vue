@@ -198,6 +198,8 @@ const debouncedMeasure = useDebounceFn(measureItemHeights, 50);
 
 let rafId: number | null = null;
 let pendingScrollTarget: HTMLElement | null = null;
+/** 触底触发武装位：离开阈值区才重新武装 */
+let bottomArmed = true;
 
 const processScroll = (): void => {
   rafId = null;
@@ -207,7 +209,13 @@ const processScroll = (): void => {
   scrollTop.value = st;
   calculateVisibleRange(st);
   if (scrollHeight - st - clientHeight < 50) {
-    emit("reachBottom");
+    // 触底停留时每次滚动都 emit：没离开阈值区只触发一次，省掉重复分页
+    if (bottomArmed) {
+      bottomArmed = false;
+      emit("reachBottom");
+    }
+  } else {
+    bottomArmed = true;
   }
 };
 

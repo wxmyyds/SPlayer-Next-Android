@@ -316,8 +316,9 @@ export const createRequest = async (
       answer.status = 200;
     }
   } catch {
-    answer.body = { code: res.status, msg: "parse failed" };
-    answer.status = res.status;
+    // 解密/解析失败按网关错误抛出：按 200 返回会把坏响应体当成功缓存并污染下游
+    answer.body = { code: 502, msg: "parse failed" };
+    answer.status = 502;
   }
 
   answer.status = answer.status > 100 && answer.status < 600 ? answer.status : 400;

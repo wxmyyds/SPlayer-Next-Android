@@ -33,6 +33,16 @@ interface TrackRow {
   scanned_at: number;
 }
 
+/** 脏数据只丢单字段：整单抛错会导致歌单详情打不开 */
+const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 /** 将数据库行解析为 Track（与上游一致） */
 const rowToTrack = (row: TrackRow): Track => {
   const quality: AudioQuality | undefined =
@@ -56,8 +66,8 @@ const rowToTrack = (row: TrackRow): Track => {
     cueEndMs: row.cue_end_ms ?? undefined,
     title: row.title,
     track: row.track ?? undefined,
-    artists: JSON.parse(row.artists) as Artist[],
-    album: row.album ? (JSON.parse(row.album) as Album) : undefined,
+    artists: parseJsonField<Artist[]>(row.artists, []),
+    album: row.album ? parseJsonField<Album | undefined>(row.album, undefined) : undefined,
     duration: row.duration,
     cover: row.cover ?? undefined,
     fileSize: row.file_size ?? undefined,
