@@ -39,6 +39,20 @@ public class AudioEnginePlugin extends Plugin {
     private static final String TAG = "AudioEngine";
     private static final int FFT_BINS = 128;
 
+    /**
+     * 读取数值参数：Capacitor 类型化取值器（getLong/getFloat）是盲目强转，
+     * 桥接过来的 JS 数字落在 Integer/Double 上会抛 CCE 并静默返回默认值（seek 变 0 的根因）
+     */
+    private static long optLong(PluginCall call, String key, long def) {
+        Object v = call.getData().opt(key);
+        return v instanceof Number ? ((Number) v).longValue() : def;
+    }
+
+    private static float optFloat(PluginCall call, String key, float def) {
+        Object v = call.getData().opt(key);
+        return v instanceof Number ? ((Number) v).floatValue() : def;
+    }
+
     private static AudioEnginePlugin sInstance;
     private ExoPlayer player;
     private Handler mainHandler;
@@ -196,7 +210,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void seek(PluginCall call) {
-        long position = call.getLong("position", 0L);
+        long position = optLong(call, "position", 0L);
         mainHandler.post(() -> {
             // 歌曲播完停在末尾后拖动：ExoPlayer 不会自动恢复播放，主动续播
             boolean wasEnded = player.getPlaybackState() == Player.STATE_ENDED;
@@ -209,7 +223,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setVolume(PluginCall call) {
-        float vol = call.getFloat("volume", 1.0f);
+        float vol = optFloat(call, "volume", 1.0f);
         volume = Math.max(0, Math.min(1, vol));
         mainHandler.post(() -> {
             player.setVolume(volume);
@@ -219,7 +233,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setSpeed(PluginCall call) {
-        float s = call.getFloat("speed", 1.0f);
+        float s = optFloat(call, "speed", 1.0f);
         speed = Math.max(0.5f, Math.min(2.0f, s));
         applyPlaybackParameters();
         call.resolve();
@@ -247,7 +261,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setFadeDuration(PluginCall call) {
-        fadeMs = call.getInt("duration", 200);
+        fadeMs = (int) optLong(call, "duration", 200L);
         call.resolve();
     }
 
