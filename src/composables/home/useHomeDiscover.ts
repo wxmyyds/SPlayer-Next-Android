@@ -66,21 +66,29 @@ export const useHomeDiscover = () => {
     newAlbums.value = data.albums;
   };
 
-  /** 拉取首页推荐内容 */
+  /** 拉取首页推荐内容：首屏三区先出，雷达延后后台补齐 */
   const load = async (): Promise<void> => {
     const loggedIn = user.isLoggedIn;
     if (cache && cache.loggedIn === loggedIn && Date.now() - cache.at < CACHE_TTL) {
       apply(cache);
       return;
     }
-    const [recommend, radar, artistList, albums] = await Promise.all([
+    const [recommend, artistList, albums] = await Promise.all([
       safe("recommend playlists", fetchRecommendPlaylists(loggedIn)),
-      loggedIn ? safe("radar playlists", fetchRadarPlaylists()) : Promise.resolve<CoverItem[]>([]),
       safe("artists", fetchArtists()),
       safe("new albums", fetchNewAlbums()),
     ]);
-    cache = { at: Date.now(), loggedIn, recommend, radar, artists: artistList, albums };
+    cache = { at: Date.now(), loggedIn, recommend, radar: [], artists: artistList, albums };
     apply(cache);
+    // 雷达在首屏下方：7 个歌单详情并发解析是 MB 级主线程开销，
+    // 等主区块渲染完再后台拉，登录态变化则丢弃迟到结果
+    if (loggedIn) {
+      void safe("radar playlists", fetchRadarPlaylists()).then((radar) => {
+        if (user.isLoggedIn !== loggedIn || !cache) return;
+        cache = { ...cache, radar };
+        radarPlaylists.value = radar;
+      });
+    }
   };
 
   // 登录态变化

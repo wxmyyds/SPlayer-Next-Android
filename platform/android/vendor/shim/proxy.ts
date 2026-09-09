@@ -157,15 +157,18 @@ export const fetchWithProxy = async (
       // 假 gzip：保持原字节
     }
   }
-  const textCache = new TextDecoder().decode(bytes.slice().buffer as ArrayBuffer);
-  const owned = Uint8Array.from(bytes);
+  // 大响应（雷达歌单详情可达 MB 级）懒解码：b64ToBytes 已返回独占精确缓冲，
+  // text/json 按需解码一次，避免首屏并发时的全量拷贝阻塞主线程
+  const payload = bytes;
+  let textCache: string | undefined;
+  const textOf = (): string => (textCache ??= new TextDecoder().decode(payload));
   return {
     ok: res.status >= 200 && res.status < 300,
     status: res.status,
     url: res.url,
     headers: makeHeaders(res.headers, res.setCookies),
-    arrayBuffer: async () => owned.buffer as ArrayBuffer,
-    text: async () => textCache,
-    json: async () => JSON.parse(textCache) as unknown,
+    arrayBuffer: async () => payload.buffer as ArrayBuffer,
+    text: async () => textOf(),
+    json: async () => JSON.parse(textOf()) as unknown,
   };
 };
