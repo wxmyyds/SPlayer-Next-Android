@@ -17,12 +17,18 @@ import { installAndroidBridge } from "@android/bridge";
 
 installAndroidBridge();
 
-// 未捕获的 Promise 异常记栈（压缩包定位用：截前 1500 字符即最内层调用）
+// 未捕获的 Promise 异常记栈（压缩包定位用）：保留头部 3 帧与尾部 25 帧，
+// 无限递归时头部全是调度器自调用，真正的循环体在尾部
 globalThis.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
   const reason = event.reason as { stack?: unknown } | null | undefined;
   const stack =
     reason && typeof reason.stack === "string" ? reason.stack : String(reason);
-  console.error(`[unhandled] ${stack.slice(0, 1500)}`);
+  const lines = stack.split("\n");
+  const brief =
+    lines.length > 30
+      ? [...lines.slice(0, 3), "...", ...lines.slice(-25)].join("\n")
+      : stack;
+  console.error(`[unhandled] ${brief.slice(0, 2500)}`);
 });
 
 const pinia = createPinia();

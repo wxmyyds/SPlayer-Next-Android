@@ -127,6 +127,7 @@ export const resolveByPlugin = async (
     },
   };
   for (const plugin of candidates) {
+    const attemptStart = Date.now();
     try {
       const res = await window.api.plugins.resolveUrl({
         pluginId: plugin.manifest.id,
@@ -134,6 +135,10 @@ export const resolveByPlugin = async (
         quality,
         musicInfo,
       });
+      const attemptMs = Date.now() - attemptStart;
+      if (attemptMs > 1500) {
+        console.warn(`[resolve-timing] 插件 ${plugin.manifest.id} 解析耗时 ${attemptMs}ms`);
+      }
       if (res?.url) {
         return {
           ok: true,
@@ -296,7 +301,15 @@ export const resolveTrackSource = async (
   // 在线源（netease / qqmusic / kugou）
   if (isOnlinePlatform(track.source)) {
     try {
+      const resolveStart = Date.now();
       const resolved = await resolveOnlineUrl(track, songLevel, options);
+      const resolveMs = Date.now() - resolveStart;
+      if (resolveMs > 1500) {
+        console.warn(
+          `[resolve-timing] "${track.title}" 解析耗时 ${resolveMs}ms` +
+            `(来源:${resolved.ok ? resolved.provider : "失败"})`,
+        );
+      }
       if (!resolved.ok) {
         reportLoadError(resolved.errorCode, options.silent);
         return null;

@@ -140,8 +140,10 @@ public class MediaSessionPlugin extends Plugin {
             pendingUpdate = null;
             doUpdate(pending);
         } else {
+            // 用户拒绝后不再打扰：直接 resolve，通知栏缺失属于可接受降级，
+            // 若 reject 会导致 JS 侧每 200ms 一次未捕获异常刷屏
             pendingUpdate = null;
-            call.reject("notification permission denied");
+            call.resolve();
         }
     }
 
