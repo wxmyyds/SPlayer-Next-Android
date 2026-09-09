@@ -51,14 +51,14 @@ public class NativeHttpPlugin extends Plugin {
         @Override public void dnsEnd(Call call, String domainName, java.util.List<java.net.InetAddress> inetAddressList) {
             slow("dns", now() - dnsStart);
         }
-        @Override public void connectStart(Call call, java.net.InetSocketAddress inetSocketAddress, okhttp3.Protocol proxy) {
+        @Override public void connectStart(Call call, java.net.InetSocketAddress inetSocketAddress, java.net.Proxy proxy) {
             connectStart = now();
         }
         @Override public void secureConnectStart(Call call) { secureStart = now(); }
         @Override public void secureConnectEnd(Call call, Handshake handshake) {
             slow("tls", now() - secureStart);
         }
-        @Override public void connectEnd(Call call, java.net.InetSocketAddress inetSocketAddress, okhttp3.Protocol proxy, okhttp3.Protocol protocol) {
+        @Override public void connectEnd(Call call, java.net.InetSocketAddress inetSocketAddress, java.net.Proxy proxy, okhttp3.Protocol protocol) {
             slow("connect", now() - connectStart);
         }
         private void slow(String phase, long ms) {
