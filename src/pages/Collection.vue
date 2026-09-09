@@ -41,17 +41,37 @@ const error = ref("");
 /** 取消当次加载 */
 let loadAbort: AbortController | null = null;
 
-/** 折叠状态 */
+/** 折叠状态（位移走满后收起高度，见 FADE_DISTANCE） */
 const collapsed = ref(false);
+/** 列表滚动距离：连续驱动头部视差位移与透明度 */
+const scrollTop = ref(0);
+/** 消隐行程（px）：0→满程内容由实变虚并上浮，满程后收起高度 */
+const FADE_DISTANCE = 120;
+/** 消隐进度 0~1 */
+const fadeProgress = computed(() => Math.min(Math.max(scrollTop.value / FADE_DISTANCE, 0), 1));
+/** 简介+元信息块：随滑动上浮消隐 */
+const fadeStyle = computed(() => ({
+  opacity: String(1 - fadeProgress.value),
+  transform: `translateY(${-14 * fadeProgress.value}px)`,
+}));
+/** 标题行：幅度更小的视差，与内容块形成错层 */
+const titleDriftStyle = computed(() => ({
+  transform: `translateY(${-6 * fadeProgress.value}px)`,
+}));
+/** 封面：轻微上浮视差，收缩仍走原有 transition */
+const coverDriftStyle = computed(() => ({
+  transform: `translateY(${-4 * fadeProgress.value}px)`,
+}));
 /** 简介弹窗 */
 const descriptionOpen = ref(false);
 
-/** 滚动超过阈值折叠 */
+/** 滚动连续驱动消隐进度；走满行程后折叠收起，平滑回滚 */
 const handleListScroll = (event: Event) => {
-  const scrollTop = (event.target as HTMLElement).scrollTop;
-  if (!collapsed.value && scrollTop > 10) {
+  const top = (event.target as HTMLElement).scrollTop;
+  scrollTop.value = top;
+  if (!collapsed.value && top > FADE_DISTANCE) {
     collapsed.value = true;
-  } else if (collapsed.value && scrollTop === 0) {
+  } else if (collapsed.value && top <= FADE_DISTANCE) {
     collapsed.value = false;
   }
 };
@@ -59,6 +79,7 @@ const handleListScroll = (event: Event) => {
 /** 加载数据 */
 const loadCollection = async (): Promise<void> => {
   collapsed.value = false;
+  scrollTop.value = 0;
   loadAbort?.abort();
   const myAbort = new AbortController();
   loadAbort = myAbort;
@@ -318,6 +339,7 @@ onBeforeUnmount(() => {
           :alt="collection.title"
           class="rounded-xl shrink-0 transition-[width,height] duration-300"
           :class="collapsed ? 'size-20' : isAndroid ? 'size-24' : 'size-40'"
+          :style="coverDriftStyle"
         />
         <!-- 信息 -->
         <div class="flex-1 flex flex-col min-w-0">
@@ -325,7 +347,7 @@ onBeforeUnmount(() => {
             class="flex flex-col transition-[gap] duration-300"
             :class="collapsed ? 'gap-0.5' : isAndroid ? 'gap-1' : 'gap-2'"
           >
-            <div class="flex min-w-0 items-center gap-3">
+            <div class="flex min-w-0 items-center gap-3" :style="titleDriftStyle">
               <h1
                 class="min-w-0 flex-1 font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
                 :class="collapsed ? 'text-xl' : isAndroid ? 'text-xl' : 'text-3xl'"
@@ -359,7 +381,7 @@ onBeforeUnmount(() => {
               class="grid transition-[grid-template-rows,opacity] duration-300"
               :class="collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
             >
-              <div class="overflow-hidden flex flex-col gap-2">
+              <div class="overflow-hidden flex flex-col gap-2" :style="fadeStyle">
                 <!-- 简介 -->
                 <SButton
                   v-if="collection.description"
