@@ -132,6 +132,36 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
 };
 
 /**
+ * 预取指定曲目的音源/歌词/封面
+ * 收藏页数据一到即在后台静默解析第一首，点播放时 loadTrack 直接消费，
+ * 把 VIP 兜底解析的几秒等待从点播时刻挪到浏览歌单时
+ * @param track - 要预取的曲目
+ */
+export const preloadTrack = (track: Track): void => {
+  if (!useSettingsStore().player.preloadNextTrack) return;
+  const contextKey = buildContextKey(track);
+  if (cachedResult?.contextKey === contextKey || currentContextKey === contextKey) return;
+  const token = ++currentToken;
+  currentContextKey = contextKey;
+  cachedResult = null;
+  preloadLyricForTrack(track);
+  void (async () => {
+    try {
+      if (track.cover) void preloadCover(track.cover);
+      const source = await resolveTrackSource(track, {
+        silent: true,
+        streamingPlaySessionId: crypto.randomUUID(),
+      });
+      if (token !== currentToken) return;
+      cachedResult = { trackId: track.id, source, contextKey };
+    } catch (err) {
+      console.warn("[nextPreload] Preload track failed silently:", err);
+      if (token === currentToken) invalidateNextTrackPreload();
+    }
+  })();
+};
+
+/**
  * 调度下一首预载任务
  */
 export const scheduleNextTrackPreload = (): void => {
