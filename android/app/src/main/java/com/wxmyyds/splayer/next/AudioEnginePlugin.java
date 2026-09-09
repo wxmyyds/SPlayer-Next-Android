@@ -121,11 +121,16 @@ public class AudioEnginePlugin extends Plugin {
                 isPlaying = playing;
                 if (playing) {
                     if (fftEnabled) initVisualizer();
-                    emitEvent("play", null);
                 } else {
                     releaseVisualizer();
-                    emitEvent("pause", null);
                 }
+                // 引擎播放态以状态快照推送（对齐官方 SPlayer-for-Android）：
+                // BUFFERING 等瞬态不产生 play/pause 指令事件，避免 JS 回射形成暂停/续播振荡环
+                JSObject data = new JSObject();
+                data.put("playing", playing);
+                data.put("volume", volume);
+                data.put("speed", speed);
+                emitEvent("playingChanged", data);
             }
 
             @Override

@@ -159,6 +159,22 @@ const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | nu
         type: "position",
         data: { position: payload.data.position, duration: payload.data.duration },
       };
+    case "playingChanged": {
+      // 引擎播放态快照：走 status 事件只同步 UI，不回射 play/pause 指令，
+      // 否则 BUFFERING 瞬态会与原生互相拨动形成暂停/续播振荡环
+      const playing = !!payload.data?.playing;
+      return {
+        type: "status",
+        data: {
+          state: playing ? "playing" : "paused",
+          position: lastPositionMs,
+          duration: lastDurationMs,
+          volume: payload.data?.volume,
+          speed: payload.data?.speed,
+          isFinished: false,
+        },
+      };
+    }
     case "ready":
     case "buffering":
       return null;
@@ -199,6 +215,15 @@ const wireEngine = (): void => {
       case "sourceError":
         enginePlaying = false;
         publishState("paused", lastPositionMs, lastDurationMs);
+        break;
+      case "playingChanged":
+        // 引擎播放态快照：同步媒体卡片，不回射指令（振荡环防护见 mapNativeEvent）
+        enginePlaying = !!data.data?.playing;
+        publishState(
+          enginePlaying ? "playing" : "paused",
+          lastPositionMs,
+          lastDurationMs,
+        );
         break;
     }
     const event = mapNativeEvent(data);
