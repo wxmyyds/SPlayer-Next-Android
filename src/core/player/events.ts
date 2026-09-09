@@ -5,6 +5,7 @@ import { useStatusStore } from "@/stores/status";
 import { useFavorite } from "@/composables/useFavorite";
 import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
+import { scheduleNextTrackPreload } from "@/services/nextTrackPreloader";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
 import * as playStats from "./stats";
@@ -68,11 +69,7 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       // 歌曲加载中或 loading 事件不更新 UI，保持当前封面/进度/播放状态平滑过渡；
       // stop 后不覆盖 stopped 状态——原生 onIsPlayingChanged(false) 延迟到达时
       // 会误伤 Play 按钮应有的 reload 路径
-      if (
-        event.data.state === "loading" ||
-        status.trackLoading ||
-        status.state === "stopped"
-      )
+      if (event.data.state === "loading" || status.trackLoading || status.state === "stopped")
         break;
       status.state = event.data.state;
       // seek 期间不从 status 事件更新 position，避免回跳；position 更新统一由 position 事件负责
@@ -128,13 +125,14 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
     case "nativeAdvance": {
       // 原生自治切歌（锁屏 WebView 冻结时）：同步队列指针与界面；
       // 找不到对应曲目（队列已变动）时回落常规 ended 流程
-      const synced = await syncFromNativeAdvance(
-        event.data.trackId,
-        event.data.playIndex,
-      );
+      const synced = await syncFromNativeAdvance(event.data.trackId, event.data.playIndex);
       if (!synced) await finishCurrentTrack();
       break;
     }
+    case "requestNextUrl":
+      // 原生补窗请求（对齐 SFA）：AUTO 过渡后/播放中窗口耗尽时，预载并重挂下一首
+      scheduleNextTrackPreload();
+      break;
     case "sourceError":
       // 音源失效（网络中断 / URL 过期）
       await recoverFromSourceFailure();

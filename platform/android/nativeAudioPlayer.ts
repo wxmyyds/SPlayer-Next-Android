@@ -93,6 +93,7 @@ interface AudioEnginePlugin {
   getStatus(): Promise<PlayerStatus>;
   setPauseOnDeviceSwitch(options: { enabled: boolean }): Promise<void>;
   extendSwitchWindow(): Promise<void>;
+  setRepeatMode(options: { mode: string }): Promise<void>;
   setNextResource(options: {
     trackId: string;
     playIndex: number;
@@ -221,6 +222,9 @@ const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | nu
           playIndex: Number(payload.data?.playIndex ?? -1),
         },
       };
+    case "requestNextUrl":
+      // 原生补窗请求（对齐 SFA requestUrls）：AUTO 过渡后/窗口耗尽时提醒 JS 预载并重挂下一首
+      return { type: "requestNextUrl" };
     case "sourceError":
       return { type: "sourceError" };
     case "position":
@@ -287,11 +291,7 @@ const wireEngine = (): void => {
         if (data.data.position > lastPositionMs) noteStallProgress();
         lastPositionMs = data.data.position;
         lastDurationMs = data.data.duration;
-        publishState(
-          enginePlaying ? "playing" : "paused",
-          lastPositionMs,
-          lastDurationMs,
-        );
+        publishState(enginePlaying ? "playing" : "paused", lastPositionMs, lastDurationMs);
         break;
       case "sourceError":
         enginePlaying = false;
@@ -303,11 +303,7 @@ const wireEngine = (): void => {
         enginePlaying = !!data.data?.playing;
         if (enginePlaying) ensureStallWatchdog();
         else stopStallWatchdog();
-        publishState(
-          enginePlaying ? "playing" : "paused",
-          lastPositionMs,
-          lastDurationMs,
-        );
+        publishState(enginePlaying ? "playing" : "paused", lastPositionMs, lastDurationMs);
         break;
     }
     const event = mapNativeEvent(data);
@@ -341,16 +337,15 @@ export const nativeAudioPlayer: PlayerApi = {
         source,
         autoPlay: options?.autoPlay,
         title: options?.meta?.title,
-        artist: options?.meta?.artists?.map((a) => a.name).filter(Boolean).join(" / "),
+        artist: options?.meta?.artists
+          ?.map((a) => a.name)
+          .filter(Boolean)
+          .join(" / "),
         album: options?.meta?.album?.name,
         artwork: options?.meta?.coverOriginal ?? options?.meta?.cover,
       });
       lastDurationMs = result.duration;
-      publishState(
-        options?.autoPlay ? "playing" : "paused",
-        0,
-        result.duration,
-      );
+      publishState(options?.autoPlay ? "playing" : "paused", 0, result.duration);
       return ok({
         detail: {
           quality: { sampleRate: 0, channels: 0, bitsPerSample: 0, bitRate: 0, codec: "" },
@@ -433,6 +428,14 @@ export const nativeAudioPlayer: PlayerApi = {
   clearNextResource: async () => {
     try {
       await AudioEngine.clearNextResource();
+      return ok();
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  },
+  setRepeatMode: async (options) => {
+    try {
+      await AudioEngine.setRepeatMode(options);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));

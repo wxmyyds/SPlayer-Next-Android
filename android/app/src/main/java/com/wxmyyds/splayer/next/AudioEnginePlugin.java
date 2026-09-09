@@ -20,6 +20,9 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.json.JSONArray;
 
 /**
@@ -80,12 +83,14 @@ public class AudioEnginePlugin extends Plugin {
     /** 曲目结束后保护切歌决策链的短时锁（ENDED 后 WAKE_MODE_LOCAL 已释放， */
     // JS 决策 + load 新曲的间隙 CPU 掉睡会卡住切歌；新曲开播即交还，30s 兜底超时）
     private android.os.PowerManager.WakeLock switchWakeLock;
-    /** JS 预登记的下一首资源：ENDED 后原生自治切歌，不依赖 WebView 存活（参照 SFA 队列） */
-    private volatile JSObject pendingNext;
-
-    /** ENDED 后无槽位时的补切重试：预载可能在锁屏后迟到，每 2s 补试一次，槽位就绪即开播 */
-    private static final int LATE_ADVANCE_MAX_TRIES = 30;
-    private int lateAdvanceTries = 0;
+    /**
+     * 队列化自治切歌（参照 SFA PlaybackQueue）：JS 预解析的下一首以播放列表待播项挂入 ExoPlayer，
+     * 当前曲播放时 ExoPlayer 自动预缓冲下一首字节，ENDED 瞬间零网络零 WebView 依赖直接过渡。
+     * AUTO 过渡后用媒体 ID 反查元数据刷新通知栏并回传 JS 同步。
+     */
+    private final Map<String, JSObject> pendingMeta = new HashMap<>();
+    /** requestNextUrl 补窗节拍计数（200ms/拍，每 75 拍 ≈ 15s 提醒 JS 补挂） */
+    private long nudgeTick = 0;
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
@@ -121,12 +126,10 @@ public class AudioEnginePlugin extends Plugin {
                         emitEvent("ready", null);
                         break;
                     case Player.STATE_ENDED:
+                        // 播放列表尾部真结束（无待播项）：回落 JS 链
                         acquireSwitchWakeLock();
-                        if (!tryNativeAdvance()) {
-                            Log.i(TAG, "ended (native next missing, late-retry armed)");
-                            armLateAdvanceRetry();
-                            emitEvent("ended", null);
-                        }
+                        Log.i(TAG, "ended (playlist end)");
+                        emitEvent("ended", null);
                         break;
                     case Player.STATE_BUFFERING:
                         emitEvent("buffering", null);
@@ -168,6 +171,28 @@ public class AudioEnginePlugin extends Plugin {
             public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason) {
                 currentPosition = newPosition.positionMs;
             }
+
+            @Override
+            public void onMediaItemTransition(androidx.media3.common.MediaItem mediaItem, int reason) {
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || mediaItem == null) return;
+                // 播放列表自动过渡（对齐 SFA 原生自治切歌）：下一首早已预缓冲，
+                // 锁屏/WebView 冻结均不影响；元数据反查后刷新通知并回传 JS 同步
+                Log.i(TAG, "autoTransition mediaId=" + mediaItem.mediaId);
+                JSObject meta = pendingMeta.get(mediaItem.mediaId);
+                if (meta != null) {
+                    MediaSessionPlugin.applyNativeUpdate(
+                            meta.getString("title", ""),
+                            meta.getString("artist", ""),
+                            meta.getString("album", ""),
+                            meta.getString("artwork", ""),
+                            true,
+                            0L,
+                            readLongFrom(meta, "durationMs"));
+                    emitEvent("autoAdvanced", meta);
+                }
+                // 立刻请求 JS 补挂新的下一首（WebView 冻结时事件排队，解锁后即补）
+                emitEvent("requestNextUrl", null);
+            }
         });
         startPositionUpdates();
     }
@@ -176,6 +201,7 @@ public class AudioEnginePlugin extends Plugin {
         mainHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
+                nudgeTick++;
                 if (player != null && isPlaying) {
                     currentPosition = player.getCurrentPosition();
                     currentDuration = player.getDuration();
@@ -183,6 +209,11 @@ public class AudioEnginePlugin extends Plugin {
                     data.put("position", currentPosition);
                     data.put("duration", currentDuration > 0 ? currentDuration : 0);
                     emitEvent("position", data);
+                    // 窗口耗尽预警（对齐 SFA requestUrls）：播放中且无待播项，定期提醒 JS 补挂下一首
+                    if (nudgeTick % 75 == 0
+                            && player.getCurrentMediaItemIndex() >= player.getMediaItemCount() - 1) {
+                        emitEvent("requestNextUrl", null);
+                    }
                 }
                 mainHandler.postDelayed(this, 200);
             }
@@ -199,13 +230,11 @@ public class AudioEnginePlugin extends Plugin {
             return;
         }
 
-        // JS 主动 load 新曲：原生登记的下一首已过时，清除（预载成功后会重新登记）
-        pendingNext = null;
-        lateAdvanceTries = 0;
-        mainHandler.removeCallbacks(lateAdvanceRunnable);
         Log.i(TAG, "load autoPlay=" + autoPlay);
         MediaItem mediaItem = MediaItem.fromUri(source);
         mainHandler.post(() -> {
+            // JS 主动 load 新曲：待播项已过时，清空（预载成功后会重新登记）
+            pendingMeta.clear();
             player.setMediaItem(mediaItem);
             player.prepare();
             if (autoPlay) player.play();
@@ -216,7 +245,8 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     /**
-     * 登记 JS 预解析好的下一首：ENDED 后原生直接开播，WebView 冻结不影响
+     * 登记 JS 预解析好的下一首：以播放列表待播项挂入 ExoPlayer（自动预缓冲），
+     * AUTO 过渡时原生直接开播，不等 WebView（参照 SFA PlaybackQueue）
      * @param call - { trackId, playIndex, source, title, artist, album, artwork, durationMs }
      */
     @PluginMethod
@@ -236,17 +266,55 @@ public class AudioEnginePlugin extends Plugin {
         meta.put("album", call.getString("album", ""));
         meta.put("artwork", call.getString("artwork", ""));
         meta.put("durationMs", readLong(call, "durationMs", 0));
-        pendingNext = meta;
-        Log.i(TAG, "setNext trackId=" + trackId);
-        call.resolve();
+        MediaItem item = new MediaItem.Builder().setMediaId(trackId).setUri(source).build();
+        mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
+            // 幂等重挂：先清掉当前之后的待播项再登记，预载重推不产生重复
+            int current = player.getCurrentMediaItemIndex();
+            if (current >= 0 && player.getMediaItemCount() > current + 1) {
+                player.removeMediaItems(current + 1, player.getMediaItemCount());
+            }
+            androidx.media3.common.MediaItem cur = player.getCurrentMediaItem();
+            if (cur != null) {
+                pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
+            } else {
+                pendingMeta.clear();
+            }
+            pendingMeta.put(trackId, meta);
+            player.addMediaItem(item);
+            Log.i(TAG, "setNext trackId=" + trackId);
+            // ENDED 后迟到补挂：直接切过去开播（对齐 SFA pendingResumeAfterRefill）
+            if (player.getPlaybackState() == Player.STATE_ENDED) {
+                player.seekTo(player.getMediaItemCount() - 1, 0);
+                player.play();
+                Log.i(TAG, "lateRefill -> play " + trackId);
+            }
+            call.resolve();
+        });
     }
 
     /** 清除登记的下一首（队列变化/预载作废时由 JS 调用） */
     @PluginMethod
     public void clearNextResource(PluginCall call) {
-        pendingNext = null;
-        Log.i(TAG, "clearNext");
-        call.resolve();
+        mainHandler.post(() -> {
+            if (player != null) {
+                int current = player.getCurrentMediaItemIndex();
+                if (current >= 0 && player.getMediaItemCount() > current + 1) {
+                    player.removeMediaItems(current + 1, player.getMediaItemCount());
+                }
+                androidx.media3.common.MediaItem cur = player.getCurrentMediaItem();
+                if (cur != null) {
+                    pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
+                } else {
+                    pendingMeta.clear();
+                }
+            }
+            Log.i(TAG, "clearNext");
+            call.resolve();
+        });
     }
 
     /** PluginCall 数字读取：JSON 数值到桥上可能被装箱成 Double，直接 getLong 会抛 ClassCastException */
@@ -260,51 +328,16 @@ public class AudioEnginePlugin extends Plugin {
         return value instanceof Number ? ((Number) value).longValue() : 0L;
     }
 
-    /**
-     * ENDED 后原生自治切歌：有登记资源则直接开播并通知 JS 同步，无则回落 JS 链
-     * @return true = 已自治切歌，调用方不应再 emit ended
-     */
-    private boolean tryNativeAdvance() {
-        JSObject meta = pendingNext;
-        pendingNext = null;
-        if (meta == null) return false;
-        String source = meta.getString("source");
-        if (source == null || source.isEmpty()) return false;
-        Log.i(TAG, "nativeAdvance trackId=" + meta.getString("trackId"));
-        player.setMediaItem(MediaItem.fromUri(source));
-        player.prepare();
-        player.play();
-        // 锁屏下 WebView 冻结，通知栏/MediaSession 由原生直接刷新
-        MediaSessionPlugin.applyNativeUpdate(
-                meta.getString("title", ""),
-                meta.getString("artist", ""),
-                meta.getString("album", ""),
-                meta.getString("artwork", ""),
-                true,
-                0L,
-                readLongFrom(meta, "durationMs"));
-        emitEvent("autoAdvanced", meta);
-        return true;
-    }
-
-    /**
-     * ENDED 后无槽位的补切重试：预载可能因 WebView 冻结/网络慢而迟到，
-     * 每 2s 补试一次；状态离开 ENDED（用户操作/新 load）即放弃
-     */
-    private final Runnable lateAdvanceRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (player == null || player.getPlaybackState() != Player.STATE_ENDED) return;
-            if (tryNativeAdvance()) return;
-            if (++lateAdvanceTries >= LATE_ADVANCE_MAX_TRIES) return;
-            mainHandler.postDelayed(this, 2000L);
-        }
-    };
-
-    private void armLateAdvanceRetry() {
-        lateAdvanceTries = 0;
-        mainHandler.removeCallbacks(lateAdvanceRunnable);
-        mainHandler.postDelayed(lateAdvanceRunnable, 2000L);
+    /** 循环模式：仅单曲循环由 ExoPlayer 原生接管（锁屏下也能无缝重放）；ALL 的回绕由 JS 链处理 */
+    @PluginMethod
+    public void setRepeatMode(PluginCall call) {
+        String mode = call.getString("mode", "none");
+        mainHandler.post(() -> {
+            if (player != null) {
+                player.setRepeatMode("one".equals(mode) ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
+            }
+            call.resolve();
+        });
     }
 
     @PluginMethod

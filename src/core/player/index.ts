@@ -880,6 +880,8 @@ export const setRepeatMode = (mode: RepeatMode): void => {
   const status = useStatusStore();
   if (status.repeatMode === mode) return;
   status.repeatMode = mode;
+  // Android：单曲循环由 ExoPlayer 原生接管（锁屏下无缝重放，不依赖 WebView）
+  void window.api.player.setRepeatMode?.({ mode }).catch(() => {});
   syncPlayMode();
   toast.info(i18n.global.t(`player.repeatMode.${mode}`), { icon: false });
 };
@@ -1180,6 +1182,8 @@ export const initPlayer = async (): Promise<void> => {
   // 下一首预载的监听器
   installNextTrackPreloadWatchers();
   scheduleNextTrackPreload();
+  // 初始同步循环模式到原生（恢复启动不经过 setRepeatMode）
+  void window.api.player.setRepeatMode?.({ mode: status.repeatMode }).catch(() => {});
 };
 
 /** 恢复上次播放状态 */

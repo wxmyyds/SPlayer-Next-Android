@@ -210,6 +210,7 @@ export type PlayerEvent =
   | { type: "seek"; data: { position: number } }
   | { type: "ended" }
   | { type: "nativeAdvance"; data: { trackId: string; playIndex: number } }
+  | { type: "requestNextUrl" }
   | { type: "sourceError" }
   | { type: "play" }
   | { type: "pause" }
@@ -315,4 +316,6 @@ export interface PlayerApi {
   }) => Promise<IpcResponse>;
   /** Android：清除原生登记的下一首资源（队列变化/预载作废时） */
   clearNextResource?: () => Promise<IpcResponse>;
+  /** Android：同步循环模式到原生（单曲循环由 ExoPlayer 原生接管，锁屏下无缝重放） */
+  setRepeatMode?: (options: { mode: string }) => Promise<IpcResponse>;
 }
