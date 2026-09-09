@@ -17,6 +17,14 @@ import { installAndroidBridge } from "@android/bridge";
 
 installAndroidBridge();
 
+// 未捕获的 Promise 异常记栈（压缩包定位用：截前 1500 字符即最内层调用）
+globalThis.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+  const reason = event.reason as { stack?: unknown } | null | undefined;
+  const stack =
+    reason && typeof reason.stack === "string" ? reason.stack : String(reason);
+  console.error(`[unhandled] ${stack.slice(0, 1500)}`);
+});
+
 const pinia = createPinia();
 pinia.use(piniaPersistedstate);
 
