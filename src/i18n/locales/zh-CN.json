@@ -2134,6 +2134,8 @@
     "edit": "编辑{type}",
     "subscribe": "收藏",
     "unsubscribe": "取消收藏",
+    "refresh": "刷新",
+    "openSourcePage": "打开源页面",
     "privacy": {
       "private": "设为私密"
     },

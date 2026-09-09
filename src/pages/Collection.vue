@@ -4,6 +4,7 @@ import type { Collection, CollectionType } from "@/types/collection";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { loadCollection as loadCollectionService } from "@/services/collection";
 import { getCollectionShareUrl } from "@/utils/format/shareUrl";
+import { openExternal } from "@/utils/url";
 import { useCopyText } from "@/composables/useCopyText";
 import { useCollectionSubscribe } from "@/composables/collection/useCollectionSubscribe";
 import { usePlaylistManage } from "@/composables/collection/usePlaylistManage";
@@ -12,6 +13,8 @@ import { formatTime } from "@/utils/time";
 import * as player from "@/core/player";
 import { isAndroid } from "@/utils/platform";
 import IconLucidePencil from "~icons/lucide/pencil";
+import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
+import IconLucideExternalLink from "~icons/lucide/external-link";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideListMusic from "~icons/lucide/list-music";
@@ -127,6 +130,49 @@ const creatorText = computed(() => {
   return artistText.value || collection.value?.creator || "";
 });
 
+/** 可跳转的在线歌手（参考官方 App：专辑/歌单头部歌手可点进歌手页） */
+const artistLinks = computed(() => {
+  const current = collection.value;
+  if (!isAndroid || !current || current.source === "local" || current.source === "streaming")
+    return [];
+  return (current.artists ?? []).filter((a) => a.id && a.name);
+});
+
+/** 跳歌手页 */
+const goArtist = (artistId: string): void => {
+  const current = collection.value;
+  if (!current) return;
+  router.push({ name: "artist", params: { source: current.source, id: artistId } });
+};
+
+/** 官方源页面地址（更多菜单“打开源页面”用） */
+const sourcePageUrl = computed(() => {
+  const current = collection.value;
+  if (!current || (type !== "playlist" && type !== "album")) return "";
+  const id = current.id;
+  if (current.source === "netease")
+    return `https://music.163.com/#/${type}?id=${id}`;
+  if (current.source === "qqmusic")
+    return type === "playlist"
+      ? `https://y.qq.com/n/ryqq/playlist/${id}`
+      : `https://y.qq.com/n/ryqq/albumDetail/${id}`;
+  if (current.source === "kugou")
+    return type === "playlist"
+      ? `https://www.kugou.com/yy/special/single/${id}.html`
+      : `https://www.kugou.com/yy/album/single/${id}.html`;
+  return "";
+});
+
+/** 播放全部按钮：加载中无数据时禁用并显示加载文案 */
+const playAllDisabled = computed(
+  () => (collection.value?.tracks.length ?? 0) === 0,
+);
+const playAllLabel = computed(() =>
+  loading.value && (collection.value?.tracks.length ?? 0) === 0
+    ? t("common.loading")
+    : t("common.playAll"),
+);
+
 /** 更新时间文本 */
 const updateTimeText = computed(() => {
   if (!collection.value?.updateTime) return "";
@@ -176,6 +222,7 @@ const moreMenuItems = computed<DropdownMenuItem[]>(() => {
   const isOnline = source !== "local" && source !== "streaming";
   const isLocal = source === "local";
   const list: DropdownMenuItem[] = [
+    { key: "refresh", label: t("collection.refresh"), icon: IconLucideRefreshCw },
     { key: "batchManage", label: t("songList.batch.manage"), icon: IconLucideListChecks },
     { key: "edit", label: editLabel.value, icon: IconLucidePencil, show: manage.canManage.value },
     {
@@ -207,6 +254,12 @@ const moreMenuItems = computed<DropdownMenuItem[]>(() => {
           icon: markRaw(IconCopy),
           show: isOnline && type !== "cloud",
         },
+        {
+          key: "openSource",
+          label: t("collection.openSourcePage"),
+          icon: markRaw(IconLucideExternalLink),
+          show: sourcePageUrl.value !== "",
+        },
       ],
     },
   ];
@@ -215,6 +268,12 @@ const moreMenuItems = computed<DropdownMenuItem[]>(() => {
 
 const handleMoreMenu = (key: string) => {
   switch (key) {
+    case "refresh":
+      loadCollection();
+      break;
+    case "openSource":
+      openExternal(sourcePageUrl.value);
+      break;
     case "batchManage":
       songListRef.value?.enterBatch();
       break;
@@ -325,9 +384,29 @@ onBeforeUnmount(() => {
                   class="flex items-center gap-3 text-sm leading-none text-on-surface-variant/50"
                   :class="isAndroid && 'flex-wrap gap-y-1'"
                 >
-                  <span v-if="creatorText" class="flex items-center gap-1 min-w-0">
+                  <span v-if="creatorText && !isAndroid" class="flex items-center gap-1 min-w-0">
                     <IconLucideUser class="shrink-0" />
                     <span class="truncate">{{ creatorText }}</span>
+                  </span>
+                  <!-- Android：在线歌手可点跳转（参考官方 App） -->
+                  <span
+                    v-else-if="isAndroid && (artistLinks.length || collection.creator)"
+                    class="flex items-center gap-1 min-w-0"
+                  >
+                    <IconLucideUser class="shrink-0" />
+                    <span class="min-w-0 truncate">
+                      <template v-for="(artist, index) in artistLinks" :key="artist.id">
+                        <span v-if="index > 0" class="text-on-surface-variant/40"> / </span>
+                        <button
+                          type="button"
+                          class="cursor-pointer border-0 bg-transparent p-0 text-left text-inherit active:text-primary"
+                          @click="goArtist(artist.id!)"
+                        >
+                          {{ artist.name }}
+                        </button>
+                      </template>
+                      <span v-if="artistLinks.length === 0">{{ collection.creator }}</span>
+                    </span>
                   </span>
                   <span class="flex items-center gap-1 shrink-0">
                     <IconLucideListMusic class="shrink-0" />
@@ -360,13 +439,13 @@ onBeforeUnmount(() => {
                 variant="secondary"
                 round
                 :size="isAndroid ? 'small' : 'medium'"
-                :disabled="collection.tracks.length === 0"
+                :disabled="playAllDisabled"
                 @click="handlePlayAll"
               >
                 <template #icon>
                   <IconLucidePlay />
                 </template>
-                {{ t("common.playAll") }}
+                {{ playAllLabel }}
               </SButton>
               <SButton
                 v-if="subscribe.available.value"
@@ -427,13 +506,13 @@ onBeforeUnmount(() => {
             variant="secondary"
             round
             size="small"
-            :disabled="collection.tracks.length === 0"
+            :disabled="playAllDisabled"
             @click="handlePlayAll"
           >
             <template #icon>
               <IconLucidePlay />
             </template>
-            {{ t("common.playAll") }}
+            {{ playAllLabel }}
           </SButton>
           <SButton
             v-if="subscribe.available.value"

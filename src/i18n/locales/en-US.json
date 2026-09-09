@@ -2146,6 +2146,8 @@
     "edit": "Edit {type}",
     "subscribe": "Subscribe",
     "unsubscribe": "Unsubscribe",
+    "refresh": "Refresh",
+    "openSourcePage": "Open source page",
     "privacy": {
       "private": "Make private"
     },
