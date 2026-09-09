@@ -163,7 +163,7 @@ const handleQrSuccess = async (): Promise<void> => {
 <template>
   <div class="flex flex-col gap-3">
     <div
-      class="flex items-center justify-between gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5"
+      class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5"
     >
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <span
@@ -205,7 +205,7 @@ const handleQrSuccess = async (): Promise<void> => {
         </div>
       </div>
 
-      <div class="shrink-0 flex items-center gap-2">
+      <div class="shrink-0 flex flex-wrap items-center gap-2 sm:justify-end">
         <template v-if="profile">
           <SButton variant="secondary" size="small" type="error" @click="confirmOpen = true">
             <template #icon>

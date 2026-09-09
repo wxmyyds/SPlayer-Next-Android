@@ -33,7 +33,7 @@ import type { CommentsApi } from "@shared/types/comment";
 import type { AiModelApi } from "@shared/types/ai";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { CjkTransformMode, OpenccApi } from "@shared/types/opencc";
-import { nativeAudioPlayer } from "./nativeAudioPlayer";
+import { nativeAudioPlayer, SystemUi } from "./nativeAudioPlayer";
 import {
   callVendorApi,
   clearVendorSession,
@@ -221,6 +221,8 @@ interface AndroidSystemApi {
   onOpenFiles: (callback: (files: string[]) => void) => () => void;
   consumePendingAudioFiles: () => Promise<string[]>;
   getPathForFile: (file: File) => string;
+  /** Android：全屏沉浸（隐藏状态栏/导航小白条，滑动临时呼出） */
+  setImmersive: (enabled: boolean) => Promise<void>;
 }
 
 const system: AndroidSystemApi = {
@@ -258,6 +260,7 @@ const system: AndroidSystemApi = {
   onOpenFiles: noopUnsubscribe,
   consumePendingAudioFiles: async () => [],
   getPathForFile: (file: File) => file.name,
+  setImmersive: (enabled: boolean) => SystemUi.setImmersive({ enabled }),
 };
 
 const library: LibraryApi = {

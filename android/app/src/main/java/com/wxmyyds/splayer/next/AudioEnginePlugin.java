@@ -75,6 +75,10 @@ public class AudioEnginePlugin extends Plugin {
     private boolean isPlaying = false;
     private long currentPosition = 0;
     private long currentDuration = 0;
+
+    // 曲目结束后保护切歌决策链的短时锁（ENDED 后 WAKE_MODE_LOCAL 已释放，
+    // JS 决策 + load 新曲的间隙 CPU 掉睡会卡住切歌；新曲开播即交还，30s 兜底超时）
+    private android.os.PowerManager.WakeLock switchWakeLock;
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
@@ -95,6 +99,9 @@ public class AudioEnginePlugin extends Plugin {
         player = new ExoPlayer.Builder(getContext())
                 .setAudioAttributes(attrs, true)
                 .setHandleAudioBecomingNoisy(true)
+                // 播放期间持有 partial wake lock：锁屏后 CPU 不休眠，
+                // 否则曲目结束瞬间整条链（ENDED 回调/WebView JS）冻结，无法切歌
+                .setWakeMode(C.WAKE_MODE_LOCAL)
                 .build();
         player.addListener(new Player.Listener() {
             @Override
@@ -107,6 +114,7 @@ public class AudioEnginePlugin extends Plugin {
                         emitEvent("ready", null);
                         break;
                     case Player.STATE_ENDED:
+                        acquireSwitchWakeLock();
                         emitEvent("ended", null);
                         break;
                     case Player.STATE_BUFFERING:
@@ -123,6 +131,7 @@ public class AudioEnginePlugin extends Plugin {
                 Log.i(TAG, "playing=" + playing);
                 isPlaying = playing;
                 if (playing) {
+                    releaseSwitchWakeLock();
                     if (fftEnabled) initVisualizer();
                 } else {
                     releaseVisualizer();
@@ -510,8 +519,29 @@ public class AudioEnginePlugin extends Plugin {
         }
         releaseAudioEffects();
         releaseVisualizer();
+        releaseSwitchWakeLock();
         mainHandler.removeCallbacksAndMessages(null);
         super.handleOnDestroy();
+    }
+
+    /** 曲目结束后短期持锁，保护 JS 切歌决策链不被 CPU 休眠打断 */
+    private void acquireSwitchWakeLock() {
+        try {
+            if (switchWakeLock == null) {
+                android.os.PowerManager pm =
+                        (android.os.PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+                switchWakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "SPlayer::TrackSwitch");
+                switchWakeLock.setReferenceCounted(false);
+            }
+            if (!switchWakeLock.isHeld()) switchWakeLock.acquire(30_000L);
+        } catch (Exception e) {
+            Log.w(TAG, "switch wake lock acquire failed", e);
+        }
+    }
+
+    /** 新曲开播后交还给 WAKE_MODE_LOCAL */
+    private void releaseSwitchWakeLock() {
+        if (switchWakeLock != null && switchWakeLock.isHeld()) switchWakeLock.release();
     }
 
     static AudioEnginePlugin getInstance() {

@@ -44,6 +44,14 @@ const {
 const { timeDisplay, toggleTimeFormat } = useTimeFormat();
 const { snapToNearestLyric } = useProgressLyric();
 
+// Android：全屏播放页沉浸（隐藏状态栏/导航小白条，滑动临时呼出）
+watch(isPlayerExpanded, (open) => {
+  if (isAndroid) void window.api.system.setImmersive(open);
+});
+onBeforeUnmount(() => {
+  if (isAndroid) void window.api.system.setImmersive(false);
+});
+
 const lyricRef = ref<InstanceType<typeof Lyrics> | InstanceType<typeof AMLLLyrics>>();
 const lyricMounted = ref(false);
 const initialLyricTimeMs = ref(0);

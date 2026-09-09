@@ -19,9 +19,16 @@ import IconLucidePlus from "~icons/lucide/plus";
 import IconLucideChevronDown from "~icons/lucide/chevron-down";
 import IconLucideEyeOff from "~icons/lucide/eye-off";
 import IconLucideSettings2 from "~icons/lucide/settings-2";
+import IconLucideAudioWaveform from "~icons/lucide/audio-waveform";
 import IconSpHeartMode from "~icons/sp/heart-mode";
 import SButton from "@/components/ui/SButton.vue";
 import SPopselect from "@/components/ui/SPopselect.vue";
+import RecognitionDialog from "@/components/modals/RecognitionDialog.vue";
+
+/** Android 侧边栏听歌识曲项的 key（非路由，onSelect 拦截后打开识别对话框） */
+const SIDEBAR_RECOGNITION_KEY = "action:recognition";
+/** 听歌识曲对话框 */
+const recognitionOpen = ref(false);
 
 const { t } = useI18n();
 const router = useRouter();
@@ -240,6 +247,15 @@ const menuItems = computed<SMenuItem[]>(() => {
     items.push({ key: "subscribed-group", type: "group", render: renderSubscribedHeader });
     items.push(...subscribedItems.value);
   }
+  // Android：听歌识曲从顶栏迁入侧边栏（非路由项，onSelect 拦截后打开识别对话框）
+  if (isAndroid) {
+    items.push({ key: "divider-recognition", type: "divider" });
+    items.push({
+      key: SIDEBAR_RECOGNITION_KEY,
+      label: t("recognition.entry"),
+      icon: markRaw(IconLucideAudioWaveform),
+    });
+  }
   return items;
 });
 
@@ -302,6 +318,10 @@ const activeKey = computed(() => {
 });
 
 const onSelect = (key: string) => {
+  if (key === SIDEBAR_RECOGNITION_KEY) {
+    recognitionOpen.value = true;
+    return;
+  }
   router.push(key);
 };
 
@@ -376,5 +396,7 @@ onMounted(() => {
       :mode="createMode"
       @created="handleCreated"
     />
+    <!-- Android：侧边栏听歌识曲入口 -->
+    <RecognitionDialog v-if="isAndroid" v-model:open="recognitionOpen" />
   </div>
 </template>

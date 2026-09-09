@@ -12,7 +12,10 @@ defineProps<{ name: string; description?: string; author?: string; clickable?: b
         <span class="truncate text-sm font-medium text-on-surface">{{ name }}</span>
         <slot name="name-suffix" />
       </div>
-      <slot name="title-end" />
+      <!-- 标签组不参与收缩也不折行：窄屏下任由左侧 truncate，避免标签内文字异常换行 -->
+      <div v-if="$slots['title-end']" class="flex items-center gap-1.5 shrink-0">
+        <slot name="title-end" />
+      </div>
     </div>
 
     <!-- 简介 -->

@@ -38,6 +38,20 @@ interface MediaBridgePlugin {
   setPauseOnDeviceSwitch: (options: { enabled: boolean }) => Promise<void>;
 }
 
+/** 系统栏沉浸插件（SystemUiPlugin）：隐藏状态栏/导航小白条 */
+interface SystemUiBridgePlugin {
+  setImmersive: (options: { enabled: boolean }) => Promise<void>;
+}
+
+class SystemUiWeb extends WebPlugin implements SystemUiBridgePlugin {
+  async setImmersive(): Promise<void> {}
+}
+
+/** 供 bridge.ts 的 system.setImmersive 消费 */
+export const SystemUi = registerPlugin<SystemUiBridgePlugin>("SystemUi", {
+  web: () => new SystemUiWeb(),
+});
+
 /** 非原生环境回退：空实现（开发/测试用） */
 class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
   async updateState(): Promise<void> {}

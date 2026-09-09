@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MediaSessionPlugin.class);
         registerPlugin(DbPlugin.class);
         registerPlugin(AudioEnginePlugin.class);
+        registerPlugin(SystemUiPlugin.class);
         super.onCreate(savedInstanceState);
         // 播放地址多为 http（网易 126.net）；主页面跑在 https scheme 下，
         // 默认混合内容策略会拦 http 音频，需与 usesCleartextTraffic 配合放行。

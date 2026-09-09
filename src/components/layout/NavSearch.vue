@@ -293,6 +293,7 @@ onMounted(() => {
       </span>
     </div>
     <SButton
+      v-if="!isAndroid"
       class="app-no-drag shrink-0"
       variant="tertiary"
       circle
