@@ -127,25 +127,43 @@ const lyricPaneRef = useTemplateRef("lyricPaneRef");
 const goStackPage = (page: number): void => {
   stackPage.value = Math.max(0, Math.min(1, page));
 };
+/** 如果拖拽起点在按钮/滑杆/输入框上，记录该目标（翻页时不跟手 + 不翻页） */
+const swipeIgnoredTarget = ref<HTMLElement | null>(null);
+const isIgnoredSwipeTarget = (e: TouchEvent): boolean =>
+  !!(
+    (e.target as HTMLElement | null)?.closest?.("button, input, a, [role='slider']")
+  );
+
 /** 第一页整页左滑（按钮/滑杆/输入框上起始的手势留给控件） */
 const page1Swipe = useSwipe(page1Ref, {
   threshold: 40,
+  onSwipeStart: (e) => {
+    swipeIgnoredTarget.value = isIgnoredSwipeTarget(e) ? (e.target as HTMLElement) : null;
+  },
   onSwipeEnd: (e, direction) => {
     if (!stackedLayout.value || direction !== "left") return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest?.("button, input, a, [role='slider']")) return;
+    if (swipeIgnoredTarget.value) return;
     goStackPage(1);
   },
 });
 const lyricSwipe = useSwipe(lyricPaneRef, {
   threshold: 40,
+  onSwipeStart: (e) => {
+    swipeIgnoredTarget.value = isIgnoredSwipeTarget(e) ? (e.target as HTMLElement) : null;
+  },
   onSwipeEnd: (_e, direction) => {
+    if (swipeIgnoredTarget.value) return;
     if (stackedLayout.value && direction === "right") goStackPage(0);
   },
 });
-const isStackSwiping = computed(() => page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value);
-/** 手指跟随偏移（px，左滑为负），竖滑不跟 */
+const isStackSwiping = computed(
+  () =>
+    (page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value) &&
+    swipeIgnoredTarget.value == null,
+);
+/** 手指跟随偏移（px，左滑为负），竖滑不跟；控件上起始的手势不跟手 */
 const stackDragPx = computed(() => {
+  if (swipeIgnoredTarget.value) return 0;
   const active = page1Swipe.isSwiping.value
     ? page1Swipe
     : lyricSwipe.isSwiping.value

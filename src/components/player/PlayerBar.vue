@@ -153,6 +153,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #title-trailing>
           <SButton
             class="-my-1"
+            data-no-swipe
             type="primary"
             variant="text"
             circle

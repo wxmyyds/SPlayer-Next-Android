@@ -181,10 +181,11 @@ export const useMediaStore = defineStore("media", () => {
     lyricLoading.value = false;
     syncToMain();
 
-    // 应用 OpenCC 简繁转换
+    // 应用 OpenCC 简繁转换（token 无条件自增：切歌/清空路径下有旧歌转换在途也不写回新歌）
+    transformToken++;
     const cjkMode = settings.lyric.cjkTransform;
     if (hasContent && cjkMode && cjkMode !== "none") {
-      const token = ++transformToken;
+      const token = transformToken;
       applyLyricCjkTransform(nextLines, cjkMode).then((transformed) => {
         if (token !== transformToken) return;
         parsedLyric.value = transformed;
@@ -203,6 +204,8 @@ export const useMediaStore = defineStore("media", () => {
 
   /** 清空所有状态 */
   const clear = (): void => {
+    // 任何清空都让在途的简繁转换作废（token 自增）  
+    transformToken++;
     track.value = null;
     playbackContext.value = undefined;
     detail.value = null;

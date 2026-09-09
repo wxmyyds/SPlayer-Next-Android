@@ -520,6 +520,11 @@ export const seek = async (posMs: number): Promise<void> => {
   if (result.success) {
     status.position = posMs;
     playback.setCurrentTime(posMs);
+  } else {
+    // seek 失败：解除冻结、清空 seekTarget，否则所有 position 事件被永久丢弃
+    seekTarget = null;
+    playback.setSeeking(false);
+    console.error("[player] seek 失败", result.error);
   }
 };
 
