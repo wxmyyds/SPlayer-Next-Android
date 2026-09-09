@@ -105,9 +105,15 @@ CREATE INDEX IF NOT EXISTS idx_playlist_tracks_position ON playlist_tracks(playl
 
 let schemaReady: Promise<void> | null = null;
 
-/** 确保建表（进程内一次） */
+/** 确保建表（进程内一次；首次失败不缓存，每次重试重新建表） */
 const ensureSchema = (): Promise<void> => {
-  schemaReady ??= SPlayerDb.exec({ sql: SCHEMA });
+  if (!schemaReady) {
+    const p = SPlayerDb.exec({ sql: SCHEMA }).catch((e) => {
+      schemaReady = null;
+      throw e;
+    });
+    schemaReady = p;
+  }
   return schemaReady;
 };
 

@@ -175,9 +175,10 @@ export const addPlaylistTracks = async (id: string, trackIds: string[]): Promise
     id,
   ]);
   const now = Date.now();
+  // INSERT OR IGNORE 应对重复插入（并发添加同一首歌或用户双击添加）
   for (const [position, trackId] of validIds.entries()) {
     await dbRun(
-      `INSERT INTO playlist_tracks (playlist_id, track_id, position, added_at)
+      `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at)
        VALUES (?, ?, ?, ?)`,
       [id, trackId, position, now],
     );

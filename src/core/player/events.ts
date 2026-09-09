@@ -64,8 +64,15 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
   const status = useStatusStore();
   switch (event.type) {
     case "status":
-      // 歌曲加载中或 loading 事件不更新 UI，保持当前封面/进度/播放状态平滑过渡
-      if (event.data.state === "loading" || status.trackLoading) break;
+      // 歌曲加载中或 loading 事件不更新 UI，保持当前封面/进度/播放状态平滑过渡；
+      // stop 后不覆盖 stopped 状态——原生 onIsPlayingChanged(false) 延迟到达时
+      // 会误伤 Play 按钮应有的 reload 路径
+      if (
+        event.data.state === "loading" ||
+        status.trackLoading ||
+        status.state === "stopped"
+      )
+        break;
       status.state = event.data.state;
       // seek 期间不从 status 事件更新 position，避免回跳；position 更新统一由 position 事件负责
       if (!isSeeking()) {
@@ -110,7 +117,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       playback.setFftFrame(event.data.ldata, event.data.rdata);
       break;
     case "ended": {
-      await finishCurrentTrack();
+      // 加载新曲期间收到的 ended 来自旧引擎（切歌瞬间的 ended 竞态），丢弃
+      if (!status.trackLoading) await finishCurrentTrack();
       break;
     }
     case "sourceError":

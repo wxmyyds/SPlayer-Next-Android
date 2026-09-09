@@ -163,6 +163,7 @@ const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | nu
       // 引擎播放态快照：走 status 事件只同步 UI，不回射 play/pause 指令，
       // 否则 BUFFERING 瞬态会与原生互相拨动形成暂停/续播振荡环
       const playing = !!payload.data?.playing;
+      enginePlaying = playing;
       return {
         type: "status",
         data: {
@@ -178,6 +179,11 @@ const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | nu
     case "ready":
     case "buffering":
       return null;
+    case "fftData":
+      return {
+        type: "fftData",
+        data: { ldata: payload.data?.ldata ?? [], rdata: payload.data?.rdata ?? [] },
+      };
     default:
       return null;
   }
@@ -272,6 +278,7 @@ export const nativeAudioPlayer: PlayerApi = {
         mediaInfo: { duration: result.duration },
       });
     } catch (err) {
+      enginePlaying = false;
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
@@ -306,6 +313,10 @@ export const nativeAudioPlayer: PlayerApi = {
   seek: async (positionMs: number) => {
     try {
       await AudioEngine.seek({ position: positionMs });
+      // 同步位置快照：原生仅在播放中推 position 事件，暂停时 seek 后必须本地更新
+      // 否则媒体卡片/状态快照停留在旧位置
+      lastPositionMs = positionMs;
+      publishState(enginePlaying ? "playing" : "paused", lastPositionMs, lastDurationMs);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));
