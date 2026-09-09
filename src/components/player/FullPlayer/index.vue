@@ -133,10 +133,20 @@ const landscapeLayout = computed(() => isAndroid && !isPortrait.value);
 const stackPage = ref(0);
 const page1Ref = useTemplateRef("page1Ref");
 const lyricPaneRef = useTemplateRef("lyricPaneRef");
+const commentPaneRef = useTemplateRef("commentPaneRef");
+/** 在线曲目才有评论页（本地无评论源） */
+const hasCommentPage = computed(() => stackedLayout.value && hasTrack.value && displayTrack.value?.source !== "local");
+/** 堆叠页数：封面恒在，歌词/评论按需；页序 [封面 | 歌词 | 评论]，评论在最右（左滑进入） */
+const stackTotal = computed(() => 2 + (hasCommentPage.value ? 1 : 0));
 const goStackPage = (page: number): void => {
-  // 无歌词时右页是空的：禁止滑入，否则空白页无内容可滑回
-  if (page > 0 && !hasLyric.value && !media.lyricLoading) return;
-  stackPage.value = Math.max(0, Math.min(1, page));
+  let target = page;
+  // 无歌词时歌词页为空：从封面左滑直接跳到评论页
+  if (target === 1 && !hasLyric.value && !media.lyricLoading && hasCommentPage.value) {
+    target = 2;
+  }
+  // 无歌词且无评论页：禁止滑入空白页
+  if (target === 1 && !hasLyric.value && !media.lyricLoading) return;
+  stackPage.value = Math.max(0, Math.min(stackTotal.value - 1, target));
 };
 /** 如果拖拽起点在按钮/滑杆/输入框上，记录该目标（翻页时不跟手 + 不翻页） */
 const swipeIgnoredTarget = ref<HTMLElement | null>(null);
@@ -145,16 +155,22 @@ const isIgnoredSwipeTarget = (e: TouchEvent): boolean =>
     (e.target as HTMLElement | null)?.closest?.("button, input, a, [role='slider']")
   );
 
-/** 第一页整页左滑（按钮/滑杆/输入框上起始的手势留给控件） */
+/** 各页统一翻页：左滑进下一页，右滑回上一页（按钮/滑杆/输入框上起始的手势留给控件） */
+const onPaneSwipeEnd = (e: TouchEvent, direction: string): void => {
+  if (!stackedLayout.value) return;
+  if (direction !== "left" && direction !== "right") return;
+  if (swipeIgnoredTarget.value) return;
+  goStackPage(stackPage.value + (direction === "left" ? 1 : -1));
+};
+
+/** 第一页整页左滑 */
 const page1Swipe = useSwipe(page1Ref, {
   threshold: 40,
   onSwipeStart: (e) => {
     swipeIgnoredTarget.value = isIgnoredSwipeTarget(e) ? (e.target as HTMLElement) : null;
   },
   onSwipeEnd: (e, direction) => {
-    if (!stackedLayout.value || direction !== "left") return;
-    if (swipeIgnoredTarget.value) return;
-    goStackPage(1);
+    onPaneSwipeEnd(e, direction);
   },
 });
 const lyricSwipe = useSwipe(lyricPaneRef, {
@@ -162,39 +178,57 @@ const lyricSwipe = useSwipe(lyricPaneRef, {
   onSwipeStart: (e) => {
     swipeIgnoredTarget.value = isIgnoredSwipeTarget(e) ? (e.target as HTMLElement) : null;
   },
-  onSwipeEnd: (_e, direction) => {
-    if (swipeIgnoredTarget.value) return;
-    if (stackedLayout.value && direction === "right") goStackPage(0);
+  onSwipeEnd: (e, direction) => {
+    onPaneSwipeEnd(e, direction);
+  },
+});
+const commentSwipe = useSwipe(commentPaneRef, {
+  threshold: 40,
+  onSwipeStart: (e) => {
+    swipeIgnoredTarget.value = isIgnoredSwipeTarget(e) ? (e.target as HTMLElement) : null;
+  },
+  onSwipeEnd: (e, direction) => {
+    onPaneSwipeEnd(e, direction);
   },
 });
 const isStackSwiping = computed(
   () =>
-    (page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value) &&
+    (page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value || commentSwipe.isSwiping.value) &&
     swipeIgnoredTarget.value == null,
 );
 /** 手指跟随偏移（px，左滑为负），竖滑不跟；控件上起始的手势不跟手 */
 const stackDragPx = computed(() => {
   if (swipeIgnoredTarget.value) return 0;
-  // 无歌词时不跟手（与 goStackPage 的禁滑一致）
-  if (!hasLyric.value && !media.lyricLoading) return 0;
+  // 无歌词且无评论页时不跟手（歌词页是空占位）
+  if (!hasLyric.value && !media.lyricLoading && !hasCommentPage.value) return 0;
   const active = page1Swipe.isSwiping.value
     ? page1Swipe
     : lyricSwipe.isSwiping.value
       ? lyricSwipe
-      : null;
+      : commentSwipe.isSwiping.value
+        ? commentSwipe
+        : null;
   if (!active) return 0;
   const len = active.lengthX.value;
   if (active.lengthY.value >= len) return 0;
   const dir = active.direction.value;
   const px = dir === "left" ? -len : dir === "right" ? len : 0;
-  return stackPage.value === 0 ? Math.min(0, px) : Math.max(0, px);
+  // 首末页边界阻尼：越界方向钳位
+  if (stackPage.value === 0) return Math.min(0, px);
+  if (stackPage.value === stackTotal.value - 1) return Math.max(0, px);
+  return px;
 });
 const stackTrackTransform = computed(
-  () => `translateX(calc(${-stackPage.value * 50}% + ${stackDragPx.value}px))`,
+  () =>
+    `translateX(calc(${(-stackPage.value * 100) / stackTotal.value}% + ${stackDragPx.value}px))`,
 );
 const stackTrackTransition = computed(() =>
   isStackSwiping.value ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
 );
+// 页数变化（切歌到本地/无歌词）时钳位当前页，避免停在空白页
+watch(stackTotal, (value) => {
+  if (stackPage.value > value - 1) stackPage.value = value - 1;
+});
 
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
   await player.seek(timeMs);
@@ -276,10 +310,6 @@ const toggleLyric = (): void => {
   } else {
     showLyric.value = !showLyric.value;
   }
-};
-
-const showComments = (): void => {
-  if (displayTrack.value) status.showComments(displayTrack.value);
 };
 </script>
 
@@ -410,7 +440,7 @@ const showComments = (): void => {
             :style="
               stackedLayout
                 ? {
-                    width: '200%',
+                    width: `${stackTotal * 100}%`,
                     transform: stackTrackTransform,
                     transition: stackTrackTransition,
                   }
@@ -421,9 +451,10 @@ const showComments = (): void => {
               ref="page1Ref"
               :class="
                 stackedLayout
-                  ? 'w-1/2 h-full shrink-0 flex flex-col overflow-y-auto pb-10'
+                  ? 'h-full shrink-0 flex flex-col overflow-y-auto pb-10'
                   : 'contents'
               "
+              :style="stackedLayout ? { width: `${100 / stackTotal}%` } : undefined"
             >
               <!-- 左侧（堆叠时为顶部封面区，参照 SPlayer-for-Android：72vw 大图+信息组在下） -->
               <div
@@ -608,7 +639,8 @@ const showComments = (): void => {
               </template>
             </div>
             <div
-              :class="stackedLayout ? 'w-1/2 h-full shrink-0 flex flex-col min-h-0' : 'contents'"
+              :class="stackedLayout ? 'h-full shrink-0 flex flex-col min-h-0' : 'contents'"
+              :style="stackedLayout ? { width: `${100 / stackTotal}%` } : undefined"
             >
               <!-- 右侧（堆叠时为歌词频谱页，文档流占满剩余高度） -->
               <div
@@ -729,6 +761,15 @@ const showComments = (): void => {
                 <LyricActions v-if="!landscapeLayout" :immersive="immersive" />
               </div>
             </div>
+            <!-- 评论页（堆叠第 3 页，左滑进入；UI 对照 SFA PlayerComment） -->
+            <div
+              v-if="stackedLayout && hasCommentPage"
+              ref="commentPaneRef"
+              class="h-full shrink-0 flex flex-col min-h-0"
+              :style="{ width: `${100 / stackTotal}%` }"
+            >
+              <PlayerCommentPage :active="stackPage === 2" @back="goStackPage(1)" />
+            </div>
           </div>
           <!-- 堆叠分页点（逐像素对照参照：白 20% 圆点 / 主色 16px 胶囊，内联样式锁定） -->
           <div
@@ -746,7 +787,7 @@ const showComments = (): void => {
             }"
           >
             <button
-              v-for="i in 2"
+              v-for="i in stackTotal"
               :key="i"
               :aria-label="`page ${i}`"
               :style="
@@ -830,16 +871,6 @@ const showComments = (): void => {
                   <template #off><IconFavoriteOutline /></template>
                 </SIconSwap>
               </template>
-            </SButton>
-            <SButton
-              type="cover"
-              variant="ghost"
-              size="large"
-              circle
-              :disabled="!hasTrack"
-              @click="showComments"
-            >
-              <template #icon><IconLucideMessageCircle /></template>
             </SButton>
             <SButton
               v-if="displayTrack?.source === 'local' || displayTrack?.source === 'netease'"
