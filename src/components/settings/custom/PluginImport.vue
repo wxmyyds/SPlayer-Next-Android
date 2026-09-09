@@ -63,7 +63,7 @@ const handleImportFromUrl = async (): Promise<void> => {
     </SAlert>
 
     <div
-      class="flex items-center justify-between gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5"
+      class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5"
     >
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 text-base">
@@ -79,7 +79,7 @@ const handleImportFromUrl = async (): Promise<void> => {
           </a>
         </div>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex flex-wrap items-center gap-2 sm:justify-end">
         <SButton variant="secondary" size="small" :loading="importing" @click="handleImportLocal">
           <template #icon>
             <IconLucideFolderOpen class="size-4" />

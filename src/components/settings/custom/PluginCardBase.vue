@@ -7,13 +7,13 @@ defineProps<{ name: string; description?: string; author?: string; clickable?: b
     class="flex flex-col h-full gap-1.5 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-3.5 py-3"
     :class="clickable && 'cursor-pointer transition-colors hover:border-primary/30'"
   >
-    <div class="flex items-center gap-1.5">
+    <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
       <div class="flex items-center gap-1 min-w-0 flex-1">
-        <span class="truncate text-sm font-medium text-on-surface">{{ name }}</span>
+        <span class="min-w-0 truncate text-sm font-medium text-on-surface">{{ name }}</span>
         <slot name="name-suffix" />
       </div>
-      <!-- 标签组不参与收缩也不折行：窄屏下任由左侧 truncate，避免标签内文字异常换行 -->
-      <div v-if="$slots['title-end']" class="flex items-center gap-1.5 shrink-0">
+      <!-- 标签组不参与收缩（整体 shrink-0）但允许组内折行：窄屏下整齐落到名字下方而非挤压 -->
+      <div v-if="$slots['title-end']" class="flex flex-wrap items-center gap-1.5 shrink-0">
         <slot name="title-end" />
       </div>
     </div>
