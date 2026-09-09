@@ -337,9 +337,6 @@ public class AudioEnginePlugin extends Plugin {
             call.resolve();
         });
     }
-            call.resolve();
-        });
-    }
 
     @PluginMethod
     public void setFftEnabled(PluginCall call) {
