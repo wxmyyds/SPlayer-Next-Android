@@ -187,7 +187,14 @@ const pickBestCandidate = <E>(
   return best?.extra ?? null;
 };
 
-const findMatch = async (
+/**
+ * 定位插件音源中与 Track 匹配的曲目（评论等扩展动作共用）
+ * @param pluginId - 插件 id
+ * @param source - 插件音源短名（wy/tx/kg…）
+ * @param track - 当前曲目
+ * @returns 匹配的曲目信息，未命中返回 null
+ */
+export const findMatch = async (
   pluginId: string,
   source: string,
   track: Track,
@@ -200,8 +207,7 @@ const findMatch = async (
       album: track.album?.name,
       durationMs: track.duration,
     };
-  }
-  const keyword =
+  }  const keyword =
     `${track.title} ${track.artists?.map((artist) => artist.name).join(" ") ?? ""}`.trim();
   if (!keyword) return null;
   const result = await callAction<{ list?: MusicSearchCandidate[] }>(

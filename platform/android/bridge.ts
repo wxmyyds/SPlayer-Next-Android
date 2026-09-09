@@ -29,7 +29,7 @@ import type { LastfmApi } from "@shared/types/lastfm";
 import type { StatsApi } from "@shared/types/stats";
 import type { UpdateApi } from "@shared/types/update";
 import type { CloudUploadApi } from "@shared/types/cloudUpload";
-import type { CommentsApi } from "@shared/types/comment";
+import type { CommentsApi, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
 import type { AiModelApi } from "@shared/types/ai";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { CjkTransformMode, OpenccApi } from "@shared/types/opencc";
@@ -78,6 +78,7 @@ import {
   uninstall,
 } from "./plugins/registry";
 import { fetchMarket, fetchScript } from "./plugins/net";
+import { getCommentSources, getMusicComments } from "./services/comments";
 import { Converter } from "opencc-js";
 import type { ConverterFunction } from "opencc-js";
 
@@ -615,7 +616,16 @@ const api = {
     convertBatch: async (texts: string[], mode: CjkTransformMode) =>
       Promise.all(texts.map((text) => openccConvert(text, mode))),
   } satisfies OpenccApi,
-  comments: emptyApi<CommentsApi>(),
+  comments: {
+    sources: () => getCommentSources(),
+    get: async (args: MusicCommentQuery): Promise<MusicCommentResponse> => {
+      try {
+        return { ok: true, data: await getMusicComments(args) };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  } satisfies CommentsApi,
   download: emptyApi<DownloadApi>(),
   theme: { pickBackgroundImage: async () => null, clearBackgroundImages: async () => {} },
   cache,

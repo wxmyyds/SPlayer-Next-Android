@@ -12,6 +12,7 @@ import { loginQrCheck, loginQrKey } from "./login_qr";
 import songUrl from "./song_url";
 import search from "./search";
 import lyric from "./lyric";
+import comment from "./comment";
 
 export const modules: Record<string, KGModule> = {
   user_detail: userDetail,
@@ -20,4 +21,5 @@ export const modules: Record<string, KGModule> = {
   song_url: songUrl,
   search,
   lyric,
+  comment,
 };

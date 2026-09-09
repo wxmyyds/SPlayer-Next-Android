@@ -21,6 +21,8 @@ import search_suggest from "./search_suggest";
 import search_hot_detail from "./search_hot_detail";
 import lyric from "./lyric";
 import lyric_new from "./lyric_new";
+import comment_hot from "./comment_hot";
+import comment_music from "./comment_music";
 import album from "./album";
 import album_new from "./album_new";
 import artists from "./artists";
@@ -52,6 +54,8 @@ export const modules: Record<string, NeteaseModule> = {
   search_hot_detail,
   lyric,
   lyric_new,
+  comment_hot,
+  comment_music,
   album,
   album_new,
   artists,
