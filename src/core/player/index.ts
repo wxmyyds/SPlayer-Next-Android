@@ -812,6 +812,60 @@ export const onQueueEnded = async (): Promise<void> => {
   status.position = status.duration;
 };
 
+/**
+ * 原生自治切歌后的 JS 同步（参照 SFA applyNativeTrackChanged）
+ * 锁屏下 WebView 冻结，原生已直接开播下一首；解锁后事件回流，
+ * 这里只对齐队列指针与界面状态，不重新解析、不重新 load。
+ * @param trackId - 原生开播的曲目 id
+ * @param playIndex - 原生回传的队列索引（登记时的快照）
+ * @returns true = 已同步；false = 队列已变动找不到曲目，调用方应回落 ended 流程
+ */
+export const syncFromNativeAdvance = async (
+  trackId: string,
+  playIndex: number,
+): Promise<boolean> => {
+  if (!trackId) return false;
+  const status = useStatusStore();
+  let index = -1;
+  if (
+    Number.isInteger(playIndex) &&
+    playIndex >= 0 &&
+    queue.getQueueItem(playIndex)?.track.id === trackId
+  ) {
+    index = playIndex;
+  } else {
+    index = queue.queue.value.findIndex((item) => item.id === trackId);
+  }
+  if (index === -1) return false;
+  if (index === status.playIndex && useMediaStore().track?.id === trackId) return true;
+  const item = queue.getQueueItem(index);
+  const track = item?.track;
+  if (!track) return false;
+
+  // 抢占令牌：正在进行的旧 load 结果作废
+  trackToken++;
+  status.playIndex = index;
+  const media = useMediaStore();
+  media.setTrack(track);
+  media.setPlaybackContext(item?.context);
+  resetForLoad(track.duration ?? 0);
+  status.trackLoading = false;
+  status.state = "playing";
+  // 原生已开播，URL 解析源信息未知；置空避免后续 reload 复用上一首的源（同 SFA 清 currentAudioSource）
+  status.currentSource = null;
+  playback.setPlaying(true);
+  abLoop.reset();
+  // 歌词/取色/封面与常规切歌对齐
+  void lyricLoader.loadForTrack(null);
+  extractColorFromUrl(track.cover ?? track.coverOriginal ?? null);
+  void coverLoader.loadCoverForTrack(track);
+  // 记入历史（常规 ENDED 流程在 loadTrack 成功后 record，这里对齐）
+  void useHistoryStore().record(track);
+  // 重新调度下一首预载（同时重新登记原生下一首）
+  scheduleNextTrackPreload();
+  return true;
+};
+
 /** 同步播放模式到主进程 */
 const syncPlayMode = (): void => {
   const status = useStatusStore();

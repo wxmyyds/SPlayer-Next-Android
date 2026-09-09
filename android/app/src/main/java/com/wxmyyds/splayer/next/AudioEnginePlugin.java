@@ -77,9 +77,11 @@ public class AudioEnginePlugin extends Plugin {
     private long currentPosition = 0;
     private long currentDuration = 0;
 
-    // 曲目结束后保护切歌决策链的短时锁（ENDED 后 WAKE_MODE_LOCAL 已释放，
+    /** 曲目结束后保护切歌决策链的短时锁（ENDED 后 WAKE_MODE_LOCAL 已释放， */
     // JS 决策 + load 新曲的间隙 CPU 掉睡会卡住切歌；新曲开播即交还，30s 兜底超时）
     private android.os.PowerManager.WakeLock switchWakeLock;
+    /** JS 预登记的下一首资源：ENDED 后原生自治切歌，不依赖 WebView 存活（参照 SFA 队列） */
+    private volatile JSObject pendingNext;
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
@@ -100,9 +102,9 @@ public class AudioEnginePlugin extends Plugin {
         player = new ExoPlayer.Builder(getContext())
                 .setAudioAttributes(attrs, true)
                 .setHandleAudioBecomingNoisy(true)
-                // 播放期间持有 partial wake lock：锁屏后 CPU 不休眠，
-                // 否则曲目结束瞬间整条链（ENDED 回调/WebView JS）冻结，无法切歌
-                .setWakeMode(C.WAKE_MODE_LOCAL)
+                // WAKE_MODE_NETWORK 同时锁 CPU + WiFi（参照 SFA PlaybackManager）：
+                // Doze 会断网，LOCAL 只锁 CPU 时 ENDED 后 prepare 拉不到流，锁屏切歌死链
+                .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build();
         player.addListener(new Player.Listener() {
             @Override
@@ -116,7 +118,9 @@ public class AudioEnginePlugin extends Plugin {
                         break;
                     case Player.STATE_ENDED:
                         acquireSwitchWakeLock();
-                        emitEvent("ended", null);
+                        if (!tryNativeAdvance()) {
+                            emitEvent("ended", null);
+                        }
                         break;
                     case Player.STATE_BUFFERING:
                         emitEvent("buffering", null);
@@ -189,6 +193,8 @@ public class AudioEnginePlugin extends Plugin {
             return;
         }
 
+        // JS 主动 load 新曲：原生登记的下一首已过时，清除（预载成功后会重新登记）
+        pendingNext = null;
         Log.i(TAG, "load autoPlay=" + autoPlay);
         MediaItem mediaItem = MediaItem.fromUri(source);
         mainHandler.post(() -> {
@@ -199,6 +205,76 @@ public class AudioEnginePlugin extends Plugin {
             ret.put("duration", player.getDuration() > 0 ? player.getDuration() : 0);
             call.resolve(ret);
         });
+    }
+
+    /**
+     * 登记 JS 预解析好的下一首：ENDED 后原生直接开播，WebView 冻结不影响
+     * @param call - { trackId, playIndex, source, title, artist, album, artwork, durationMs }
+     */
+    @PluginMethod
+    public void setNextResource(PluginCall call) {
+        String source = call.getString("source");
+        String trackId = call.getString("trackId");
+        if (source == null || source.isEmpty() || trackId == null || trackId.isEmpty()) {
+            call.reject("source/trackId required");
+            return;
+        }
+        JSObject meta = new JSObject();
+        meta.put("trackId", trackId);
+        meta.put("playIndex", readLong(call, "playIndex", -1));
+        meta.put("source", source);
+        meta.put("title", call.getString("title", ""));
+        meta.put("artist", call.getString("artist", ""));
+        meta.put("album", call.getString("album", ""));
+        meta.put("artwork", call.getString("artwork", ""));
+        meta.put("durationMs", readLong(call, "durationMs", 0));
+        pendingNext = meta;
+        call.resolve();
+    }
+
+    /** 清除登记的下一首（队列变化/预载作废时由 JS 调用） */
+    @PluginMethod
+    public void clearNextResource(PluginCall call) {
+        pendingNext = null;
+        call.resolve();
+    }
+
+    /** PluginCall 数字读取：JSON 数值到桥上可能被装箱成 Double，直接 getLong 会抛 ClassCastException */
+    private static long readLong(PluginCall call, String key, long fallback) {
+        Object value = call.getData().opt(key);
+        return value instanceof Number ? ((Number) value).longValue() : fallback;
+    }
+
+    private static long readLongFrom(JSObject obj, String key) {
+        Object value = obj.opt(key);
+        return value instanceof Number ? ((Number) value).longValue() : 0L;
+    }
+
+    /**
+     * ENDED 后原生自治切歌：有登记资源则直接开播并通知 JS 同步，无则回落 JS 链
+     * @return true = 已自治切歌，调用方不应再 emit ended
+     */
+    private boolean tryNativeAdvance() {
+        JSObject meta = pendingNext;
+        pendingNext = null;
+        if (meta == null) return false;
+        String source = meta.getString("source");
+        if (source == null || source.isEmpty()) return false;
+        Log.i(TAG, "nativeAdvance trackId=" + meta.getString("trackId"));
+        player.setMediaItem(MediaItem.fromUri(source));
+        player.prepare();
+        player.play();
+        // 锁屏下 WebView 冻结，通知栏/MediaSession 由原生直接刷新
+        MediaSessionPlugin.applyNativeUpdate(
+                meta.getString("title", ""),
+                meta.getString("artist", ""),
+                meta.getString("album", ""),
+                meta.getString("artwork", ""),
+                true,
+                0L,
+                readLongFrom(meta, "durationMs"));
+        emitEvent("autoAdvanced", meta);
+        return true;
     }
 
     @PluginMethod

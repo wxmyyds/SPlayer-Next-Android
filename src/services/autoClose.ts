@@ -84,3 +84,6 @@ export const onTrackEnded = (): boolean => {
   cancel();
   return true;
 };
+
+/** 是否已到点且设置为“等本曲结束”停播（原生自治切歌前须排除） */
+export const shouldStopAfterCurrentTrack = (): boolean => pendingPauseOnEnd;

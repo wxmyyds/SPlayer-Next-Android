@@ -150,6 +150,13 @@ public class MediaSessionPlugin extends Plugin {
 
     private void doUpdate(PluginCall call) {
         boolean stopped = Boolean.TRUE.equals(call.getBoolean("stopped", false));
+        String title = call.getString("title", "");
+        String artist = call.getString("artist", "");
+        String album = call.getString("album", "");
+        boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
+        long positionMs = readLong(call, "positionMs", 0);
+        long durationMs = readLong(call, "durationMs", 0);
+        String artworkUrl = call.getString("artworkUrl", null);
         getActivity()
                 .runOnUiThread(
                         () -> {
@@ -167,64 +174,93 @@ public class MediaSessionPlugin extends Plugin {
                             }
                             sSession.setActive(true);
                             ensureChannel();
-                            String title = call.getString("title", "");
-                            String artist = call.getString("artist", "");
-                            String album = call.getString("album", "");
-                            boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
-                            long positionMs = readLong(call, "positionMs", 0);
-                            long durationMs = readLong(call, "durationMs", 0);
-                            String artworkUrl = call.getString("artworkUrl", null);
 
                             // 焦点礼让交由 WebView 内部媒体栈处理（原生再申请会与其互斥，元素被瞬时暂停）；
                             // 这里只管拔耳机监听生命周期：播放期注册，暂停/停止注销
                             if (playing) registerNoisyReceiver();
                             else unregisterNoisyReceiver();
 
-                            // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
-                            MediaMetadata current =
-                                    sSession.getController() != null
-                                            ? sSession.getController().getMetadata()
-                                            : null;
-                            String currentTitle =
-                                    current != null
-                                            ? current.getString(MediaMetadata.METADATA_KEY_TITLE)
-                                            : null;
-                            boolean metaProvided =
-                                    !title.isEmpty()
-                                            || !artist.isEmpty()
-                                            || !album.isEmpty()
-                                            || (artworkUrl != null && !artworkUrl.isEmpty());
-                            if (!title.isEmpty() && !title.equals(currentTitle)) lastArt = null;
-                            if (metaProvided) {
-                                // 时长优先取本次推送，未带时用当前元数据旧值兜底
-                                long duration =
-                                        durationMs > 0
-                                                ? durationMs
-                                                : current != null
-                                                        ? current.getLong(MediaMetadata.METADATA_KEY_DURATION)
-                                                        : 0L;
-                                MediaMetadata.Builder meta =
-                                        new MediaMetadata.Builder()
-                                                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
-                                                .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
-                                                .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
-                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, duration);
-                                sSession.setMetadata(meta.build());
-                            } else if (durationMs > 0
-                                    && current != null
-                                    && current.getLong(MediaMetadata.METADATA_KEY_DURATION) != durationMs) {
-                                // 纯进度推送：把最新时长补进元数据，系统媒体卡片据此渲染进度条
-                                sSession.setMetadata(
-                                        new MediaMetadata.Builder(current)
-                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
-                                                .build());
-                            }
-                            publishState(playing, positionMs, durationMs, lastArt);
-                            if (artworkUrl != null && !artworkUrl.isEmpty()) {
-                                loadArtworkAsync(artworkUrl, title, artist, album, playing, positionMs, durationMs);
-                            }
+                            applyMetadataUpdate(title, artist, album, playing, positionMs, durationMs, artworkUrl);
                             call.resolve();
                         });
+    }
+
+    /**
+     * 原生自治切歌后的通知栏刷新（锁屏下 WebView 冻结，收不到 JS 的 updateState）
+     * @param title 曲目标题
+     * @param artist 艺术家
+     * @param album 专辑
+     * @param artworkUrl 封面 URL
+     * @param playing 是否播放中
+     * @param positionMs 进度
+     * @param durationMs 时长
+     */
+    static void applyNativeUpdate(
+            String title,
+            String artist,
+            String album,
+            String artworkUrl,
+            boolean playing,
+            long positionMs,
+            long durationMs) {
+        MediaSessionPlugin instance = sInstance;
+        if (instance == null || sSession == null || instance.getActivity() == null) return;
+        instance
+                .getActivity()
+                .runOnUiThread(
+                        () ->
+                                instance.applyMetadataUpdate(
+                                        title, artist, album, playing, positionMs, durationMs, artworkUrl));
+    }
+
+    /** 元数据/通知更新主体（doUpdate 与原生自治切歌共用）；须在主线程调用 */
+    private void applyMetadataUpdate(
+            String title,
+            String artist,
+            String album,
+            boolean playing,
+            long positionMs,
+            long durationMs,
+            String artworkUrl) {
+        // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
+        MediaMetadata current =
+                sSession.getController() != null ? sSession.getController().getMetadata() : null;
+        String currentTitle =
+                current != null ? current.getString(MediaMetadata.METADATA_KEY_TITLE) : null;
+        boolean metaProvided =
+                !title.isEmpty()
+                        || !artist.isEmpty()
+                        || !album.isEmpty()
+                        || (artworkUrl != null && !artworkUrl.isEmpty());
+        if (!title.isEmpty() && !title.equals(currentTitle)) lastArt = null;
+        if (metaProvided) {
+            // 时长优先取本次推送，未带时用当前元数据旧值兜底
+            long duration =
+                    durationMs > 0
+                            ? durationMs
+                            : current != null
+                                    ? current.getLong(MediaMetadata.METADATA_KEY_DURATION)
+                                    : 0L;
+            MediaMetadata.Builder meta =
+                    new MediaMetadata.Builder()
+                            .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                            .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
+                            .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
+                            .putLong(MediaMetadata.METADATA_KEY_DURATION, duration);
+            sSession.setMetadata(meta.build());
+        } else if (durationMs > 0
+                && current != null
+                && current.getLong(MediaMetadata.METADATA_KEY_DURATION) != durationMs) {
+            // 纯进度推送：把最新时长补进元数据，系统媒体卡片据此渲染进度条
+            sSession.setMetadata(
+                    new MediaMetadata.Builder(current)
+                            .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
+                            .build());
+        }
+        publishState(playing, positionMs, durationMs, lastArt);
+        if (artworkUrl != null && !artworkUrl.isEmpty()) {
+            loadArtworkAsync(artworkUrl, title, artist, album, playing, positionMs, durationMs);
+        }
     }
 
     private void publishState(

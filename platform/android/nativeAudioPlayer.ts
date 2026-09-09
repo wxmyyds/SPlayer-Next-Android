@@ -93,6 +93,17 @@ interface AudioEnginePlugin {
   getStatus(): Promise<PlayerStatus>;
   setPauseOnDeviceSwitch(options: { enabled: boolean }): Promise<void>;
   extendSwitchWindow(): Promise<void>;
+  setNextResource(options: {
+    trackId: string;
+    playIndex: number;
+    source: string;
+    title: string;
+    artist: string;
+    album: string;
+    artwork: string;
+    durationMs: number;
+  }): Promise<void>;
+  clearNextResource(): Promise<void>;
   addListener(
     event: "event" | "mediaKey",
     callback: (payload: unknown) => void,
@@ -201,6 +212,15 @@ const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | nu
       return { type: "pause" };
     case "ended":
       return { type: "ended" };
+    case "autoAdvanced":
+      // 原生自治切歌（锁屏 WebView 冻结时）：JS 侧同步队列指针与界面，不重新 load
+      return {
+        type: "nativeAdvance",
+        data: {
+          trackId: String(payload.data?.trackId ?? ""),
+          playIndex: Number(payload.data?.playIndex ?? -1),
+        },
+      };
     case "sourceError":
       return { type: "sourceError" };
     case "position":

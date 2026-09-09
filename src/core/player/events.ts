@@ -24,6 +24,7 @@ import {
   seek,
   setRepeatMode,
   setShuffleMode,
+  syncFromNativeAdvance,
 } from "./index";
 
 /** 防止 ended 事件重入 */
@@ -122,6 +123,16 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
     case "ended": {
       // 加载新曲期间收到的 ended 来自旧引擎（切歌瞬间的 ended 竞态），丢弃
       if (!status.trackLoading) await finishCurrentTrack();
+      break;
+    }
+    case "nativeAdvance": {
+      // 原生自治切歌（锁屏 WebView 冻结时）：同步队列指针与界面；
+      // 找不到对应曲目（队列已变动）时回落常规 ended 流程
+      const synced = await syncFromNativeAdvance(
+        event.data.trackId,
+        event.data.playIndex,
+      );
+      if (!synced) await finishCurrentTrack();
       break;
     }
     case "sourceError":

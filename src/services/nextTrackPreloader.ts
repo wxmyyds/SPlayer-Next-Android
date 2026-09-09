@@ -13,6 +13,7 @@ import { useStreamingStore } from "@/stores/streaming";
 import { usePluginsStore } from "@/stores/plugins";
 import { useMediaStore } from "@/stores/media";
 import { isAndroid } from "@/utils/platform";
+import * as autoClose from "@/services/autoClose";
 import * as queue from "@/stores/queue";
 
 /** 预载结果 */
@@ -93,6 +94,8 @@ export const invalidateNextTrackPreload = (): void => {
     pendingCover = null;
   }
   invalidatePreloadedLyric();
+  // 原生登记的下一首一并作废，避免 ENDED 后原生切到已被换掉的曲目
+  if (isAndroid) void window.api.player.clearNextResource?.().catch(() => {});
 };
 
 /**
@@ -198,6 +201,26 @@ export const scheduleNextTrackPreload = (): void => {
         source,
         contextKey,
       };
+      // Android：登记到原生，锁屏 ENDED 后原生直接开播，不等 WebView（参照 SFA 原生队列）
+      // 单曲循环/定时关闭“等本曲结束”时不登记，否则原生会越过这两种语义
+      const status = useStatusStore();
+      if (
+        isAndroid &&
+        source?.source &&
+        status.repeatMode !== "one" &&
+        !autoClose.shouldStopAfterCurrentTrack()
+      ) {
+        void window.api.player.setNextResource?.({
+          trackId: candidateTrack.id,
+          playIndex: candidateResult.index,
+          source: source.source,
+          title: candidateTrack.title,
+          artist: candidateTrack.artists?.map((a) => a.name).join(" / ") ?? "",
+          album: candidateTrack.album?.name ?? "",
+          artwork: candidateTrack.coverOriginal ?? candidateTrack.cover ?? "",
+          durationMs: candidateTrack.duration ?? 0,
+        }).catch(() => {});
+      }
     } catch (err) {
       console.warn("[nextPreload] Preload task failed silently:", err);
       if (token === currentToken) {
