@@ -1,6 +1,5 @@
 package com.wxmyyds.splayer.next;
 
-import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
 import androidx.core.view.WindowCompat;
@@ -34,14 +33,5 @@ public class SystemUiPlugin extends Plugin {
             controller.show(WindowInsetsCompat.Type.systemBars());
         }
         call.resolve(new JSObject());
-    }
-
-    @Override
-    protected void handleOnRestoreInstanceState(Bundle savedInstanceState) {
-        super.handleOnRestoreInstanceState(savedInstanceState);
-        // Activity 重建后系统栏默认恢复显示，避免残留意外的沉浸状态
-        Window window = getActivity().getWindow();
-        new WindowInsetsControllerCompat(window, window.getDecorView())
-                .show(WindowInsetsCompat.Type.systemBars());
     }
 }

@@ -1,5 +1,6 @@
 package com.wxmyyds.splayer.next;
 
+import android.content.Context;
 import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.LoudnessEnhancer;
