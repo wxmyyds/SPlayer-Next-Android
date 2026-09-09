@@ -134,6 +134,8 @@ const stackPage = ref(0);
 const page1Ref = useTemplateRef("page1Ref");
 const lyricPaneRef = useTemplateRef("lyricPaneRef");
 const goStackPage = (page: number): void => {
+  // 无歌词时右页是空的：禁止滑入，否则空白页无内容可滑回
+  if (page > 0 && !hasLyric.value && !media.lyricLoading) return;
   stackPage.value = Math.max(0, Math.min(1, page));
 };
 /** 如果拖拽起点在按钮/滑杆/输入框上，记录该目标（翻页时不跟手 + 不翻页） */
@@ -173,6 +175,8 @@ const isStackSwiping = computed(
 /** 手指跟随偏移（px，左滑为负），竖滑不跟；控件上起始的手势不跟手 */
 const stackDragPx = computed(() => {
   if (swipeIgnoredTarget.value) return 0;
+  // 无歌词时不跟手（与 goStackPage 的禁滑一致）
+  if (!hasLyric.value && !media.lyricLoading) return 0;
   const active = page1Swipe.isSwiping.value
     ? page1Swipe
     : lyricSwipe.isSwiping.value
@@ -203,11 +207,16 @@ const springConfig = computed(() => ({
   stiffness: settings.lyric.springStiffness,
 }));
 
-const lyricFontSize = computed(() =>
-  settings.lyric.adaptiveFontSize
+const lyricFontSize = computed(() => {
+  // 横屏高度只有竖屏一半：竖屏基准的字号在横屏会显得过小，按高度比例放大
+  if (isAndroid && landscapeLayout.value) {
+    const factor = settings.lyric.adaptiveFontSize ? 2 : 1.4;
+    return `calc(${settings.lyric.fontSize * factor} / 1080 * 100vh)`;
+  }
+  return settings.lyric.adaptiveFontSize
     ? `calc(${settings.lyric.fontSize} / 1080 * 100vh)`
-    : `${settings.lyric.fontSize}px`,
-);
+    : `${settings.lyric.fontSize}px`;
+});
 
 const { immersive, onPlayerMouseEnter, onPlayerMouseLeave, onMainMove, onBarEnter, onBarLeave } =
   useImmersiveMode(isPlayerExpanded);
