@@ -200,4 +200,21 @@ public class LoginWebPlugin extends Plugin {
         pending = null;
         call.reject(message != null ? message : "page load failed");
     }
+
+    /** 进程级销毁：释放 dialog/webview，终止 poll，拒绝 pending（防 Promise 悬挂） */
+    @Override
+    protected void handleOnDestroy() {
+        if (dialog != null) {
+            dialog.dismiss();
+            dialog = null;
+        }
+        if (handler != null && poll != null) handler.removeCallbacks(poll);
+        handler = null;
+        poll = null;
+        if (pending != null) {
+            PluginCall call = pending;
+            pending = null;
+            call.reject("canceled");
+        }
+    }
 }

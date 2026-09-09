@@ -77,7 +77,7 @@ public class MediaSessionPlugin extends Plugin {
     public void load() {
         sInstance = this;
         if (sSession == null) {
-            sSession = new MediaSession(getContext(), "SPlayer");
+            sSession = new MediaSession(getContext().getApplicationContext(), "SPlayer");
             sSession.setFlags(MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
             sSession.setCallback(
                     new MediaSession.Callback() {
@@ -304,8 +304,9 @@ public class MediaSessionPlugin extends Plugin {
                 () -> {
                     Bitmap art = fetchBitmap(url);
                     if (art == null) return;
-                    getActivity()
-                            .runOnUiThread(
+                    Activity act = getActivity();
+                    if (act == null) return;
+                    act.runOnUiThread(
                                     () -> {
                                         if (sSession == null) return;
                                         MediaMetadata old = sSession.getController().getMetadata();

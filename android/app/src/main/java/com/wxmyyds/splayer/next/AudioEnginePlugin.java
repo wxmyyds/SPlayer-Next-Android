@@ -63,6 +63,9 @@ public class AudioEnginePlugin extends Plugin {
     private Virtualizer virtualizer;
     private LoudnessEnhancer loudnessEnhancer;
     private boolean effectsAttached = false;
+    private boolean equalizerEnabled = false;
+    private float[] equalizerBands = null;
+    private boolean normalizationEnabled = false;
 
     // Visualizer
     private android.media.audiofx.Visualizer visualizer;
@@ -285,23 +288,31 @@ public class AudioEnginePlugin extends Plugin {
     public void setEqualizerBands(PluginCall call) {
         JSONArray gains = call.getArray("bands");
         mainHandler.post(() -> {
-            if (equalizer != null && gains != null) {
-                int numBands = equalizer.getNumberOfBands();
-                short[] range = equalizer.getBandLevelRange();
-                short min = range[0];
-                short max = range[1];
-                for (int i = 0; i < numBands; i++) {
-                    try {
-                        double gain = gains.getDouble(i);
-                        int minVal = min;
-                        int maxVal = max;
-                        short level = (short) Math.max(minVal, Math.min(maxVal, (int) (gain * 100)));
-                        equalizer.setBandLevel((short) i, level);
-                    } catch (Exception ignored) {}
+            // 缓存档位（IDLE 时 equalizer == null，等 initAudioEffects 重建后回灌）
+            if (gains != null) {
+                equalizerBands = new float[gains.length()];
+                for (int i = 0; i < gains.length(); i++) {
+                    try { equalizerBands[i] = (float) gains.getDouble(i); } catch (Exception ignored) {}
                 }
             }
+            applyEqualizerBands();
             call.resolve();
         });
+    }
+
+    /** 将缓存的均衡器档位应用到已创建的 Equalizer */
+    private void applyEqualizerBands() {
+        if (equalizer == null || equalizerBands == null) return;
+        short[] range = equalizer.getBandLevelRange();
+        short min = range[0];
+        short max = range[1];
+        int numBands = Math.min(equalizer.getNumberOfBands(), equalizerBands.length);
+        for (int i = 0; i < numBands; i++) {
+            int minVal = min;
+            int maxVal = max;
+            short level = (short) Math.max(minVal, Math.min(maxVal, (int) (equalizerBands[i] * 100)));
+            equalizer.setBandLevel((short) i, level);
+        }
     }
 
     @PluginMethod
@@ -312,8 +323,9 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setNormalizationEnabled(PluginCall call) {
-        boolean enabled = call.getBoolean("enabled", false);
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         mainHandler.post(() -> {
+            normalizationEnabled = enabled;
             if (loudnessEnhancer != null) {
                 loudnessEnhancer.setEnabled(enabled);
                 if (enabled) {
@@ -322,6 +334,9 @@ public class AudioEnginePlugin extends Plugin {
                     } catch (Exception ignored) {}
                 }
             }
+            call.resolve();
+        });
+    }
             call.resolve();
         });
     }
@@ -397,7 +412,6 @@ public class AudioEnginePlugin extends Plugin {
         if (audioSessionId == 0) return;
         try {
             equalizer = new Equalizer(0, audioSessionId);
-            equalizer.setEnabled(false);
         } catch (Exception ignored) {}
         try {
             bassBoost = new BassBoost(0, audioSessionId);
@@ -409,8 +423,18 @@ public class AudioEnginePlugin extends Plugin {
         } catch (Exception ignored) {}
         try {
             loudnessEnhancer = new LoudnessEnhancer(audioSessionId);
-            loudnessEnhancer.setEnabled(false);
         } catch (Exception ignored) {}
+        // 回灌启动时缓存的均衡器/响度归一化状态（启动时 equalizer 还是 null，JS 下发被静默丢弃）
+        if (equalizer != null) {
+            applyEqualizerBands();
+            equalizer.setEnabled(equalizerEnabled);
+        }
+        if (loudnessEnhancer != null) {
+            loudnessEnhancer.setEnabled(normalizationEnabled);
+            if (normalizationEnabled) {
+                try { loudnessEnhancer.setTargetGain(0); } catch (Exception ignored) {}
+            }
+        }
     }
 
     private void releaseAudioEffects() {
