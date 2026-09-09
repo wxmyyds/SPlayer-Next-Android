@@ -3,7 +3,6 @@ import type { PlaybackContext, TrackSource } from "@shared/types/player";
 import type { Collection, CollectionType } from "@/types/collection";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { loadCollection as loadCollectionService } from "@/services/collection";
-import { preloadTrack } from "@/services/nextTrackPreloader";
 import { getCollectionShareUrl } from "@/utils/format/shareUrl";
 import { openExternal } from "@/utils/url";
 import { useCopyText } from "@/composables/useCopyText";
@@ -60,13 +59,9 @@ const handleListScroll = (event: Event) => {
   }
 };
 
-/** 已预取首曲的歌单 id，切歌单时重置 */
-let preloadedCollectionId: string | null = null;
-
 /** 加载数据 */
 const loadCollection = async (): Promise<void> => {
   headerHidden.value = false;
-  preloadedCollectionId = null;
   loadAbort?.abort();
   const myAbort = new AbortController();
   loadAbort = myAbort;
@@ -80,11 +75,6 @@ const loadCollection = async (): Promise<void> => {
       onUpdate: (next) => {
         if (myAbort.signal.aborted) return;
         collection.value = next;
-        // 首批曲目一到即后台预取第一首：点播放全部时直接消费，省掉现解析等待
-        if (next && next.tracks.length > 0 && preloadedCollectionId !== next.id) {
-          preloadedCollectionId = next.id;
-          preloadTrack(next.tracks[0]);
-        }
       },
     });
   } catch (err) {

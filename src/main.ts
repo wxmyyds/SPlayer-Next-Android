@@ -17,28 +17,6 @@ import { installAndroidBridge } from "@android/bridge";
 
 installAndroidBridge();
 
-// V8 默认只收 10 帧，无限递归时真正的循环体会被截掉：提到 150 帧再记
-try {
-  (Error as unknown as { stackTraceLimit: number }).stackTraceLimit = 150;
-} catch {
-  // 忽略
-}
-// 未捕获的 Promise 异常记栈（压缩包定位用）：保留头部 3 帧与尾部 25 帧，
-// 无限递归时头部全是调度器自调用，真正的循环体在尾部
-globalThis.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
-  const reason = event.reason as { stack?: unknown } | null | undefined;
-  const stack =
-    reason && typeof reason.stack === "string" ? reason.stack : String(reason);
-  const lines = stack.split("\n");
-  // logcat 单条截断：头尾分两条记，避免尾部（真实循环体）被截掉
-  if (lines.length > 30) {
-    console.error(`[unhandled-head] ${lines.slice(0, 3).join("\n").slice(0, 1500)}`);
-    console.error(`[unhandled-tail] ${lines.slice(-25).join("\n").slice(0, 2500)}`);
-  } else {
-    console.error(`[unhandled] ${stack.slice(0, 2500)}`);
-  }
-});
-
 const pinia = createPinia();
 pinia.use(piniaPersistedstate);
 

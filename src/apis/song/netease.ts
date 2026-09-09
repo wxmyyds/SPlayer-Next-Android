@@ -56,27 +56,6 @@ export const classifyNeteasePlayUrl = (item: unknown): NeteasePlayUrlResult => {
   return { available: false, errorCode: ErrorCode.NETEASE_UNAVAILABLE };
 };
 
-/** xeapi 单次尝试上限（毫秒）：interface3 首包 stall 时早换 weapi，不白等 20 秒 */
-const XEAPI_ATTEMPT_MS = 8000;
-const XEAPI_TIMEOUT_MESSAGE = "song_url xeapi attempt timeout";
-/** 项目音质档位 → weapi br（weapi 最高 320k，兜底够用） */
-const WEAPI_BR: Record<QualityLevel, number> = {
-  lq: 128000,
-  sq: 192000,
-  hq: 320000,
-  lossless: 320000,
-  "hi-res": 320000,
-};
-
-/** 给任务加单次时限，超时后迟到结果丢弃（调用方决定是否走兜底） */
-const withAttemptTimeout = <T>(task: Promise<T>): Promise<T> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(XEAPI_TIMEOUT_MESSAGE)), XEAPI_ATTEMPT_MS);
-  });
-  return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
-};
-
 /**
  * 解析 Track 的播放 URL
  * @param track - track.id 为云端 songId
@@ -90,27 +69,12 @@ export const resolveNeteaseUrl = async (
   recovery?: NeteaseSessionRecovery,
 ): Promise<NeteasePlayUrlResult> => {
   const request = async (): Promise<NeteasePlayUrlResult> => {
-    try {
-      const body = await withAttemptTimeout(
-        neteaseCall<{ data?: unknown[] }>(
-          "song_url",
-          { id: track.id, level: NETEASE_LEVEL[songLevel] },
-          { notifyAuthFailure: false },
-        ),
-      );
-      return classifyNeteasePlayUrl(body?.data?.[0]);
-    } catch (err) {
-      // 仅超时走 weapi 兜底（music.163.com，常走预热连接）；
-      // 认证失败等原样抛出，走既有登录恢复流程
-      if (!(err instanceof Error) || err.message !== XEAPI_TIMEOUT_MESSAGE) throw err;
-      const fallback = await neteaseCall<{ data?: unknown }>(
-        "song_url_weapi",
-        { id: track.id, br: WEAPI_BR[songLevel] },
-        { notifyAuthFailure: false },
-      );
-      const item = Array.isArray(fallback?.data) ? fallback.data[0] : fallback?.data;
-      return classifyNeteasePlayUrl(item);
-    }
+    const body = await neteaseCall<{ data?: unknown[] }>(
+      "song_url",
+      { id: track.id, level: NETEASE_LEVEL[songLevel] },
+      { notifyAuthFailure: false },
+    );
+    return classifyNeteasePlayUrl(body?.data?.[0]);
   };
 
   let result: NeteasePlayUrlResult | null = null;

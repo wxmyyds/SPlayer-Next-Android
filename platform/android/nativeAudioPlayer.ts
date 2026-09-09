@@ -156,16 +156,19 @@ const ensureStallWatchdog = (): void => {
 
 /** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
 const publishMetadata = (meta?: LoadOptions["meta"]): void => {
-  // 通知权限被拒等原生失败 JS 侧无法补救：吞掉避免每 200ms 一次未捕获异常刷屏
-  void MediaBridge.updateState({
-    title: meta?.title ?? "",
-    artist: (meta?.artists ?? [])
-      .map((a) => a.name)
-      .filter(Boolean)
-      .join(" / "),
-    album: meta?.album?.name ?? "",
-    artworkUrl: meta?.coverOriginal ?? meta?.cover,
-  }).catch(() => {});
+  try {
+    void MediaBridge.updateState({
+      title: meta?.title ?? "",
+      artist: (meta?.artists ?? [])
+        .map((a) => a.name)
+        .filter(Boolean)
+        .join(" / "),
+      album: meta?.album?.name ?? "",
+      artworkUrl: meta?.coverOriginal ?? meta?.cover,
+    });
+  } catch {
+    // 忽略
+  }
 };
 
 /** 同步播放状态与进度到系统（MediaSession 据此渲染通知栏/锁屏卡片） */
@@ -174,13 +177,16 @@ const publishState = (
   positionMs?: number,
   durationMs?: number,
 ): void => {
-  // 同 publishMetadata：原生失败吞掉，避免未捕获异常刷屏
-  void MediaBridge.updateState({
-    playing: state === "playing",
-    positionMs,
-    durationMs,
-    stopped: state === "none" || undefined,
-  }).catch(() => {});
+  try {
+    void MediaBridge.updateState({
+      playing: state === "playing",
+      positionMs,
+      durationMs,
+      stopped: state === "none" || undefined,
+    });
+  } catch {
+    // 忽略
+  }
 };
 
 /** 将原生事件映射为桌面 PlayerEvent */

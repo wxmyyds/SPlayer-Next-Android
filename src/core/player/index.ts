@@ -27,8 +27,6 @@ import {
 import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
 import { extractColorFromUrl } from "@/utils/color";
-import { isAndroid } from "@/utils/platform";
-import { neteaseCall } from "@/apis/netease";
 import { handleError, isSkippableError } from "@/utils/errors";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@/utils/preset/djMode";
@@ -72,10 +70,6 @@ let consecutiveFailures = 0;
 const MAX_CONSECUTIVE_FAILURES = 5;
 /** 失败后跳下一首的节流延迟（毫秒） */
 const SKIP_ON_ERROR_DELAY_MS = 1000;
-/** 首播启动耗时告警线（毫秒）：冷启动 TLS/解析叠加偶发数秒无声等待，只记录超线用例 */
-const SLOW_START_WARN_MS = 2500;
-/** 最近一次引擎 load 耗时（毫秒），用于拆分启动耗时的解析/引擎两段 */
-let lastNativeLoadMs = 0;
 
 /**
  * 单曲级失败兜底
@@ -150,13 +144,11 @@ export const load = async (
     if (meta) void coverLoader.loadCoverForTrack(meta);
   }
   try {
-    const nativeStart = Date.now();
     const result = await window.api.player.load(source, {
       autoPlay,
       meta,
       context: options.context,
     });
-    lastNativeLoadMs = Date.now() - nativeStart;
     // 竞态保护
     if (token !== loadToken) return { ok: false };
     if (result.success && result.data) {
@@ -310,7 +302,6 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
   void window.api.player.stop();
   // 是否可跳曲
   let shouldSkip = false;
-  const loadStart = Date.now();
   try {
     const loaded = await loadTrackSourceWithFallback(
       track,
@@ -320,16 +311,6 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
       false,
       preloaded?.source,
     );
-    if (loaded.status === "loaded" && loaded.result.ok) {
-      // 启动耗时超线只记一条 warn，拆解析/引擎两段定位冷启动卡顿
-      const startupMs = Date.now() - loadStart;
-      if (startupMs > SLOW_START_WARN_MS) {
-        console.warn(
-          `[play-timing] "${track.title}" 启动耗时 ${startupMs}ms` +
-            `（解析约${Math.max(0, startupMs - lastNativeLoadMs)}ms/引擎约${lastNativeLoadMs}ms）`,
-        );
-      }
-    }
     if (loaded.status === "cancelled") return;
     if (loaded.status === "unresolved") {
       const status = useStatusStore();
@@ -1143,14 +1124,6 @@ export const initPlayer = async (): Promise<void> => {
   // 下一首预载的监听器
   installNextTrackPreloadWatchers();
   scheduleNextTrackPreload();
-  // Android：冷启动后台预热 song_url（interface3 首字节 stall 环境，首播现等 20 秒）。
-  // 用记忆中的当前曲目 id 发一次真实解析预热连接，失败忽略、点播时正常重试。
-  if (isAndroid) {
-    const warmId = useStatusStore().currentTrack?.id;
-    if (warmId) {
-      void neteaseCall("song_url", { id: warmId, level: "exhigh" }).catch(() => {});
-    }
-  }
 };
 
 /** 恢复上次播放状态 */

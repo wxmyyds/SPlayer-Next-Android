@@ -139,7 +139,6 @@ export const fetchWithProxy = async (
   if (typeof init?.body === "string") body = init.body;
   else if (init?.body instanceof Uint8Array) body = bytesToB64(init.body);
   // 原生侧 OkHttp 自带连接/读取超时；AbortSignal 暂不透传
-  const reqStart = Date.now();
   const res = await NativeHttp.request({
     url: href,
     method: init?.method ?? "GET",
@@ -147,14 +146,6 @@ export const fetchWithProxy = async (
     body,
     redirect: init?.redirect ?? "follow",
   });
-  const reqMs = Date.now() - reqStart;
-  if (reqMs > 8000) {
-    try {
-      console.warn(`[net-timing] ${init?.method ?? "GET"} ${new URL(href).host} 耗时 ${reqMs}ms`);
-    } catch {
-      // URL 解析失败时忽略
-    }
-  }
   let bytes = b64ToBytes(res.bodyBase64);
   // 防御性解压：个别接口仍可能返回真 gzip（魔数 0x1f 0x8b）
   if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
@@ -166,18 +157,15 @@ export const fetchWithProxy = async (
       // 假 gzip：保持原字节
     }
   }
-  // 大响应（雷达歌单详情可达 MB 级）懒解码：b64ToBytes 已返回独占精确缓冲，
-  // text/json 按需解码一次，避免首屏并发时的全量拷贝阻塞主线程
-  const payload = bytes;
-  let textCache: string | undefined;
-  const textOf = (): string => (textCache ??= new TextDecoder().decode(payload));
+  const textCache = new TextDecoder().decode(bytes.slice().buffer as ArrayBuffer);
+  const owned = Uint8Array.from(bytes);
   return {
     ok: res.status >= 200 && res.status < 300,
     status: res.status,
     url: res.url,
     headers: makeHeaders(res.headers, res.setCookies),
-    arrayBuffer: async () => payload.buffer as ArrayBuffer,
-    text: async () => textOf(),
-    json: async () => JSON.parse(textOf()) as unknown,
+    arrayBuffer: async () => owned.buffer as ArrayBuffer,
+    text: async () => textCache,
+    json: async () => JSON.parse(textCache) as unknown,
   };
 };

@@ -14,7 +14,6 @@ import login_status from "./login_status";
 import logout from "./logout";
 import register_anonimous from "./register_anonimous";
 import song_url from "./song_url";
-import song_url_weapi from "./song_url_weapi";
 import song_detail from "./song_detail";
 import search from "./search";
 import cloudsearch from "./cloudsearch";
@@ -46,7 +45,6 @@ export const modules: Record<string, NeteaseModule> = {
   logout,
   register_anonimous,
   song_url,
-  song_url_weapi,
   song_detail,
   search,
   cloudsearch,
