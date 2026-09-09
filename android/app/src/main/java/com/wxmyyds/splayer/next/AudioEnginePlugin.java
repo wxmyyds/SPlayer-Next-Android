@@ -82,6 +82,10 @@ public class AudioEnginePlugin extends Plugin {
     private android.os.PowerManager.WakeLock switchWakeLock;
     /** JS 预登记的下一首资源：ENDED 后原生自治切歌，不依赖 WebView 存活（参照 SFA 队列） */
     private volatile JSObject pendingNext;
+
+    /** ENDED 后无槽位时的补切重试：预载可能在锁屏后迟到，每 2s 补试一次，槽位就绪即开播 */
+    private static final int LATE_ADVANCE_MAX_TRIES = 30;
+    private int lateAdvanceTries = 0;
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
@@ -119,6 +123,8 @@ public class AudioEnginePlugin extends Plugin {
                     case Player.STATE_ENDED:
                         acquireSwitchWakeLock();
                         if (!tryNativeAdvance()) {
+                            Log.i(TAG, "ended (native next missing, late-retry armed)");
+                            armLateAdvanceRetry();
                             emitEvent("ended", null);
                         }
                         break;
@@ -195,6 +201,8 @@ public class AudioEnginePlugin extends Plugin {
 
         // JS 主动 load 新曲：原生登记的下一首已过时，清除（预载成功后会重新登记）
         pendingNext = null;
+        lateAdvanceTries = 0;
+        mainHandler.removeCallbacks(lateAdvanceRunnable);
         Log.i(TAG, "load autoPlay=" + autoPlay);
         MediaItem mediaItem = MediaItem.fromUri(source);
         mainHandler.post(() -> {
@@ -229,6 +237,7 @@ public class AudioEnginePlugin extends Plugin {
         meta.put("artwork", call.getString("artwork", ""));
         meta.put("durationMs", readLong(call, "durationMs", 0));
         pendingNext = meta;
+        Log.i(TAG, "setNext trackId=" + trackId);
         call.resolve();
     }
 
@@ -236,6 +245,7 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void clearNextResource(PluginCall call) {
         pendingNext = null;
+        Log.i(TAG, "clearNext");
         call.resolve();
     }
 
@@ -275,6 +285,26 @@ public class AudioEnginePlugin extends Plugin {
                 readLongFrom(meta, "durationMs"));
         emitEvent("autoAdvanced", meta);
         return true;
+    }
+
+    /**
+     * ENDED 后无槽位的补切重试：预载可能因 WebView 冻结/网络慢而迟到，
+     * 每 2s 补试一次；状态离开 ENDED（用户操作/新 load）即放弃
+     */
+    private final Runnable lateAdvanceRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (player == null || player.getPlaybackState() != Player.STATE_ENDED) return;
+            if (tryNativeAdvance()) return;
+            if (++lateAdvanceTries >= LATE_ADVANCE_MAX_TRIES) return;
+            mainHandler.postDelayed(this, 2000L);
+        }
+    };
+
+    private void armLateAdvanceRetry() {
+        lateAdvanceTries = 0;
+        mainHandler.removeCallbacks(lateAdvanceRunnable);
+        mainHandler.postDelayed(lateAdvanceRunnable, 2000L);
     }
 
     @PluginMethod

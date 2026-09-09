@@ -135,25 +135,23 @@ const page1Ref = useTemplateRef("page1Ref");
 const lyricPaneRef = useTemplateRef("lyricPaneRef");
 const commentPaneRef = useTemplateRef("commentPaneRef");
 /** 在线曲目才有评论页（本地无评论源） */
-const hasCommentPage = computed(() => stackedLayout.value && hasTrack.value && displayTrack.value?.source !== "local");
-/** 堆叠页数：封面恒在，歌词/评论按需；页序 [封面 | 歌词 | 评论]，评论在最右（左滑进入） */
+const hasCommentPage = computed(
+  () => stackedLayout.value && hasTrack.value && displayTrack.value?.source !== "local",
+);
+/** 堆叠页数：封面恒在，歌词/评论按需；页序 [评论 | 封面 | 歌词]（对照 SFA，封面右滑进评论） */
 const stackTotal = computed(() => 2 + (hasCommentPage.value ? 1 : 0));
+const commentIdx = computed(() => (hasCommentPage.value ? 0 : -1));
+const coverIdx = computed(() => (hasCommentPage.value ? 1 : 0));
+const lyricIdx = computed(() => coverIdx.value + 1);
 const goStackPage = (page: number): void => {
-  let target = page;
-  // 无歌词时歌词页为空：从封面左滑直接跳到评论页
-  if (target === 1 && !hasLyric.value && !media.lyricLoading && hasCommentPage.value) {
-    target = 2;
-  }
-  // 无歌词且无评论页：禁止滑入空白页
-  if (target === 1 && !hasLyric.value && !media.lyricLoading) return;
-  stackPage.value = Math.max(0, Math.min(stackTotal.value - 1, target));
+  // 无歌词时歌词页为空：禁止滑入，否则空白页无内容可滑回
+  if (page === lyricIdx.value && !hasLyric.value && !media.lyricLoading) return;
+  stackPage.value = Math.max(0, Math.min(stackTotal.value - 1, page));
 };
 /** 如果拖拽起点在按钮/滑杆/输入框上，记录该目标（翻页时不跟手 + 不翻页） */
 const swipeIgnoredTarget = ref<HTMLElement | null>(null);
 const isIgnoredSwipeTarget = (e: TouchEvent): boolean =>
-  !!(
-    (e.target as HTMLElement | null)?.closest?.("button, input, a, [role='slider']")
-  );
+  !!(e.target as HTMLElement | null)?.closest?.("button, input, a, [role='slider']");
 
 /** 各页统一翻页：左滑进下一页，右滑回上一页（按钮/滑杆/输入框上起始的手势留给控件） */
 const onPaneSwipeEnd = (e: TouchEvent, direction: string): void => {
@@ -225,9 +223,14 @@ const stackTrackTransform = computed(
 const stackTrackTransition = computed(() =>
   isStackSwiping.value ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
 );
-// 页数变化（切歌到本地/无歌词）时钳位当前页，避免停在空白页
+// 页数/页序变化（切歌到本地、旋转屏）时落回封面页，避免停在错位或空页
 watch(stackTotal, (value) => {
-  if (stackPage.value > value - 1) stackPage.value = value - 1;
+  if (stackPage.value > value - 1) {
+    stackPage.value = !hasLyric.value && !media.lyricLoading ? coverIdx.value : value - 1;
+  }
+});
+watch(hasCommentPage, () => {
+  stackPage.value = coverIdx.value;
 });
 
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
@@ -341,7 +344,9 @@ const toggleLyric = (): void => {
         <!-- 底部频谱：堆叠时只在歌词页展示，横屏精简布局不展示 -->
         <BottomSpectrum
           v-if="isPlayerExpanded && settings.player.enableSpectrum"
-          :show="isPlaying && immersive && !landscapeLayout && (!stackedLayout || stackPage === 1)"
+          :show="
+            isPlaying && immersive && !landscapeLayout && (!stackedLayout || stackPage === coverIdx)
+          "
         />
         <!-- 顶/底栏渐变遮罩（全屏封面模式） -->
         <div
@@ -447,12 +452,19 @@ const toggleLyric = (): void => {
                 : undefined
             "
           >
+            <!-- 评论页（堆叠最左页，封面右滑进入；UI 对照 SFA PlayerComment） -->
+            <div
+              v-if="stackedLayout && hasCommentPage"
+              ref="commentPaneRef"
+              class="h-full shrink-0 flex flex-col min-h-0"
+              :style="{ width: `${100 / stackTotal}%` }"
+            >
+              <PlayerCommentPage :active="stackPage === commentIdx" @back="goStackPage(coverIdx)" />
+            </div>
             <div
               ref="page1Ref"
               :class="
-                stackedLayout
-                  ? 'h-full shrink-0 flex flex-col overflow-y-auto pb-10'
-                  : 'contents'
+                stackedLayout ? 'h-full shrink-0 flex flex-col overflow-y-auto pb-10' : 'contents'
               "
               :style="stackedLayout ? { width: `${100 / stackTotal}%` } : undefined"
             >
@@ -760,15 +772,6 @@ const toggleLyric = (): void => {
                 <!-- 歌词侧边工具栏：横屏精简布局不渲染 -->
                 <LyricActions v-if="!landscapeLayout" :immersive="immersive" />
               </div>
-            </div>
-            <!-- 评论页（堆叠第 3 页，左滑进入；UI 对照 SFA PlayerComment） -->
-            <div
-              v-if="stackedLayout && hasCommentPage"
-              ref="commentPaneRef"
-              class="h-full shrink-0 flex flex-col min-h-0"
-              :style="{ width: `${100 / stackTotal}%` }"
-            >
-              <PlayerCommentPage :active="stackPage === 2" @back="goStackPage(1)" />
             </div>
           </div>
           <!-- 堆叠分页点（逐像素对照参照：白 20% 圆点 / 主色 16px 胶囊，内联样式锁定） -->

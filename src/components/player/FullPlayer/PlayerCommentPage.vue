@@ -172,7 +172,11 @@ const goBack = (): void => {
             <span class="font-medium">{{ item.userName }}：</span>
             <span class="text-cover/90">{{ item.text }}</span>
           </div>
-          <div v-for="reply in item.reply ?? []" :key="`hot-r-${reply.id}`" class="text-xs text-cover/60">
+          <div
+            v-for="reply in item.reply ?? []"
+            :key="`hot-r-${reply.id}`"
+            class="text-xs text-cover/60"
+          >
             @ {{ reply.userName }}：{{ reply.text }}
           </div>
           <div class="flex items-center gap-3 text-xs text-cover/40">

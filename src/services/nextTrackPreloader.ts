@@ -23,6 +23,29 @@ export interface NextTrackPreloadResult {
   contextKey: string;
 }
 
+/**
+ * 登记原生下一首槽位（幂等）：锁屏 ENDED 后原生直接开播，不等 WebView。
+ * 单曲循环/定时关闭“等本曲结束”时不登记，否则原生会越过这两种语义。
+ */
+const pushNativeNext = (result: NextTrackPreloadResult, track: Track, playIndex: number): void => {
+  if (!isAndroid || !result.source?.source) return;
+  const status = useStatusStore();
+  if (status.repeatMode === "one" || autoClose.shouldStopAfterCurrentTrack()) return;
+  console.log("[nextPreload] native next armed:", track.id);
+  void window.api.player
+    .setNextResource?.({
+      trackId: track.id,
+      playIndex,
+      source: result.source.source,
+      title: track.title,
+      artist: track.artists?.map((a) => a.name).join(" / ") ?? "",
+      album: track.album?.name ?? "",
+      artwork: track.coverOriginal ?? track.cover ?? "",
+      durationMs: track.duration ?? 0,
+    })
+    .catch(() => {});
+};
+
 let currentToken = 0;
 let cachedResult: NextTrackPreloadResult | null = null;
 let currentContextKey: string | null = null;
@@ -171,8 +194,11 @@ export const scheduleNextTrackPreload = (): void => {
   // 歌词使用独立上下文去重，歌词偏好变化不需要重新解析音源
   preloadLyricForTrack(candidateTrack);
 
-  // 上下文指纹一致且已有缓存，避免重复触发
+  // 上下文指纹一致且已有缓存，避免重复触发；顺带重登记原生槽位（可能被 invalidate 清空）
   if (cachedResult && cachedResult.contextKey === contextKey) {
+    if (cachedResult.trackId === candidateTrack.id) {
+      pushNativeNext(cachedResult, candidateTrack, candidateResult.index);
+    }
     return;
   }
 
@@ -196,31 +222,14 @@ export const scheduleNextTrackPreload = (): void => {
         streamingPlaySessionId: crypto.randomUUID(),
       });
       if (token !== currentToken) return;
-      cachedResult = {
+      const result: NextTrackPreloadResult = {
         trackId: candidateTrack.id,
         source,
         contextKey,
       };
+      cachedResult = result;
       // Android：登记到原生，锁屏 ENDED 后原生直接开播，不等 WebView（参照 SFA 原生队列）
-      // 单曲循环/定时关闭“等本曲结束”时不登记，否则原生会越过这两种语义
-      const status = useStatusStore();
-      if (
-        isAndroid &&
-        source?.source &&
-        status.repeatMode !== "one" &&
-        !autoClose.shouldStopAfterCurrentTrack()
-      ) {
-        void window.api.player.setNextResource?.({
-          trackId: candidateTrack.id,
-          playIndex: candidateResult.index,
-          source: source.source,
-          title: candidateTrack.title,
-          artist: candidateTrack.artists?.map((a) => a.name).join(" / ") ?? "",
-          album: candidateTrack.album?.name ?? "",
-          artwork: candidateTrack.coverOriginal ?? candidateTrack.cover ?? "",
-          durationMs: candidateTrack.duration ?? 0,
-        }).catch(() => {});
-      }
+      pushNativeNext(result, candidateTrack, candidateResult.index);
     } catch (err) {
       console.warn("[nextPreload] Preload task failed silently:", err);
       if (token === currentToken) {
