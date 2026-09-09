@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.9",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "fast-xml-parser": "^5.10.1",

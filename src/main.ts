@@ -10,6 +10,7 @@ import { useThemeStore } from "./stores/theme";
 import { useSettingsStore } from "./stores/settings";
 import { useHotkeyStore } from "./stores/hotkey";
 import { initPlayer, playFiles, restoreLastTrack } from "./core/player";
+import { installAndroidBackButton } from "./services/androidBackButton";
 import { handleOrpheus } from "./services/orpheus";
 import { installHotkeyManager } from "./core/hotkey/manager";
 import { vRipple } from "./directives/ripple";
@@ -25,6 +26,9 @@ app.directive("ripple", vRipple);
 app.use(pinia);
 app.use(router);
 app.use(i18n);
+
+// Android 返回键：覆盖层 → 路由 → 最小化
+void installAndroidBackButton();
 
 // 初始化主题
 useThemeStore().init();
