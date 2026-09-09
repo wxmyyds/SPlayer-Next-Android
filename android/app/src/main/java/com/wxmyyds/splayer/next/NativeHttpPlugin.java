@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.EventListener;
+import okhttp3.Handshake;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -37,11 +39,44 @@ public class NativeHttpPlugin extends Plugin {
 
     private OkHttpClient client;
     private OkHttpClient noRedirectClient;
+    /** 慢阶段阈值：超过该阈值的 DNS/连接/TLS 阶段记日志定位网络侧 stall */
+    private static final long SLOW_PHASE_MS = 3000;
+
+    /** 记录 DNS/连接/TLS 各阶段耗时，慢阶段 warn 日志 */
+    private static class PhaseLogger extends EventListener {
+        long dnsStart, connectStart, secureStart;
+        String url;
+        PhaseLogger(String url) { this.url = url; }
+        @Override public void dnsStart(Call call, String domainName) { dnsStart = now(); }
+        @Override public void dnsEnd(Call call, String domainName, java.util.List<java.net.InetAddress> inetAddressList) {
+            slow("dns", now() - dnsStart);
+        }
+        @Override public void connectStart(Call call, java.net.InetSocketAddress inetSocketAddress, okhttp3.Protocol proxy) {
+            connectStart = now();
+        }
+        @Override public void secureConnectStart(Call call) { secureStart = now(); }
+        @Override public void secureConnectEnd(Call call, Handshake handshake) {
+            slow("tls", now() - secureStart);
+        }
+        @Override public void connectEnd(Call call, java.net.InetSocketAddress inetSocketAddress, okhttp3.Protocol proxy, okhttp3.Protocol protocol) {
+            slow("connect", now() - connectStart);
+        }
+        private void slow(String phase, long ms) {
+            if (ms > SLOW_PHASE_MS) {
+                try {
+                    android.util.Log.w("NativeHttp", phase + " stall " + ms + "ms " + new java.net.URL(url).getHost());
+                } catch (Exception ignored) {}
+            }
+        }
+        private static long now() { return android.os.SystemClock.elapsedRealtime(); }
+    }
 
     @Override
     public void load() {
+        // 首连 stall 环境（透明代理/劫持 DNS）下 15s 超时意味着每次冷启动白等；
+        // 8s 足够正常网络建连，超时后 OkHttp 自动重试走已预热路径
         client = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(8, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .build();
         // 登录流程需要读取 302 的 Location/Set-Cookie，不能自动跟随
@@ -49,6 +84,15 @@ public class NativeHttpPlugin extends Plugin {
                 .followRedirects(false)
                 .followSslRedirects(false)
                 .build();
+    }
+
+    /** 调用方 headers 是否已声明某请求头 */
+    private static boolean hasHeader(JSObject headersObj, String name) {
+        java.util.Iterator<String> names = headersObj.keys();
+        while (names.hasNext()) {
+            if (name.equalsIgnoreCase(names.next())) return true;
+        }
+        return false;
     }
 
     @PluginMethod
@@ -87,9 +131,18 @@ public class NativeHttpPlugin extends Plugin {
             builder.method(method, body);
         }
 
+        // 调用方未声明 UA 时给浏览器 UA：部分透明代理/网关对默认 okhttp UA 首连限速
+        if (!hasHeader(headersObj, "User-Agent")) {
+            builder.header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36");
+        }
         // redirect=manual 时返回跳转响应本身（QQ 登录取 Location/p_skey 用）
         boolean manual = "manual".equalsIgnoreCase(call.getString("redirect", "follow"));
-        (manual ? noRedirectClient : client).newCall(builder.build()).enqueue(new Callback() {
+        OkHttpClient base = manual ? noRedirectClient : client;
+        // 慢阶段监控：按调用挂 EventListener，连接池共享不受影响
+        OkHttpClient scoped = base.newBuilder()
+                .eventListener(new PhaseLogger(url))
+                .build();
+        scoped.newCall(builder.build()).enqueue(new Callback() {
             @Override
             public void onFailure(Call c, IOException e) {
                 call.reject(e.getMessage(), e);
