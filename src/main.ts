@@ -17,6 +17,12 @@ import { installAndroidBridge } from "@android/bridge";
 
 installAndroidBridge();
 
+// V8 默认只收 10 帧，无限递归时真正的循环体会被截掉：提到 150 帧再记
+try {
+  (Error as unknown as { stackTraceLimit: number }).stackTraceLimit = 150;
+} catch {
+  // 忽略
+}
 // 未捕获的 Promise 异常记栈（压缩包定位用）：保留头部 3 帧与尾部 25 帧，
 // 无限递归时头部全是调度器自调用，真正的循环体在尾部
 globalThis.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {

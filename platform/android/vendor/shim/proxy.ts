@@ -139,6 +139,7 @@ export const fetchWithProxy = async (
   if (typeof init?.body === "string") body = init.body;
   else if (init?.body instanceof Uint8Array) body = bytesToB64(init.body);
   // 原生侧 OkHttp 自带连接/读取超时；AbortSignal 暂不透传
+  const reqStart = Date.now();
   const res = await NativeHttp.request({
     url: href,
     method: init?.method ?? "GET",
@@ -146,6 +147,14 @@ export const fetchWithProxy = async (
     body,
     redirect: init?.redirect ?? "follow",
   });
+  const reqMs = Date.now() - reqStart;
+  if (reqMs > 8000) {
+    try {
+      console.warn(`[net-timing] ${init?.method ?? "GET"} ${new URL(href).host} 耗时 ${reqMs}ms`);
+    } catch {
+      // URL 解析失败时忽略
+    }
+  }
   let bytes = b64ToBytes(res.bodyBase64);
   // 防御性解压：个别接口仍可能返回真 gzip（魔数 0x1f 0x8b）
   if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
