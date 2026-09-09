@@ -278,6 +278,13 @@ public class AudioEnginePlugin extends Plugin {
                 player.removeMediaItems(current + 1, player.getMediaItemCount());
             }
             androidx.media3.common.MediaItem cur = player.getCurrentMediaItem();
+            // 预载与 ended 链竞态：ended 后 JS 已自行 load 了同一首，再挂会出现重复项，
+            // 导致该曲播完自动切到“自己”。媒体 ID 相同即丢弃本次挂载。
+            if (cur != null && trackId.equals(cur.mediaId)) {
+                Log.i(TAG, "setNext skip (already current) trackId=" + trackId);
+                call.resolve();
+                return;
+            }
             if (cur != null) {
                 pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
             } else {
