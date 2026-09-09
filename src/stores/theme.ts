@@ -1,4 +1,5 @@
 import type { ThemeMode, ThemeSource, AppearanceStyle, ImageBackgroundConfig } from "@/types/theme";
+import { isAndroid } from "@/utils/platform";
 import {
   generatePalette,
   applyThemeToDOM,
@@ -85,6 +86,8 @@ export const useThemeStore = defineStore(
         : generatePalette(effectiveColor.value, isDark.value, effectiveGlobalTint.value);
       applyThemeToDOM(palette, coverColor.value, isDark.value);
       document.documentElement.dataset.appearanceStyle = effectiveStyle.value;
+      // Android：浅色背景下系统栏白色图标不可见，跟随明暗主题切换图标颜色
+      if (isAndroid) void window.api.system.setLightBars(!isDark.value).catch(() => {});
     };
 
     /** 循环切换主题模式 */

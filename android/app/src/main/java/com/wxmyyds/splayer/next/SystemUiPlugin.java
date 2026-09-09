@@ -43,4 +43,28 @@ public class SystemUiPlugin extends Plugin {
                     call.resolve(new JSObject());
                 });
     }
+
+    /**
+     * 状态栏/导航栏图标明暗适配：浅色背景时给深色图标，避免白色图标看不见
+     * @param light 为 true 时系统栏图标用深色（浅色背景），false 用浅色（暗色背景）
+     */
+    @PluginMethod
+    public void setLightBars(PluginCall call) {
+        // light = 图标深色（浅色背景用）；与 setAppearanceLightStatusBars 语义对齐
+        boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("activity unavailable");
+            return;
+        }
+        final Window window = activity.getWindow();
+        activity.runOnUiThread(
+                () -> {
+                    WindowInsetsControllerCompat controller =
+                            new WindowInsetsControllerCompat(window, window.getDecorView());
+                    controller.setAppearanceLightStatusBars(light);
+                    controller.setAppearanceLightNavigationBars(light);
+                    call.resolve(new JSObject());
+                });
+    }
 }

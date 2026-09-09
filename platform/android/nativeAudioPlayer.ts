@@ -41,10 +41,12 @@ interface MediaBridgePlugin {
 /** 系统栏沉浸插件（SystemUiPlugin）：隐藏状态栏/导航小白条 */
 interface SystemUiBridgePlugin {
   setImmersive: (options: { enabled: boolean }) => Promise<void>;
+  setLightBars: (options: { light: boolean }) => Promise<void>;
 }
 
 class SystemUiWeb extends WebPlugin implements SystemUiBridgePlugin {
   async setImmersive(): Promise<void> {}
+  async setLightBars(): Promise<void> {}
 }
 
 /** 供 bridge.ts 的 system.setImmersive 消费 */

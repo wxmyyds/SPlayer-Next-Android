@@ -223,6 +223,8 @@ interface AndroidSystemApi {
   getPathForFile: (file: File) => string;
   /** Android：全屏沉浸（隐藏状态栏/导航小白条，滑动临时呼出） */
   setImmersive: (enabled: boolean) => Promise<void>;
+  /** Android：系统栏图标明暗（true = 深色图标，浅色背景用） */
+  setLightBars: (light: boolean) => Promise<void>;
 }
 
 const system: AndroidSystemApi = {
@@ -261,6 +263,7 @@ const system: AndroidSystemApi = {
   consumePendingAudioFiles: async () => [],
   getPathForFile: (file: File) => file.name,
   setImmersive: (enabled: boolean) => SystemUi.setImmersive({ enabled }),
+  setLightBars: (light: boolean) => SystemUi.setLightBars({ light }),
 };
 
 const library: LibraryApi = {
