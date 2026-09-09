@@ -122,6 +122,38 @@ let lastPositionMs = 0;
 let lastDurationMs = 0;
 let enginePlaying = false;
 
+/** 缓冲停滞看门狗：VIP/第三方源偶发只连接不出数据，ExoPlayer 持续 BUFFERING
+ * 既无 position 推进也无 sourceError，UI 会冻在“播放中”。超时按源失效恢复（重载一次→跳曲）。 */
+let lastAdvanceAt = 0;
+let stallTimer: ReturnType<typeof setInterval> | null = null;
+/** 判停滞时长（毫秒）：第三方源首包慢，留足余量 */
+const STALL_TIMEOUT_MS = 15000;
+const STALL_CHECK_MS = 5000;
+
+/** 记录一次有效推进（load/开播/位置前进），刷新停滞起点 */
+const noteStallProgress = (): void => {
+  lastAdvanceAt = Date.now();
+};
+
+const stopStallWatchdog = (): void => {
+  if (stallTimer) {
+    clearInterval(stallTimer);
+    stallTimer = null;
+  }
+};
+
+const ensureStallWatchdog = (): void => {
+  noteStallProgress();
+  if (stallTimer) return;
+  stallTimer = setInterval(() => {
+    if (!enginePlaying) return;
+    if (Date.now() - lastAdvanceAt < STALL_TIMEOUT_MS) return;
+    stopStallWatchdog();
+    enginePlaying = false;
+    emit({ type: "sourceError" });
+  }, STALL_CHECK_MS);
+};
+
 /** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
 const publishMetadata = (meta?: LoadOptions["meta"]): void => {
   try {
@@ -213,17 +245,21 @@ const wireEngine = (): void => {
     switch (data.type) {
       case "play":
         enginePlaying = true;
+        ensureStallWatchdog();
         publishState("playing", lastPositionMs, lastDurationMs);
         break;
       case "pause":
         enginePlaying = false;
+        stopStallWatchdog();
         publishState("paused", lastPositionMs, lastDurationMs);
         break;
       case "ended":
         enginePlaying = false;
+        stopStallWatchdog();
         publishState("paused", 0, lastDurationMs);
         break;
       case "position":
+        if (data.data.position > lastPositionMs) noteStallProgress();
         lastPositionMs = data.data.position;
         lastDurationMs = data.data.duration;
         publishState(
@@ -234,11 +270,14 @@ const wireEngine = (): void => {
         break;
       case "sourceError":
         enginePlaying = false;
+        stopStallWatchdog();
         publishState("paused", lastPositionMs, lastDurationMs);
         break;
       case "playingChanged":
         // 引擎播放态快照：同步媒体卡片，不回射指令（振荡环防护见 mapNativeEvent）
         enginePlaying = !!data.data?.playing;
+        if (enginePlaying) ensureStallWatchdog();
+        else stopStallWatchdog();
         publishState(
           enginePlaying ? "playing" : "paused",
           lastPositionMs,
@@ -269,6 +308,7 @@ export const nativeAudioPlayer: PlayerApi = {
       wireEngine();
       publishMetadata(options?.meta);
       enginePlaying = !!options?.autoPlay;
+      ensureStallWatchdog();
       lastPositionMs = 0;
       const result = await AudioEngine.load({
         source,
@@ -316,6 +356,7 @@ export const nativeAudioPlayer: PlayerApi = {
     try {
       await AudioEngine.stop();
       enginePlaying = false;
+      stopStallWatchdog();
       lastPositionMs = 0;
       lastDurationMs = 0;
       publishState("none");
@@ -327,6 +368,8 @@ export const nativeAudioPlayer: PlayerApi = {
   seek: async (positionMs: number) => {
     try {
       await AudioEngine.seek({ position: positionMs });
+      // 切到未缓冲区间会重新 BUFFERING，刷新停滞起点避免误判
+      noteStallProgress();
       // 同步位置快照：原生仅在播放中推 position 事件，暂停时 seek 后必须本地更新
       // 否则媒体卡片/状态快照停留在旧位置
       lastPositionMs = positionMs;
