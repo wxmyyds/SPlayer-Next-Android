@@ -12,6 +12,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { useStreamingStore } from "@/stores/streaming";
 import { usePluginsStore } from "@/stores/plugins";
 import { useMediaStore } from "@/stores/media";
+import { isAndroid } from "@/utils/platform";
 import * as queue from "@/stores/queue";
 
 /** 预载结果 */
@@ -100,7 +101,7 @@ export const invalidateNextTrackPreload = (): void => {
  * @returns 匹配的预载结果，未命中或已作废则返回 null
  */
 export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | null => {
-  if (!useSettingsStore().player.preloadNextTrack) {
+  if (!useSettingsStore().player.preloadNextTrack && !isAndroid) {
     invalidateNextTrackPreload();
     return null;
   }
@@ -136,7 +137,9 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
  */
 export const scheduleNextTrackPreload = (): void => {
   const settings = useSettingsStore();
-  if (!settings.player.preloadNextTrack) {
+  // Android 锁屏下 ENDED 时现解析必走网络，常因 CPU 休眠/首包 stall 卡死不切歌；
+  // 必须在播放中（CPU 醒着）预解析好下一首，ENDED 时直接消费缓存
+  if (!settings.player.preloadNextTrack && !isAndroid) {
     invalidateNextTrackPreload();
     return;
   }

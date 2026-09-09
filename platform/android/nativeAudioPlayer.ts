@@ -90,6 +90,7 @@ interface AudioEnginePlugin {
   setOutputDevice(options: { deviceId: string }): Promise<void>;
   getStatus(): Promise<PlayerStatus>;
   setPauseOnDeviceSwitch(options: { enabled: boolean }): Promise<void>;
+  extendSwitchWindow(): Promise<void>;
   addListener(
     event: "event" | "mediaKey",
     callback: (payload: unknown) => void,
@@ -257,6 +258,8 @@ const wireEngine = (): void => {
         enginePlaying = false;
         stopStallWatchdog();
         publishState("paused", 0, lastDurationMs);
+        // 锁屏下 CPU 休眠会把 JS 切歌决策链掐死在下一步网络请求上，先续借唤醒窗口
+        void AudioEngine.extendSwitchWindow().catch(() => {});
         break;
       case "position":
         if (data.data.position > lastPositionMs) noteStallProgress();

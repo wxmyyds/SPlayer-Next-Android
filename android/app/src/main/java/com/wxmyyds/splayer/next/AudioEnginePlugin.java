@@ -547,6 +547,13 @@ public class AudioEnginePlugin extends Plugin {
         if (switchWakeLock != null && switchWakeLock.isHeld()) switchWakeLock.release();
     }
 
+    /** JS 切歌决策中续借唤醒窗口（锁屏下下一首解析走网络，30 秒可能不够） */
+    @PluginMethod
+    public void extendSwitchWindow(PluginCall call) {
+        acquireSwitchWakeLock();
+        call.resolve();
+    }
+
     static AudioEnginePlugin getInstance() {
         return sInstance;
     }
