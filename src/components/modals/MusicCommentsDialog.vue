@@ -217,7 +217,7 @@ watch(activeTab, async (next, prev) => {
       </div>
       <div v-else ref="listScrollRef" class="min-h-0 flex-1 overflow-y-auto pr-1">
         <div class="space-y-1.5">
-          <SCard v-for="item in page.list" :key="item.id" size="small" radius="lg">
+          <SCard v-for="item in page.list" :key="item.id" size="small" radius="xl">
             <div class="flex gap-3">
               <SImg
                 v-if="item.avatar"
