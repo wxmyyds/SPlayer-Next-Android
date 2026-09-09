@@ -422,6 +422,22 @@ export const nativeAudioPlayer: PlayerApi = {
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
+  setNextResource: async (options) => {
+    try {
+      await AudioEngine.setNextResource(options);
+      return ok();
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  },
+  clearNextResource: async () => {
+    try {
+      await AudioEngine.clearNextResource();
+      return ok();
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  },
   getVolume: async () => {
     try {
       const status = await AudioEngine.getStatus();
