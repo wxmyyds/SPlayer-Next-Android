@@ -30,11 +30,13 @@ globalThis.addEventListener("unhandledrejection", (event: PromiseRejectionEvent)
   const stack =
     reason && typeof reason.stack === "string" ? reason.stack : String(reason);
   const lines = stack.split("\n");
-  const brief =
-    lines.length > 30
-      ? [...lines.slice(0, 3), "...", ...lines.slice(-25)].join("\n")
-      : stack;
-  console.error(`[unhandled] ${brief.slice(0, 2500)}`);
+  // logcat 单条截断：头尾分两条记，避免尾部（真实循环体）被截掉
+  if (lines.length > 30) {
+    console.error(`[unhandled-head] ${lines.slice(0, 3).join("\n").slice(0, 1500)}`);
+    console.error(`[unhandled-tail] ${lines.slice(-25).join("\n").slice(0, 2500)}`);
+  } else {
+    console.error(`[unhandled] ${stack.slice(0, 2500)}`);
+  }
 });
 
 const pinia = createPinia();

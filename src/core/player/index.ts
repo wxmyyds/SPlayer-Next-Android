@@ -27,6 +27,8 @@ import {
 import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
 import { extractColorFromUrl } from "@/utils/color";
+import { isAndroid } from "@/utils/platform";
+import { neteaseCall } from "@/apis/netease";
 import { handleError, isSkippableError } from "@/utils/errors";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@/utils/preset/djMode";
@@ -1141,6 +1143,14 @@ export const initPlayer = async (): Promise<void> => {
   // 下一首预载的监听器
   installNextTrackPreloadWatchers();
   scheduleNextTrackPreload();
+  // Android：冷启动后台预热 song_url（interface3 首字节 stall 环境，首播现等 20 秒）。
+  // 用记忆中的当前曲目 id 发一次真实解析预热连接，失败忽略、点播时正常重试。
+  if (isAndroid) {
+    const warmId = useStatusStore().currentTrack?.id;
+    if (warmId) {
+      void neteaseCall("song_url", { id: warmId, level: "exhigh" }).catch(() => {});
+    }
+  }
 };
 
 /** 恢复上次播放状态 */

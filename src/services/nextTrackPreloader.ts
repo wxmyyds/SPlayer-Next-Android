@@ -134,11 +134,11 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
 /**
  * 预取指定曲目的音源/歌词/封面
  * 收藏页数据一到即在后台静默解析第一首，点播放时 loadTrack 直接消费，
- * 把 VIP 兜底解析的几秒等待从点播时刻挪到浏览歌单时
+ * 把 VIP 兜底解析的几秒等待从点播时刻挪到浏览歌单时。
+ * 不受 preloadNextTrack 开关门控：收藏页打开后点播概率极高，单次解析成本可接受。
  * @param track - 要预取的曲目
  */
 export const preloadTrack = (track: Track): void => {
-  if (!useSettingsStore().player.preloadNextTrack) return;
   const contextKey = buildContextKey(track);
   if (cachedResult?.contextKey === contextKey || currentContextKey === contextKey) return;
   const token = ++currentToken;
