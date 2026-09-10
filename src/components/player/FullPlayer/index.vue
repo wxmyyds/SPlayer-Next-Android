@@ -522,7 +522,7 @@ const toggleLyric = (): void => {
               class="h-full shrink-0 flex flex-col min-h-0"
               :style="{ width: `${100 / stackTotal}%` }"
             >
-              <PlayerCommentPage :active="stackPage === commentIdx" @back="goStackPage(coverIdx)" />
+              <PlayerCommentPage :active="stackPage === commentIdx" />
             </div>
             <div
               ref="page1Ref"

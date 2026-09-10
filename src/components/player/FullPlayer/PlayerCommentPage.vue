@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 评论页（全屏播放器左滑第 3 页，UI 对照 SFA PlayerComment/CommentList）
- * 热门评论 + 全部评论两段式，加载更多追加；数据走 window.api.comments。
+ * 评论页（全屏播放器封面右滑，UI 对照 SFA PlayerComment/CommentList 移动端）
+ * 热门评论 + 全部评论两段式卡片流，加载更多追加；数据走 window.api.comments。
  */
 import type { CommentSource, MusicCommentItem, MusicCommentPage } from "@shared/types/comment";
 import { useStatusStore } from "@/stores/status";
@@ -11,8 +11,6 @@ const props = defineProps<{
   /** 页面是否处于激活态（非激活不发起请求） */
   active?: boolean;
 }>();
-
-const emit = defineEmits<{ (e: "back"): void }>();
 
 const status = useStatusStore();
 const { t } = useI18n();
@@ -31,7 +29,6 @@ const hasMore = ref(false);
 const loadingHot = ref(false);
 const loadingNew = ref(false);
 const loadedFor = ref("");
-const listRef = ref<HTMLElement | null>(null);
 
 const loading = computed(() => loadingHot.value || loadingNew.value);
 
@@ -50,7 +47,7 @@ const reset = (): void => {
 
 const load = async (): Promise<void> => {
   const current = track.value;
-  if (!current || !sourceId.value || !props.active) return;
+  if (!current || !props.active) return;
   const key = `${current.source}:${current.id}`;
   if (loadedFor.value === key) return;
   loadedFor.value = key;
@@ -125,113 +122,141 @@ watch(
   { immediate: true },
 );
 
-const goBack = (): void => {
-  emit("back");
-};
+/** 空态可见：加载完成且两段都为空 */
+const showEmpty = computed(
+  () => !loading.value && loadedFor.value && !hotList.value.length && !newList.value.length,
+);
 </script>
 
 <template>
   <div class="flex h-full flex-col overflow-hidden">
-    <!-- 歌曲信息头（对照 SFA song-data） -->
-    <div class="flex shrink-0 items-center gap-3 px-5 pt-1 pb-3">
+    <!-- 歌曲信息卡（对照 SFA 移动端 song-data：80px 卡片，圆角封面 + 标题/歌手） -->
+    <div
+      v-if="track"
+      class="mx-4 mb-3 flex h-20 shrink-0 items-center gap-3 rounded-xl bg-cover/[0.08] px-3.5"
+    >
       <img
-        v-if="track?.cover"
+        v-if="track.cover"
         :src="track.cover"
         :alt="track.title"
         decoding="async"
-        class="h-11 w-11 rounded-lg object-cover"
+        class="size-14 shrink-0 rounded-[10px] object-cover"
       />
-      <div class="min-w-0 flex-1">
-        <div class="truncate text-sm font-medium text-cover">{{ track?.title }}</div>
-        <div class="truncate text-xs text-cover/50">
-          {{ track?.artists?.map((artist) => artist.name).join(" / ") }}
-        </div>
+      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="truncate text-[17px] leading-snug font-bold text-cover">
+          {{ track.title }}
+        </span>
+        <span class="truncate text-xs text-cover/80">
+          {{ track.artists?.map((artist) => artist.name).join(" / ") }}
+        </span>
       </div>
-      <button
-        class="shrink-0 rounded-full p-2 text-cover/70 transition-colors active:bg-cover/10"
-        :aria-label="t('common.back')"
-        @click.stop="goBack"
-      >
-        <IconLucideChevronRight class="size-5" />
-      </button>
     </div>
 
-    <div ref="listRef" class="min-h-0 flex-1 overflow-y-auto px-5 pb-24">
+    <!-- 评论滚动区（上下渐隐遮罩，对照 SFA comment-scroll） -->
+    <div
+      class="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [mask-image:linear-gradient(180deg,transparent,rgba(0,0,0,0.6)_2%,#000_5%,#000_90%,rgba(0,0,0,0.6)_95%,transparent)]"
+    >
       <!-- 热门评论 -->
       <template v-if="hotList.length > 0">
-        <div class="flex items-center gap-1.5 pb-2 text-sm font-semibold text-cover">
-          <IconLucideFlame class="size-4 text-orange-400" />
-          <span>{{ t("comments.hot") }}</span>
+        <div class="flex h-14 items-end pb-2.5">
+          <div class="flex items-center gap-1 text-lg font-bold text-cover">
+            <IconLucideFlame class="size-5" />
+            <span>{{ t("comments.hot") }}</span>
+          </div>
         </div>
-        <div
-          v-for="item in hotList"
-          :key="`hot-${item.id}`"
-          class="flex flex-col gap-1 border-b border-solid border-cover/5 py-3"
-        >
-          <div class="text-sm leading-snug text-cover">
-            <span class="font-medium">{{ item.userName }}：</span>
-            <span class="text-cover/90">{{ item.text }}</span>
-          </div>
+        <div class="mb-5 flex flex-col gap-5">
           <div
-            v-for="reply in item.reply ?? []"
-            :key="`hot-r-${reply.id}`"
-            class="text-xs text-cover/60"
+            v-for="item in hotList"
+            :key="`hot-${item.id}`"
+            class="flex min-h-32 flex-col rounded-xl bg-cover/[0.08] p-4"
           >
-            @ {{ reply.userName }}：{{ reply.text }}
-          </div>
-          <div class="flex items-center gap-3 text-xs text-cover/40">
-            <span v-if="item.time">{{ formatDate(item.time) }}</span>
-            <span v-if="item.location">{{ item.location }}</span>
-            <span v-if="item.likedCount != null" class="ml-auto flex items-center gap-1">
-              <IconLucideThumbsUp class="size-3.5" />
-              {{ item.likedCount }}
-            </span>
+            <div class="text-base leading-snug text-cover">
+              <span class="font-bold">{{ item.userName }}：</span>
+              <span class="whitespace-pre-wrap">{{ item.text }}</span>
+            </div>
+            <div
+              v-for="reply in item.reply ?? []"
+              :key="`hot-r-${reply.id}`"
+              class="mt-1.5 rounded-lg bg-cover/[0.12] px-2 py-1 text-[13px] leading-snug text-cover"
+            >
+              <span class="font-bold text-cover/70">@ {{ reply.userName }}：</span>
+              <span class="whitespace-pre-wrap">{{ reply.text }}</span>
+            </div>
+            <div class="mt-auto flex items-center gap-3 pt-3 text-xs text-cover/60">
+              <span v-if="item.time" class="flex items-center gap-1">
+                <IconLucideClock class="size-4" />
+                {{ formatDate(item.time) }}
+              </span>
+              <span v-if="item.location" class="flex items-center gap-1">
+                <IconLucideMapPin class="size-4" />
+                {{ item.location }}
+              </span>
+              <span v-if="item.likedCount != null" class="ml-auto flex items-center gap-1">
+                <IconLucideThumbsUp class="size-4" />
+                {{ item.likedCount }}
+              </span>
+            </div>
           </div>
         </div>
       </template>
 
       <!-- 全部评论 -->
-      <div class="flex items-center gap-1.5 pt-4 pb-2 text-sm font-semibold text-cover">
-        <IconLucideMessageCircle class="size-4" />
-        <span>{{ t("comments.new") }}</span>
-        <span v-if="total > 0" class="text-xs font-normal text-cover/40">{{ total }}</span>
+      <div class="flex h-14 items-end pb-2.5">
+        <div class="flex items-center gap-1 text-lg font-bold text-cover">
+          <IconLucideMessageCircle class="size-5" />
+          <span>{{ t("comments.new") }}</span>
+          <span v-if="total > 0" class="ml-1 text-sm font-normal text-cover/60">{{ total }}</span>
+        </div>
       </div>
-      <div
-        v-for="item in newList"
-        :key="item.id"
-        class="flex flex-col gap-1 border-b border-solid border-cover/5 py-3"
-      >
-        <div class="text-sm leading-snug text-cover">
-          <span class="font-medium">{{ item.userName }}：</span>
-          <span class="text-cover/90">{{ item.text }}</span>
-        </div>
-        <div v-for="reply in item.reply ?? []" :key="`r-${reply.id}`" class="text-xs text-cover/60">
-          @ {{ reply.userName }}：{{ reply.text }}
-        </div>
-        <div v-if="item.images?.length" class="flex flex-wrap gap-2">
-          <img
-            v-for="(image, index) in item.images"
-            :key="index"
-            :src="image"
-            decoding="async"
-            loading="lazy"
-            class="max-h-28 rounded-lg object-cover"
-          />
-        </div>
-        <div class="flex items-center gap-3 text-xs text-cover/40">
-          <span v-if="item.time">{{ formatDate(item.time) }}</span>
-          <span v-if="item.location">{{ item.location }}</span>
-          <span v-if="item.likedCount != null" class="ml-auto flex items-center gap-1">
-            <IconLucideThumbsUp class="size-3.5" />
-            {{ item.likedCount }}
-          </span>
+
+      <!-- 骨架屏（首载） -->
+      <div v-if="loading && !newList.length" class="flex flex-col gap-5">
+        <div
+          v-for="index in 4"
+          :key="`sk-${index}`"
+          class="h-32 animate-pulse rounded-xl bg-cover/[0.08]"
+        />
+      </div>
+
+      <div v-else class="flex flex-col gap-5">
+        <div
+          v-for="item in newList"
+          :key="item.id"
+          class="flex min-h-32 flex-col rounded-xl bg-cover/[0.08] p-4"
+        >
+          <div class="text-base leading-snug text-cover">
+            <span class="font-bold">{{ item.userName }}：</span>
+            <span class="whitespace-pre-wrap">{{ item.text }}</span>
+          </div>
+          <div
+            v-for="reply in item.reply ?? []"
+            :key="`r-${reply.id}`"
+            class="mt-1.5 rounded-lg bg-cover/[0.12] px-2 py-1 text-[13px] leading-snug text-cover"
+          >
+            <span class="font-bold text-cover/70">@ {{ reply.userName }}：</span>
+            <span class="whitespace-pre-wrap">{{ reply.text }}</span>
+          </div>
+          <div class="mt-auto flex items-center gap-3 pt-3 text-xs text-cover/60">
+            <span v-if="item.time" class="flex items-center gap-1">
+              <IconLucideClock class="size-4" />
+              {{ formatDate(item.time) }}
+            </span>
+            <span v-if="item.location" class="flex items-center gap-1">
+              <IconLucideMapPin class="size-4" />
+              {{ item.location }}
+            </span>
+            <span v-if="item.likedCount != null" class="ml-auto flex items-center gap-1">
+              <IconLucideThumbsUp class="size-4" />
+              {{ item.likedCount }}
+            </span>
+          </div>
         </div>
       </div>
 
       <!-- 加载更多 -->
-      <div v-if="hasMore" class="flex justify-center py-4">
+      <div v-if="hasMore" class="flex justify-center py-5">
         <button
-          class="rounded-full border border-solid border-cover/20 px-5 py-1.5 text-xs text-cover/70 transition-colors active:bg-cover/10"
+          class="rounded-full bg-cover/[0.12] px-6 py-2 text-sm text-cover transition-colors active:bg-cover/[0.2]"
           :disabled="loadingNew"
           @click.stop="loadMore"
         >
@@ -240,10 +265,7 @@ const goBack = (): void => {
       </div>
 
       <!-- 空态 -->
-      <div
-        v-if="!loading && !loadingHot && newList.length === 0 && hotList.length === 0 && loadedFor"
-        class="py-16 text-center text-sm text-cover/40"
-      >
+      <div v-if="showEmpty" class="py-16 text-center text-sm text-cover/60">
         {{ t("comments.empty") }}
       </div>
     </div>
