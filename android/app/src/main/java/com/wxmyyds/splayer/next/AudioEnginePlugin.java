@@ -101,6 +101,86 @@ public class AudioEnginePlugin extends Plugin {
             java.util.concurrent.Executors.newSingleThreadExecutor();
     /** requestNextUrl 补窗节拍计数（200ms/拍，每 75 拍 ≈ 15s 提醒 JS 补挂） */
     private long nudgeTick = 0;
+    /** 上次过渡的媒体 ID：锁屏播控/自动过渡都靠它判定“真的换了曲”（曲内拖动 mediaId 不变不误同步） */
+    private String lastTransitionMediaId;
+
+    /**
+     * 锁屏播控原生接管：播放/暂停直接作用 ExoPlayer（幂等，JS 恢复后重放无害）
+     * @param play - true 播放，false 暂停
+     */
+    static void handleNativePlayPause(boolean play) {
+        AudioEnginePlugin self = sInstance;
+        if (self == null || self.mainHandler == null) return;
+        self.mainHandler.post(
+                () -> {
+                    if (self.player != null) self.player.setPlayWhenReady(play);
+                });
+    }
+
+    /**
+     * 锁屏进度拖动原生接管（幂等，JS 恢复后重放同位置无害）
+     * @param positionMs - 目标位置（毫秒）
+     */
+    static void handleNativeSeekTo(long positionMs) {
+        AudioEnginePlugin self = sInstance;
+        if (self == null || self.mainHandler == null) return;
+        self.mainHandler.post(
+                () -> {
+                    if (self.player != null) {
+                        self.player.seekTo(Math.max(0L, positionMs));
+                        if (self.player.getPlaybackState() == Player.STATE_ENDED) self.player.play();
+                    }
+                });
+    }
+
+    /**
+     * 锁屏上一首/下一首原生接管：有预载项时直接切播放列表（非幂等，成功后不发 JS，
+     * JS 经 autoAdvanced 同步指针）；无预载项（FM/队列耗尽）回落 JS 链
+     * @param direction - 1 下一首，-1 上一首
+     */
+    static void handleNativeSkip(int direction) {
+        AudioEnginePlugin self = sInstance;
+        if (self == null || self.mainHandler == null) {
+            MediaSessionPlugin.emitMediaKey(direction > 0 ? "next" : "prev", -1);
+            return;
+        }
+        self.mainHandler.post(
+                () -> {
+                    boolean handled = false;
+                    if (self.player != null) {
+                        if (direction > 0) {
+                            if (self.player.getCurrentMediaItemIndex()
+                                    < self.player.getMediaItemCount() - 1) {
+                                self.player.seekToNext();
+                                handled = true;
+                            }
+                        } else {
+                            if (self.player.getCurrentPosition() > 3000) {
+                                self.player.seekTo(0);
+                                handled = true;
+                            } else if (self.player.getCurrentMediaItemIndex() > 0) {
+                                self.player.seekToPreviousMediaItem();
+                                handled = true;
+                            }
+                        }
+                    }
+                    if (handled) {
+                        Log.i(TAG, "lockSkip dir=" + direction);
+                    } else {
+                        MediaSessionPlugin.emitMediaKey(direction > 0 ? "next" : "prev", -1);
+                    }
+                });
+    }
+
+    /** 队列/窗口诊断计数（通知栏 subText，锁屏可直接读出链路健康状态） */
+    static String queueStats() {
+        AudioEnginePlugin self = sInstance;
+        if (self == null || self.player == null) return "";
+        int current = self.player.getCurrentMediaItemIndex();
+        int window = Math.max(0, self.player.getMediaItemCount() - current - 1);
+        return "q" + self.pendingQueue.size() + " w" + window;
+    }
+
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
@@ -188,10 +268,15 @@ public class AudioEnginePlugin extends Plugin {
 
             @Override
             public void onMediaItemTransition(androidx.media3.common.MediaItem mediaItem, int reason) {
-                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || mediaItem == null) return;
-                // 播放列表自动过渡（对齐 SFA 原生自治切歌）：下一首早已预缓冲，
+                if (mediaItem == null) return;
+                // AUTO = 自动连播，SEEK = 锁屏播控原生切换；同曲过渡（单曲循环/曲内拖动）不重复同步
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                        && reason != Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) return;
+                if (mediaItem.mediaId != null && mediaItem.mediaId.equals(lastTransitionMediaId)) return;
+                lastTransitionMediaId = mediaItem.mediaId;
+                // 播放列表过渡（对齐 SFA 原生自治切歌）：下一首早已预缓冲，
                 // 锁屏/WebView 冻结均不影响；元数据反查后刷新通知并回传 JS 同步
-                Log.i(TAG, "autoTransition mediaId=" + mediaItem.mediaId);
+                Log.i(TAG, "mediaTransition mediaId=" + mediaItem.mediaId + " reason=" + reason);
                 JSObject meta = pendingMeta.get(mediaItem.mediaId);
                 if (meta != null) {
                     MediaSessionPlugin.applyNativeUpdate(

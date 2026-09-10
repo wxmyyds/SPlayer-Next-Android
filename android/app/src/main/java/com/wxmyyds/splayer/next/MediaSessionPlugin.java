@@ -69,7 +69,7 @@ public class MediaSessionPlugin extends Plugin {
                 public void onReceive(Context context, Intent intent) {
                     if (!pauseOnNoisy) return;
                     // 拔耳机/断蓝牙：暂停，重连后不自动续播
-                    emitMediaKey("pause");
+                    emitMediaKey("pause", -1);
                 }
             };
     private boolean noisyRegistered;
@@ -85,35 +85,36 @@ public class MediaSessionPlugin extends Plugin {
             sSession.setCallback(
                     new MediaSession.Callback() {
                         private void emit(String action, long position) {
-                            if (sInstance == null) return;
-                            JSObject data = new JSObject();
-                            data.put("action", action);
-                            data.put("position", position);
-                            sInstance.notifyListeners("mediaKey", data);
+                            emitMediaKey(action, position);
                         }
 
                         @Override
                         public void onPlay() {
+                            // 原生直接接管（幂等，JS 恢复后重放无害），不再依赖 WebView 存活
+                            AudioEnginePlugin.handleNativePlayPause(true);
                             emit("play", -1);
                         }
 
                         @Override
                         public void onPause() {
+                            AudioEnginePlugin.handleNativePlayPause(false);
                             emit("pause", -1);
                         }
 
                         @Override
                         public void onSkipToNext() {
-                            emit("next", -1);
+                            // 非幂等：原生处理成功时不发 JS（避免双跳），JS 经 autoAdvanced 同步
+                            AudioEnginePlugin.handleNativeSkip(1);
                         }
 
                         @Override
                         public void onSkipToPrevious() {
-                            emit("prev", -1);
+                            AudioEnginePlugin.handleNativeSkip(-1);
                         }
 
                         @Override
                         public void onSeekTo(long pos) {
+                            AudioEnginePlugin.handleNativeSeekTo(pos);
                             emit("seekto", pos);
                         }
                     });
@@ -303,6 +304,7 @@ public class MediaSessionPlugin extends Plugin {
                         .setSmallIcon(ctx.getApplicationInfo().icon)
                         .setContentTitle(title)
                         .setContentText(artist)
+                        .setSubText(AudioEnginePlugin.queueStats())
                         .setOngoing(playing)
                         .setOnlyAlertOnce(true)
                         .setShowWhen(false)
@@ -394,12 +396,13 @@ public class MediaSessionPlugin extends Plugin {
         return (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
     }
 
-    /** 经 mediaKey 通道通知 JS 执行播放/暂停（与通知栏按键同一路径） */
-    private void emitMediaKey(String action) {
+    /** 经 mediaKey 通道通知 JS 执行播控（与通知栏按键同一路径） */
+    static void emitMediaKey(String action, long position) {
+        if (sInstance == null) return;
         JSObject data = new JSObject();
         data.put("action", action);
-        data.put("position", -1);
-        notifyListeners("mediaKey", data);
+        data.put("position", position);
+        sInstance.notifyListeners("mediaKey", data);
     }
 
     private void registerNoisyReceiver() {
