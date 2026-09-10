@@ -37,6 +37,8 @@ public class NativeHttpPlugin extends Plugin {
 
     private OkHttpClient client;
     private OkHttpClient noRedirectClient;
+    /** requestId → 在途 Call，供 JS 中止（AbortSignal）时取消 */
+    private final Map<String, Call> inflight = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override
     public void load() {
@@ -89,14 +91,19 @@ public class NativeHttpPlugin extends Plugin {
 
         // redirect=manual 时返回跳转响应本身（QQ 登录取 Location/p_skey 用）
         boolean manual = "manual".equalsIgnoreCase(call.getString("redirect", "follow"));
-        (manual ? noRedirectClient : client).newCall(builder.build()).enqueue(new Callback() {
+        final String requestId = call.getString("requestId", "");
+        Call httpCall = (manual ? noRedirectClient : client).newCall(builder.build());
+        if (!requestId.isEmpty()) inflight.put(requestId, httpCall);
+        httpCall.enqueue(new Callback() {
             @Override
             public void onFailure(Call c, IOException e) {
+                if (!requestId.isEmpty()) inflight.remove(requestId);
                 call.reject(e.getMessage(), e);
             }
 
             @Override
             public void onResponse(Call c, Response response) {
+                if (!requestId.isEmpty()) inflight.remove(requestId);
                 try (Response r = response) {
                     JSObject ret = new JSObject();
                     ret.put("status", r.code());
