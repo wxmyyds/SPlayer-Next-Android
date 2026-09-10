@@ -5,7 +5,7 @@
  * 所有请求经 Capacitor 原生插件（OkHttp）发出：
  * - 证书/超时/重定向由原生侧统一处理
  * - `redirect: "manual"` 时返回跳转响应本身（QQ 登录取 Location/p_skey 用）
- * - 桌面端 `AbortSignal` 暂不透传（OkHttp 自带 15s 连接 / 30s 读取超时）
+ * - `AbortSignal` 透传原生取消（OkHttp Call.cancel）
  */
 
 import { registerPlugin, WebPlugin } from "@capacitor/core";
@@ -18,6 +18,7 @@ interface NativeHttpPlugin {
     headers: Record<string, string>;
     body?: string;
     redirect?: "follow" | "manual";
+    requestId?: string;
   }) => Promise<{
     status: number;
     url: string;
@@ -25,6 +26,7 @@ interface NativeHttpPlugin {
     setCookies: string[];
     bodyBase64: string;
   }>;
+  cancel: (options: { requestId: string }) => Promise<void>;
 }
 
 /** 非原生环境回退：直接用 Web fetch（仅开发/测试用） */
@@ -60,6 +62,10 @@ class NativeHttpWeb extends WebPlugin implements NativeHttpPlugin {
       setCookies: [],
       bodyBase64: bytesToB64(bytes),
     };
+  }
+
+  async cancel(): Promise<void> {
+    // Web 回退：fetch 级取消由调用方自持，这里不做任何事
   }
 }
 
@@ -118,6 +124,9 @@ export interface NativeFetchResponse {
   json: () => Promise<unknown>;
 }
 
+/** 请求序号：作为原生侧取消的键 */
+let requestSeq = 0;
+
 /**
  * 经原生插件发 HTTP 请求
  * @param url 请求地址
@@ -138,14 +147,30 @@ export const fetchWithProxy = async (
   let body: string | undefined;
   if (typeof init?.body === "string") body = init.body;
   else if (init?.body instanceof Uint8Array) body = bytesToB64(init.body);
-  // 原生侧 OkHttp 自带连接/读取超时；AbortSignal 暂不透传
-  const res = await NativeHttp.request({
-    url: href,
-    method: init?.method ?? "GET",
-    headers: init?.headers ?? {},
-    body,
-    redirect: init?.redirect ?? "follow",
-  });
+  const signal = init?.signal;
+  if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
+  const requestId = `nh-${++requestSeq}`;
+  const onAbort = () => {
+    void NativeHttp.cancel({ requestId }).catch(() => {});
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  let res;
+  try {
+    res = await NativeHttp.request({
+      url: href,
+      method: init?.method ?? "GET",
+      headers: init?.headers ?? {},
+      body,
+      redirect: init?.redirect ?? "follow",
+      requestId,
+    });
+  } catch (error) {
+    // 原生取消到达的 reject 归一化为 AbortError，与 fetch 语义一致
+    if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
+    throw error;
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
   let bytes = b64ToBytes(res.bodyBase64);
   // 防御性解压：个别接口仍可能返回真 gzip（魔数 0x1f 0x8b）
   if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {

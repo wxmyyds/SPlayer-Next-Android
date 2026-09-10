@@ -144,4 +144,16 @@ public class NativeHttpPlugin extends Plugin {
             }
         });
     }
+
+    /**
+     * 中止指定 requestId 的在途请求（对齐 fetch 的 AbortSignal 语义）
+     * @param call - { requestId }
+     */
+    @PluginMethod
+    public void cancel(PluginCall call) {
+        String id = call.getString("requestId", "");
+        Call c = inflight.remove(id);
+        if (c != null) c.cancel();
+        call.resolve();
+    }
 }
