@@ -1,8 +1,7 @@
 /**
  * Netease 模块注册表（Android 版）
  *
- * 上游 dev 有百余模块；Android 首批只接登录与播放必需的 8 个，
- * 后续按需从上游同名文件原样补齐（core 层已完整）。
+ * 上游 dev 有百余模块；Android 按需从上游同名文件原样补齐（core 层已完整）。
  */
 
 import type { NeteaseModule } from "../core/types";
@@ -38,6 +37,25 @@ import like from "./like";
 import like_v1 from "./like_v1";
 import album_sublist from "./album_sublist";
 import artist_sublist from "./artist_sublist";
+import personalized from "./personalized";
+import top_artists from "./top_artists";
+import recommend_resource from "./recommend_resource";
+import recommend_songs from "./recommend_songs";
+import personal_fm from "./personal_fm";
+import fm_trash from "./fm_trash";
+import playmode_intelligence from "./playmode_intelligence";
+import playlist_create from "./playlist_create";
+import playlist_delete from "./playlist_delete";
+import playlist_desc_update from "./playlist_desc_update";
+import playlist_name_update from "./playlist_name_update";
+import playlist_order_update from "./playlist_order_update";
+import playlist_subscribe from "./playlist_subscribe";
+import playlist_tracks from "./playlist_tracks";
+import album_sub from "./album_sub";
+import artist_sub from "./artist_sub";
+import song_download_url from "./song_download_url";
+import user_cloud from "./user_cloud";
+import user_cloud_del from "./user_cloud_del";
 
 export const modules: Record<string, NeteaseModule> = {
   login_qr_key,
@@ -71,4 +89,23 @@ export const modules: Record<string, NeteaseModule> = {
   like_v1,
   album_sublist,
   artist_sublist,
+  personalized,
+  top_artists,
+  recommend_resource,
+  recommend_songs,
+  personal_fm,
+  fm_trash,
+  playmode_intelligence,
+  playlist_create,
+  playlist_delete,
+  playlist_desc_update,
+  playlist_name_update,
+  playlist_order_update,
+  playlist_subscribe,
+  playlist_tracks,
+  album_sub,
+  artist_sub,
+  song_download_url,
+  user_cloud,
+  user_cloud_del,
 };
