@@ -260,7 +260,7 @@ public class AudioEnginePlugin extends Plugin {
      */
     @PluginMethod
     public void setNextResources(PluginCall call) {
-        JSArray items = call.getArray("items");
+        org.json.JSONArray items = call.getData().optJSONArray("items");
         if (items == null || items.length() == 0) {
             call.reject("items required");
             return;
