@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  * 原生音频引擎（Android 对标桌面 Rust audio-engine）。
@@ -209,11 +210,14 @@ public class AudioEnginePlugin extends Plugin {
                     data.put("position", currentPosition);
                     data.put("duration", currentDuration > 0 ? currentDuration : 0);
                     emitEvent("position", data);
-                    // 窗口耗尽预警（对齐 SFA requestUrls）：播放中且无待播项，定期提醒 JS 补挂下一首
-                    if (nudgeTick % 75 == 0
-                            && player.getCurrentMediaItemIndex() >= player.getMediaItemCount() - 1) {
-                        emitEvent("requestNextUrl", null);
-                    }
+                }
+                // 窗口耗尽预警（对齐 SFA requestUrls）：待播播放中且无待播项，定期提醒 JS 补窗。
+                // 用 playWhenReady 而非 isPlaying：锁屏 BUFFERING 间隙同样需要补窗
+                if (player != null
+                        && player.getPlayWhenReady()
+                        && nudgeTick % 75 == 0
+                        && player.getCurrentMediaItemIndex() >= player.getMediaItemCount() - 1) {
+                    emitEvent("requestNextUrl", null);
                 }
                 mainHandler.postDelayed(this, 200);
             }
@@ -231,7 +235,12 @@ public class AudioEnginePlugin extends Plugin {
         }
 
         Log.i(TAG, "load autoPlay=" + autoPlay);
-        MediaItem mediaItem = MediaItem.fromUri(source);
+        String trackId = call.getString("trackId", "");
+        // mediaId 必须是 trackId（而非 URI）：AUTO 过渡后按它反查元数据，
+        // 也让预载挂载能识别“当前曲即待挂曲目”的竞态
+        MediaItem mediaItem = trackId.isEmpty()
+                ? MediaItem.fromUri(source)
+                : new MediaItem.Builder().setMediaId(trackId).setUri(source).build();
         mainHandler.post(() -> {
             // JS 主动 load 新曲：待播项已过时，清空（预载成功后会重新登记）
             pendingMeta.clear();
@@ -245,59 +254,63 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     /**
-     * 登记 JS 预解析好的下一首：以播放列表待播项挂入 ExoPlayer（自动预缓冲），
-     * AUTO 过渡时原生直接开播，不等 WebView（参照 SFA PlaybackQueue）
-     * @param call - { trackId, playIndex, source, title, artist, album, artwork, durationMs }
+     * 登记 JS 预解析好的下一首窗口（SFA PlaybackQueue 滑窗）：整窗替换当前曲之后的待播项，
+     * ExoPlayer 对窗口内曲目逐个预缓冲，锁屏连续 AUTO 过渡零 WebView 依赖
+     * @param call - { items: [{ trackId, playIndex, source, title, artist, album, artwork, durationMs }] }
      */
     @PluginMethod
-    public void setNextResource(PluginCall call) {
-        String source = call.getString("source");
-        String trackId = call.getString("trackId");
-        if (source == null || source.isEmpty() || trackId == null || trackId.isEmpty()) {
-            call.reject("source/trackId required");
+    public void setNextResources(PluginCall call) {
+        JSArray items = call.getArray("items");
+        if (items == null || items.length() == 0) {
+            call.reject("items required");
             return;
         }
-        JSObject meta = new JSObject();
-        meta.put("trackId", trackId);
-        meta.put("playIndex", readLong(call, "playIndex", -1));
-        meta.put("source", source);
-        meta.put("title", call.getString("title", ""));
-        meta.put("artist", call.getString("artist", ""));
-        meta.put("album", call.getString("album", ""));
-        meta.put("artwork", call.getString("artwork", ""));
-        meta.put("durationMs", readLong(call, "durationMs", 0));
-        MediaItem item = new MediaItem.Builder().setMediaId(trackId).setUri(source).build();
         mainHandler.post(() -> {
             if (player == null) {
                 call.resolve();
                 return;
             }
-            // 幂等重挂：先清掉当前之后的待播项再登记，预载重推不产生重复
+            androidx.media3.common.MediaItem cur = player.getCurrentMediaItem();
+            if (cur == null) {
+                call.resolve();
+                return;
+            }
+            // 幂等整窗替换：先清掉当前之后的待播项再登记，预载重推不产生重复
             int current = player.getCurrentMediaItemIndex();
             if (current >= 0 && player.getMediaItemCount() > current + 1) {
                 player.removeMediaItems(current + 1, player.getMediaItemCount());
             }
-            androidx.media3.common.MediaItem cur = player.getCurrentMediaItem();
-            // 预载与 ended 链竞态：ended 后 JS 已自行 load 了同一首，再挂会出现重复项，
-            // 导致该曲播完自动切到“自己”。媒体 ID 相同即丢弃本次挂载。
-            if (cur != null && trackId.equals(cur.mediaId)) {
-                Log.i(TAG, "setNext skip (already current) trackId=" + trackId);
-                call.resolve();
-                return;
+            pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
+            int appended = 0;
+            String firstAppendedId = null;
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject raw = items.optJSONObject(i);
+                if (raw == null) continue;
+                String trackId = raw.optString("trackId", "");
+                String source = raw.optString("source", "");
+                if (trackId.isEmpty() || source.isEmpty()) continue;
+                // 预载与 ended 链竞态：该曲已被 JS 链自行 load 为当前曲，再挂会切到“自己”
+                if (trackId.equals(cur.mediaId)) continue;
+                JSObject meta = new JSObject();
+                meta.put("trackId", trackId);
+                meta.put("playIndex", raw.optInt("playIndex", -1));
+                meta.put("source", source);
+                meta.put("title", raw.optString("title", ""));
+                meta.put("artist", raw.optString("artist", ""));
+                meta.put("album", raw.optString("album", ""));
+                meta.put("artwork", raw.optString("artwork", ""));
+                meta.put("durationMs", raw.optDouble("durationMs", 0));
+                pendingMeta.put(trackId, meta);
+                player.addMediaItem(new MediaItem.Builder().setMediaId(trackId).setUri(source).build());
+                if (firstAppendedId == null) firstAppendedId = trackId;
+                appended++;
             }
-            if (cur != null) {
-                pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
-            } else {
-                pendingMeta.clear();
-            }
-            pendingMeta.put(trackId, meta);
-            player.addMediaItem(item);
-            Log.i(TAG, "setNext trackId=" + trackId);
-            // ENDED 后迟到补挂：直接切过去开播（对齐 SFA pendingResumeAfterRefill）
-            if (player.getPlaybackState() == Player.STATE_ENDED) {
-                player.seekTo(player.getMediaItemCount() - 1, 0);
+            Log.i(TAG, "setNextWindow appended=" + appended + " first=" + firstAppendedId);
+            // ENDED 后迟到补窗：直接切到窗口首项开播（对齐 SFA pendingResumeAfterRefill）
+            if (appended > 0 && player.getPlaybackState() == Player.STATE_ENDED) {
+                player.seekTo(current + 1, 0);
                 player.play();
-                Log.i(TAG, "lateRefill -> play " + trackId);
+                Log.i(TAG, "lateRefill -> play " + firstAppendedId);
             }
             call.resolve();
         });
@@ -322,12 +335,6 @@ public class AudioEnginePlugin extends Plugin {
             Log.i(TAG, "clearNext");
             call.resolve();
         });
-    }
-
-    /** PluginCall 数字读取：JSON 数值到桥上可能被装箱成 Double，直接 getLong 会抛 ClassCastException */
-    private static long readLong(PluginCall call, String key, long fallback) {
-        Object value = call.getData().opt(key);
-        return value instanceof Number ? ((Number) value).longValue() : fallback;
     }
 
     private static long readLongFrom(JSObject obj, String key) {

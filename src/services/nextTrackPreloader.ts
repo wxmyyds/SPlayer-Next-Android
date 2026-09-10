@@ -5,7 +5,7 @@
 import type { Track } from "@shared/types/player";
 import type { ResolvedTrackSource } from "@/services/audioSource";
 import { resolveTrackSource } from "@/services/audioSource";
-import { getNextTrackCandidate } from "@/core/player/candidate";
+import { getNextTrackCandidates } from "@/core/player/candidate";
 import { invalidatePreloadedLyric, preloadLyricForTrack } from "@/services/lyric/preload";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
@@ -23,31 +23,43 @@ export interface NextTrackPreloadResult {
   contextKey: string;
 }
 
+/** 窗口条目：预载结果 + 候选轨道信息 */
+interface WindowEntry {
+  result: NextTrackPreloadResult;
+  track: Track;
+  index: number;
+}
+
 /**
- * 登记原生下一首槽位（幂等）：锁屏 ENDED 后原生直接开播，不等 WebView。
+ * 登记原生下一首窗口（SFA PlaybackQueue 滑窗，幂等整窗替换）：
+ * 锁屏下连续 AUTO 过渡由 ExoPlayer 预缓冲直接开播，不等 WebView。
  * 单曲循环/定时关闭“等本曲结束”时不登记，否则原生会越过这两种语义。
  */
-const pushNativeNext = (result: NextTrackPreloadResult, track: Track, playIndex: number): void => {
-  if (!isAndroid || !result.source?.source) return;
+const pushNativeWindow = (entries: (WindowEntry | null)[]): void => {
+  if (!isAndroid) return;
+  const items = entries
+    .filter((entry): entry is WindowEntry => !!entry && !!entry.result.source?.source)
+    .map((entry) => ({
+      trackId: entry.track.id,
+      playIndex: entry.index,
+      source: entry.result.source!.source,
+      title: entry.track.title,
+      artist: entry.track.artists?.map((a) => a.name).join(" / ") ?? "",
+      album: entry.track.album?.name ?? "",
+      artwork: entry.track.coverOriginal ?? entry.track.cover ?? "",
+      durationMs: entry.track.duration ?? 0,
+    }));
+  if (!items.length) return;
   const status = useStatusStore();
   if (status.repeatMode === "one" || autoClose.shouldStopAfterCurrentTrack()) return;
-  console.log("[nextPreload] native next armed:", track.id);
-  void window.api.player
-    .setNextResource?.({
-      trackId: track.id,
-      playIndex,
-      source: result.source.source,
-      title: track.title,
-      artist: track.artists?.map((a) => a.name).join(" / ") ?? "",
-      album: track.album?.name ?? "",
-      artwork: track.coverOriginal ?? track.cover ?? "",
-      durationMs: track.duration ?? 0,
-    })
-    .catch(() => {});
+  console.log("[nextPreload] native window armed:", items.map((item) => item.trackId).join(","));
+  void window.api.player.setNextResources?.({ items }).catch(() => {});
 };
 
 let currentToken = 0;
 let cachedResult: NextTrackPreloadResult | null = null;
+let cachedEntry: WindowEntry | null = null;
+let tailEntry: WindowEntry | null = null;
 let currentContextKey: string | null = null;
 let pendingCover: HTMLImageElement | null = null;
 let stopContextWatch: (() => void) | null = null;
@@ -117,7 +129,9 @@ export const invalidateNextTrackPreload = (): void => {
     pendingCover = null;
   }
   invalidatePreloadedLyric();
-  // 原生登记的下一首一并作废，避免 ENDED 后原生切到已被换掉的曲目
+  // 原生登记的下一首窗口一并作废，避免 ENDED 后原生切到已被换掉的曲目
+  cachedEntry = null;
+  tailEntry = null;
   if (isAndroid) void window.api.player.clearNextResource?.().catch(() => {});
 };
 
@@ -132,6 +146,17 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
     return null;
   }
   const currentKey = buildContextKey(track);
+  // 滑窗晋升：次候选正是正在切入的曲目时直接提升为首候选（SFA 式零延迟续窗）
+  if (
+    !cachedResult &&
+    tailEntry &&
+    tailEntry.result.trackId === track.id &&
+    tailEntry.result.contextKey === currentKey
+  ) {
+    cachedResult = tailEntry.result;
+    cachedEntry = tailEntry;
+    tailEntry = null;
+  }
   if (!cachedResult) {
     if (currentContextKey === currentKey) {
       // 音源尚未解析完成，阻止迟到结果写回；同曲歌词和封面仍可继续使用
@@ -154,8 +179,47 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
   const result = cachedResult;
   currentToken++;
   cachedResult = null;
+  cachedEntry = null;
   currentContextKey = null;
   return result;
+};
+
+/** 解析失败重试间隔（用户网络存在 weapi 首包 stall，一次失败不能放弃整首歌的槽位） */
+const RESOLVE_RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+
+/**
+ * 带退避重试的音源预解析
+ * @param track - 候选曲目
+ * @param contextKey - 首候选的调度指纹（次候选传 null，仅由 token 守卫）
+ * @param token - 调度令牌，作废后不再重试
+ * @returns 解析结果，重试耗尽或已作废时返回 null
+ */
+const attemptResolve = async (
+  track: Track,
+  contextKey: string | null,
+  token: number,
+): Promise<ResolvedTrackSource | null> => {
+  const stale = (): boolean =>
+    token !== currentToken || (contextKey !== null && currentContextKey !== contextKey);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await resolveTrackSource(track, {
+        silent: true,
+        streamingPlaySessionId: crypto.randomUUID(),
+      });
+    } catch (err) {
+      if (attempt >= RESOLVE_RETRY_DELAYS_MS.length || stale()) {
+        if (!stale()) {
+          console.warn("[nextPreload] resolve failed after retries:", err);
+          // 清理调度指纹，让下一次 requestNextUrl 补窗重新发起解析
+          if (contextKey !== null && currentContextKey === contextKey) currentContextKey = null;
+        }
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RESOLVE_RETRY_DELAYS_MS[attempt]));
+      if (stale()) return null;
+    }
+  }
 };
 
 /**
@@ -176,28 +240,32 @@ export const scheduleNextTrackPreload = (): void => {
     invalidateNextTrackPreload();
     return;
   }
-  const candidateResult = getNextTrackCandidate({
-    playIndex: status.playIndex,
-    queue: queue.queue.value,
-    fmMode: status.fmMode,
-    fuckDjMode: settings.preset.fuckDjMode,
-    shuffleMode: status.shuffleMode,
-  });
+  const candidates = getNextTrackCandidates(
+    {
+      playIndex: status.playIndex,
+      queue: queue.queue.value,
+      fmMode: status.fmMode,
+      fuckDjMode: settings.preset.fuckDjMode,
+      shuffleMode: status.shuffleMode,
+    },
+    2,
+  );
 
-  if (!candidateResult) {
+  if (!candidates.length) {
     invalidateNextTrackPreload();
     return;
   }
 
+  const [candidateResult, tailCandidate] = candidates;
   const candidateTrack = candidateResult.track;
   const contextKey = buildContextKey(candidateTrack);
   // 歌词使用独立上下文去重，歌词偏好变化不需要重新解析音源
   preloadLyricForTrack(candidateTrack);
 
-  // 上下文指纹一致且已有缓存，避免重复触发；顺带重登记原生槽位（可能被 invalidate 清空）
+  // 上下文指纹一致且已有缓存：只重推窗口（可能被 invalidate 清空）
   if (cachedResult && cachedResult.contextKey === contextKey) {
     if (cachedResult.trackId === candidateTrack.id) {
-      pushNativeNext(cachedResult, candidateTrack, candidateResult.index);
+      pushNativeWindow([cachedEntry, tailEntry]);
     }
     return;
   }
@@ -210,26 +278,24 @@ export const scheduleNextTrackPreload = (): void => {
   const token = ++currentToken;
   currentContextKey = contextKey;
   cachedResult = null;
+  cachedEntry = null;
+  tailEntry = null;
 
   void (async () => {
     try {
       if (candidateTrack.cover) {
         void preloadCover(candidateTrack.cover);
       }
-      // 音源预拉取
-      const source = await resolveTrackSource(candidateTrack, {
-        silent: true,
-        streamingPlaySessionId: crypto.randomUUID(),
-      });
-      if (token !== currentToken) return;
+      const source = await attemptResolve(candidateTrack, contextKey, token);
+      if (token !== currentToken || !source) return;
       const result: NextTrackPreloadResult = {
         trackId: candidateTrack.id,
         source,
         contextKey,
       };
       cachedResult = result;
-      // Android：登记到原生，锁屏 ENDED 后原生直接开播，不等 WebView（参照 SFA 原生队列）
-      pushNativeNext(result, candidateTrack, candidateResult.index);
+      cachedEntry = { result, track: candidateTrack, index: candidateResult.index };
+      pushNativeWindow([cachedEntry, tailEntry]);
     } catch (err) {
       console.warn("[nextPreload] Preload task failed silently:", err);
       if (token === currentToken) {
@@ -237,6 +303,21 @@ export const scheduleNextTrackPreload = (): void => {
       }
     }
   })();
+
+  // 次候选异步解析：成功后整窗重推（幂等），锁屏多撑一次自治切歌
+  if (tailCandidate) {
+    void (async () => {
+      const tailKey = buildContextKey(tailCandidate.track);
+      const source = await attemptResolve(tailCandidate.track, null, token);
+      if (token !== currentToken || !source) return;
+      tailEntry = {
+        result: { trackId: tailCandidate.track.id, source, contextKey: tailKey },
+        track: tailCandidate.track,
+        index: tailCandidate.index,
+      };
+      pushNativeWindow([cachedEntry, tailEntry]);
+    })();
+  }
 };
 
 /** 安装预载上下文监听 */

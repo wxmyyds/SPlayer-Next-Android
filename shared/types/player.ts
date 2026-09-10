@@ -303,16 +303,18 @@ export interface PlayerApi {
   dispatch: (type: string) => void;
   /** 订阅播放事件 */
   onEvent: (callback: (event: PlayerEvent) => void) => () => void;
-  /** Android：向原生登记下一首已解析资源（ENDED 后原生自治切歌，不依赖 WebView 存活；参照 SFA 队列设计） */
-  setNextResource?: (options: {
-    trackId: string;
-    playIndex: number;
-    source: string;
-    title: string;
-    artist: string;
-    album: string;
-    artwork: string;
-    durationMs: number;
+  /** Android：向原生登记下一首窗口（SFA 滑窗，锁屏连续自治切歌不依赖 WebView） */
+  setNextResources?: (options: {
+    items: {
+      trackId: string;
+      playIndex: number;
+      source: string;
+      title: string;
+      artist: string;
+      album: string;
+      artwork: string;
+      durationMs: number;
+    }[];
   }) => Promise<IpcResponse>;
   /** Android：清除原生登记的下一首资源（队列变化/预载作废时） */
   clearNextResource?: () => Promise<IpcResponse>;

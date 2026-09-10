@@ -69,6 +69,7 @@ interface AudioEnginePlugin {
   load(options: {
     source: string;
     autoPlay?: boolean;
+    trackId?: string;
     title?: string;
     artist?: string;
     album?: string;
@@ -94,15 +95,17 @@ interface AudioEnginePlugin {
   setPauseOnDeviceSwitch(options: { enabled: boolean }): Promise<void>;
   extendSwitchWindow(): Promise<void>;
   setRepeatMode(options: { mode: string }): Promise<void>;
-  setNextResource(options: {
-    trackId: string;
-    playIndex: number;
-    source: string;
-    title: string;
-    artist: string;
-    album: string;
-    artwork: string;
-    durationMs: number;
+  setNextResources(options: {
+    items: {
+      trackId: string;
+      playIndex: number;
+      source: string;
+      title: string;
+      artist: string;
+      album: string;
+      artwork: string;
+      durationMs: number;
+    }[];
   }): Promise<void>;
   clearNextResource(): Promise<void>;
   addListener(
@@ -336,6 +339,7 @@ export const nativeAudioPlayer: PlayerApi = {
       const result = await AudioEngine.load({
         source,
         autoPlay: options?.autoPlay,
+        trackId: options?.meta?.id ?? "",
         title: options?.meta?.title,
         artist: options?.meta?.artists
           ?.map((a) => a.name)
@@ -417,9 +421,9 @@ export const nativeAudioPlayer: PlayerApi = {
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
-  setNextResource: async (options) => {
+  setNextResources: async (options) => {
     try {
-      await AudioEngine.setNextResource(options);
+      await AudioEngine.setNextResources(options);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));
