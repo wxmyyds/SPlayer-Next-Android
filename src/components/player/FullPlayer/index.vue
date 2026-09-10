@@ -189,6 +189,67 @@ const commentSwipe = useSwipe(commentPaneRef, {
     onPaneSwipeEnd(e, direction);
   },
 });
+/**
+ * 封面页下拉收起（对齐 SFA 下拉手势）：方向锁避免与翻页冲突，跟手位移 + 阈值关闭。
+ * 超过阈值直接收起（leave 动画接管），未达阈值弹回原位。
+ */
+const CLOSE_DRAG_THRESHOLD = 120;
+const closeDragY = ref(0);
+/** ""=空闲 / "drag"=跟手中 / "snap"=未达阈值回弹中 */
+const closeDragPhase = ref<"" | "drag" | "snap">("");
+let closeDragLock: "h" | "v" | null = null;
+/** 是否处于纵向关闭拖拽（用于压制横向翻页跟手） */
+const isCloseDragging = computed(() => closeDragPhase.value === "drag");
+const coverSwipe = useSwipe(page1Ref, {
+  // threshold=1：几乎从触屏第一帧起就输出位移，保证下拉跟手；方向锁容差承担防抖
+  threshold: 1,
+  onSwipeStart: () => {
+    closeDragLock = null;
+  },
+  onSwipe: () => {},
+  onSwipeEnd: () => {
+    const shouldClose = closeDragLock === "v" && closeDragY.value > CLOSE_DRAG_THRESHOLD;
+    closeDragLock = null;
+    if (shouldClose) {
+      closeDragPhase.value = "";
+      closeDragY.value = 0;
+      collapse();
+    } else if (closeDragPhase.value === "drag") {
+      closeDragPhase.value = "snap";
+      closeDragY.value = 0;
+      setTimeout(() => (closeDragPhase.value = ""), 260);
+    }
+  },
+});
+watch(
+  () => [coverSwipe.lengthX.value, coverSwipe.lengthY.value] as const,
+  ([lenX, lenY]) => {
+    if (!coverSwipe.isSwiping.value || !stackedLayout.value) return;
+    if (stackPage.value !== coverIdx.value) return;
+    if (swipeIgnoredTarget.value) return;
+    const ax = Math.abs(lenX);
+    const ay = Math.abs(lenY);
+    if (!closeDragLock) {
+      if (Math.max(ax, ay) < 8) return;
+      closeDragLock = ay > ax ? "v" : "h";
+    }
+    if (closeDragLock !== "v") return;
+    // lengthY = startY - currentY，下拉为负值
+    closeDragY.value = Math.max(0, -(lenY - 1));
+    closeDragPhase.value = "drag";
+  },
+);
+/** 关闭拖拽的样式：跟手位移 + 渐隐；回弹阶段带过渡 */
+const rootDragStyle = computed(() => {
+  if (closeDragPhase.value === "") return undefined;
+  const base = {
+    transform: `translateY(${closeDragY.value}px)`,
+    opacity: String(Math.max(0.35, 1 - closeDragY.value / 600)),
+  };
+  return closeDragPhase.value === "snap"
+    ? { ...base, transition: "transform 0.26s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.26s" }
+    : { ...base, transition: "none" };
+});
 const isStackSwiping = computed(
   () =>
     (page1Swipe.isSwiping.value || lyricSwipe.isSwiping.value || commentSwipe.isSwiping.value) &&
@@ -199,6 +260,8 @@ const stackDragPx = computed(() => {
   if (swipeIgnoredTarget.value) return 0;
   // 无歌词且无评论页时不跟手（歌词页是空占位）
   if (!hasLyric.value && !media.lyricLoading && !hasCommentPage.value) return 0;
+  // 纵向关闭拖拽中不跟手横向翻页
+  if (isCloseDragging.value) return 0;
   const active = page1Swipe.isSwiping.value
     ? page1Swipe
     : lyricSwipe.isSwiping.value
@@ -331,7 +394,7 @@ const toggleLyric = (): void => {
         v-show="isPlayerExpanded"
         class="fixed inset-0 z-200 overflow-hidden text-cover"
         :class="immersive ? 'cursor-none [&_*]:!cursor-none' : ''"
-        style="--lp-color: rgb(var(--s-cover))"
+        :style="['--lp-color: rgb(var(--s-cover))', rootDragStyle]"
         @mouseenter="onPlayerMouseEnter"
         @mouseleave="onPlayerMouseLeave"
       >
