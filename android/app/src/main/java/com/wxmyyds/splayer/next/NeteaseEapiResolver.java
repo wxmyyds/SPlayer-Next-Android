@@ -1,5 +1,6 @@
 package com.wxmyyds.splayer.next;
 
+import android.util.Log;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
