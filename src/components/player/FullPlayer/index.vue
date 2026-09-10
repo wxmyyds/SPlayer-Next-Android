@@ -88,6 +88,11 @@ const onBeforeLeave = () => {
 /** 收起后 */
 const onAfterLeave = () => {
   lyricMounted.value = false;
+  // 惯性滑出触发的收起：到这里才清掉保持屏外位置的拖拽状态
+  if (closeDragPhase.value === "out") {
+    closeDragPhase.value = "";
+    closeDragY.value = 0;
+  }
 };
 
 // 重新挂载时，刷新初始时间
@@ -195,8 +200,8 @@ const commentSwipe = useSwipe(commentPaneRef, {
  */
 const CLOSE_DRAG_THRESHOLD = 120;
 const closeDragY = ref(0);
-/** ""=空闲 / "drag"=跟手中 / "snap"=未达阈值回弹中 */
-const closeDragPhase = ref<"" | "drag" | "snap">("");
+/** ""=空闲 / "drag"=跟手中 / "snap"=未达阈值回弹中 / "out"=达阈值惯性滑出中 */
+const closeDragPhase = ref<"" | "drag" | "snap" | "out">("");
 let closeDragLock: "h" | "v" | null = null;
 /** 是否处于纵向关闭拖拽（用于压制横向翻页跟手） */
 const isCloseDragging = computed(() => closeDragPhase.value === "drag");
@@ -211,9 +216,10 @@ const coverSwipe = useSwipe(page1Ref, {
     const shouldClose = closeDragLock === "v" && closeDragY.value > CLOSE_DRAG_THRESHOLD;
     closeDragLock = null;
     if (shouldClose) {
-      closeDragPhase.value = "";
-      closeDragY.value = 0;
-      collapse();
+      // 从当前位移继续惯性滑出，完成后再收起（inline transform 保持到 leave 结束，避免抽搐）
+      closeDragPhase.value = "out";
+      closeDragY.value = window.innerHeight;
+      setTimeout(() => collapse(), 260);
     } else if (closeDragPhase.value === "drag") {
       closeDragPhase.value = "snap";
       closeDragY.value = 0;
@@ -239,9 +245,16 @@ watch(
     closeDragPhase.value = "drag";
   },
 );
-/** 关闭拖拽的样式：跟手位移 + 渐隐；回弹阶段带过渡 */
+/** 关闭拖拽的样式：跟手位移 + 渐隐；回弹/滑出阶段带过渡 */
 const rootDragStyle = computed(() => {
   if (closeDragPhase.value === "") return undefined;
+  if (closeDragPhase.value === "out") {
+    return {
+      transform: `translateY(${closeDragY.value}px)`,
+      opacity: "0",
+      transition: "transform 0.25s cubic-bezier(0.3, 0, 0.8, 0.3), opacity 0.25s",
+    };
+  }
   const base = {
     transform: `translateY(${closeDragY.value}px)`,
     opacity: String(Math.max(0.35, 1 - closeDragY.value / 600)),
