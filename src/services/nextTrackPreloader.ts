@@ -7,6 +7,7 @@ import type { ResolvedTrackSource } from "@/services/audioSource";
 import { resolveTrackSource } from "@/services/audioSource";
 import { getNextTrackCandidates } from "@/core/player/candidate";
 import { invalidatePreloadedLyric, preloadLyricForTrack } from "@/services/lyric/preload";
+import { pushNativeQueue } from "@/services/nextTrackQueue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import { useStreamingStore } from "@/stores/streaming";
@@ -189,6 +190,12 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
 /** 解析失败重试间隔（用户网络存在 weapi 首包 stall，一次失败不能放弃整首歌的槽位） */
 const RESOLVE_RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
 
+/** 预载调度候选数：前几名预解析 URL 即时缓冲，全部推入原生自治队列兜底 */
+const QUEUE_CANDIDATE_COUNT = 30;
+
+/** 参与 URL 预解析的候选数（含首候选）：ExoPlayer 只需紧邻几首预缓冲 */
+const PRELOAD_URL_COUNT = 5;
+
 /**
  * 带退避重试的音源预解析
  * @param track - 候选曲目
@@ -251,13 +258,16 @@ export const scheduleNextTrackPreload = (): void => {
       fuckDjMode: settings.preset.fuckDjMode,
       shuffleMode: status.shuffleMode,
     },
-    5,
+    QUEUE_CANDIDATE_COUNT,
   );
 
   if (!candidates.length) {
     invalidateNextTrackPreload();
     return;
   }
+
+  // 原生自治队列整队重推（纯元数据零网络成本；队列耗尽原生才回落 JS 链）
+  pushNativeQueue(candidates);
 
   const [candidateResult] = candidates;
   const candidateTrack = candidateResult.track;
@@ -307,8 +317,8 @@ export const scheduleNextTrackPreload = (): void => {
     }
   })();
 
-  // 次候选并发解析（一次即止，不重试，重试留给首候选）：每成一首整窗重推，锁屏多搜几首自治切歌
-  for (const tail of candidates.slice(1)) {
+  // URL 预解析限前 PRELOAD_URL_COUNT 首（即时缓冲）；其余候选仅推队列，由原生按需自解
+  for (const tail of candidates.slice(1, PRELOAD_URL_COUNT)) {
     void (async () => {
       const tailKey = buildContextKey(tail.track);
       const source = await attemptResolve(tail.track, null, token, []);

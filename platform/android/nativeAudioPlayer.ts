@@ -107,6 +107,25 @@ interface AudioEnginePlugin {
       durationMs: number;
     }[];
   }): Promise<void>;
+  setNextQueue(options: {
+    items: {
+      trackId: string;
+      songId: string;
+      playIndex: number;
+      level: string;
+      title: string;
+      artist: string;
+      album: string;
+      artwork: string;
+      durationMs: number;
+    }[];
+    resolve: {
+      path: string;
+      header: Record<string, string>;
+      cookie: string;
+      userAgent: string;
+    };
+  }): Promise<void>;
   clearNextResource(): Promise<void>;
   addListener(
     event: "event" | "mediaKey",
@@ -424,6 +443,14 @@ export const nativeAudioPlayer: PlayerApi = {
   setNextResources: async (options) => {
     try {
       await AudioEngine.setNextResources(options);
+      return ok();
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  },
+  setNextQueue: async (options) => {
+    try {
+      await AudioEngine.setNextQueue(options);
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));

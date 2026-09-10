@@ -316,6 +316,26 @@ export interface PlayerApi {
       durationMs: number;
     }[];
   }) => Promise<IpcResponse>;
+  /** Android：登记原生自治切歌队列（元数据 + eapi 解析上下文，WebView 冻结时原生自解 URL） */
+  setNextQueue?: (options: {
+    items: {
+      trackId: string;
+      songId: string;
+      playIndex: number;
+      level: string;
+      title: string;
+      artist: string;
+      album: string;
+      artwork: string;
+      durationMs: number;
+    }[];
+    resolve: {
+      path: string;
+      header: Record<string, string>;
+      cookie: string;
+      userAgent: string;
+    };
+  }) => Promise<IpcResponse>;
   /** Android：清除原生登记的下一首资源（队列变化/预载作废时） */
   clearNextResource?: () => Promise<IpcResponse>;
   /** Android：同步循环模式到原生（单曲循环由 ExoPlayer 原生接管，锁屏下无缝重放） */

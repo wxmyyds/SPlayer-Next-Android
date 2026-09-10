@@ -90,6 +90,15 @@ public class AudioEnginePlugin extends Plugin {
      * AUTO 过渡后用媒体 ID 反查元数据刷新通知栏并回传 JS 同步。
      */
     private final Map<String, JSObject> pendingMeta = new HashMap<>();
+    /** 原生自治切歌队列（SFA PlaybackQueue 等价）：JS 推入的元数据条目，ENDED/预填时原生逐条自解 URL */
+    private final java.util.ArrayDeque<JSObject> pendingQueue = new java.util.ArrayDeque<>();
+    /** eapi 解析上下文（path/header/cookie/userAgent），随队列一起由 JS 下发 */
+    private JSONObject resolveCtx;
+    /** 连续解析失败计数，≥3 放弃兜底并回落 JS 链 */
+    private int resolveFails = 0;
+    /** eapi 解析 IO 线程池（单线程即可：串行解析避免触发限流） */
+    private static final java.util.concurrent.ExecutorService RESOLVE_POOL =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
     /** requestNextUrl 补窗节拍计数（200ms/拍，每 75 拍 ≈ 15s 提醒 JS 补挂） */
     private long nudgeTick = 0;
     private float volume = 1.0f;
@@ -127,10 +136,14 @@ public class AudioEnginePlugin extends Plugin {
                         emitEvent("ready", null);
                         break;
                     case Player.STATE_ENDED:
-                        // 播放列表尾部真结束（无待播项）：回落 JS 链
+                        // ENDED：优先原生队列自解下一首（WebView 冻结也能续播）；
+                        // 队列空/连续解析失败才回落 JS 链
                         acquireSwitchWakeLock();
-                        Log.i(TAG, "ended (playlist end)");
-                        emitEvent("ended", null);
+                        maybeResolveNext(true);
+                        if (pendingQueue.isEmpty()) {
+                            Log.i(TAG, "ended (playlist end)");
+                            emitEvent("ended", null);
+                        }
                         break;
                     case Player.STATE_BUFFERING:
                         emitEvent("buffering", null);
@@ -191,6 +204,7 @@ public class AudioEnginePlugin extends Plugin {
                             readLongFrom(meta, "durationMs"));
                     emitEvent("autoAdvanced", meta);
                 }
+                maybeResolveNext(false);
                 // 立刻请求 JS 补挂新的下一首（WebView 冻结时事件排队，解锁后即补）
                 emitEvent("requestNextUrl", null);
             }
@@ -242,8 +256,9 @@ public class AudioEnginePlugin extends Plugin {
                 ? MediaItem.fromUri(source)
                 : new MediaItem.Builder().setMediaId(trackId).setUri(source).build();
         mainHandler.post(() -> {
-            // JS 主动 load 新曲：待播项已过时，清空（预载成功后会重新登记）
+            // JS 主动 load 新曲：待播项与队列已过时，清空（预载/队列推送后会重新登记）
             pendingMeta.clear();
+            pendingQueue.clear();
             player.setMediaItem(mediaItem);
             player.prepare();
             if (autoPlay) player.play();
@@ -320,6 +335,7 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void clearNextResource(PluginCall call) {
         mainHandler.post(() -> {
+            pendingQueue.clear();
             if (player != null) {
                 int current = player.getCurrentMediaItemIndex();
                 if (current >= 0 && player.getMediaItemCount() > current + 1) {
@@ -335,6 +351,101 @@ public class AudioEnginePlugin extends Plugin {
             Log.i(TAG, "clearNext");
             call.resolve();
         });
+    }
+
+    /**
+     * 登记原生自治切歌队列（SFA PlaybackQueue 等价）：JS 推入接下来至多 30 首的元数据 + eapi 解析
+     * 上下文，ENDED/预填时由原生逐条自解 URL（WebView 冻结时不受影响），直到队列耗尽才回落 JS
+     * @param call - { items: [{ trackId, songId, playIndex, level, title, artist, album, artwork, durationMs }], resolve: { path, header, cookie, userAgent } }
+     */
+    @PluginMethod
+    public void setNextQueue(PluginCall call) {
+        org.json.JSONArray items = call.getData().optJSONArray("items");
+        JSONObject resolve = call.getData().optJSONObject("resolve");
+        if (resolve == null) {
+            call.reject("resolve required");
+            return;
+        }
+        mainHandler.post(() -> {
+            resolveCtx = resolve;
+            resolveFails = 0;
+            pendingQueue.clear();
+            int queued = 0;
+            if (items != null) {
+                for (int i = 0; i < items.length(); i++) {
+                    JSONObject raw = items.optJSONObject(i);
+                    if (raw == null || raw.optString("songId", "").isEmpty()) continue;
+                    JSObject entry = new JSObject();
+                    entry.put("trackId", raw.optString("trackId", ""));
+                    entry.put("songId", raw.optString("songId", ""));
+                    entry.put("playIndex", raw.optInt("playIndex", -1));
+                    entry.put("level", raw.optString("level", "exhigh"));
+                    entry.put("title", raw.optString("title", ""));
+                    entry.put("artist", raw.optString("artist", ""));
+                    entry.put("album", raw.optString("album", ""));
+                    entry.put("artwork", raw.optString("artwork", ""));
+                    entry.put("durationMs", raw.optDouble("durationMs", 0));
+                    pendingQueue.add(entry);
+                    queued++;
+                }
+            }
+            Log.i(TAG, "setNextQueue size=" + queued);
+            maybeResolveNext(false);
+            call.resolve();
+        });
+    }
+
+    /**
+     * 播放列表无下一项且队列非空时，从队列头自解一首挂入（IO 线程解析，主线程挂载）
+     * @param fromEnded - 是否由 ENDED 状态触发（挂载后需主动 seek+play 续播）
+     */
+    private void maybeResolveNext(boolean fromEnded) {
+        if (player == null || resolveCtx == null || pendingQueue.isEmpty()) return;
+        if (!fromEnded) {
+            int current = player.getCurrentMediaItemIndex();
+            if (current >= 0 && current < player.getMediaItemCount() - 1) return; // 已有预缓冲的下一项
+        }
+        final JSObject entry = pendingQueue.poll();
+        if (entry == null) return;
+        final String trackId = entry.getString("trackId", "");
+        final String songId = entry.getString("songId", "");
+        final String level = entry.getString("level", "exhigh");
+        RESOLVE_POOL.execute(
+                () -> {
+                    try {
+                        String url = NeteaseEapiResolver.resolve(resolveCtx, songId, level);
+                        mainHandler.post(
+                                () -> {
+                                    if (player == null) return;
+                                    pendingMeta.put(trackId, entry);
+                                    player.addMediaItem(
+                                            new MediaItem.Builder().setMediaId(trackId).setUri(url).build());
+                                    resolveFails = 0;
+                                    Log.i(TAG, "queueResolve trackId=" + trackId + " songId=" + songId);
+                                    int index = player.getCurrentMediaItemIndex();
+                                    // ENDED 状态下挂上即续播（无论来源：队列推送/过渡预填/ENDED 自身触发）
+                                    if (player.getPlaybackState() == Player.STATE_ENDED) {
+                                        player.seekTo(index + 1, 0);
+                                        player.play();
+                                        Log.i(TAG, "endedAdvance -> play trackId=" + trackId);
+                                    }
+                                    // 继续预填下一条，保持播放列表始终有预缓冲待播项
+                                    maybeResolveNext(false);
+                                });
+                    } catch (Exception e) {
+                        Log.w(TAG, "queueResolve failed songId=" + songId + " err=" + e.getMessage());
+                        mainHandler.post(
+                                () -> {
+                                    resolveFails++;
+                                    if (resolveFails < 3) {
+                                        maybeResolveNext(fromEnded);
+                                    } else {
+                                        Log.w(TAG, "queueResolve give up, fall back to JS chain");
+                                        emitEvent("ended", null);
+                                    }
+                                });
+                    }
+                });
     }
 
     private static long readLongFrom(JSObject obj, String key) {

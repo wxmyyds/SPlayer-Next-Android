@@ -18,7 +18,8 @@ export const songsByIds = async (ids: Array<string | number>): Promise<Track[]> 
 };
 
 /** 项目音质档位 → 官方 song/url v1 的 level 参数 */
-const NETEASE_LEVEL: Record<QualityLevel, string> = {
+/** 音质档位 → 网易云 level 参数（原生队列兜底解析复用同一映射） */
+export const NETEASE_LEVEL: Record<QualityLevel, string> = {
   lq: "standard",
   sq: "higher",
   hq: "exhigh",
