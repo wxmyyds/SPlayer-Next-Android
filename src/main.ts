@@ -11,6 +11,7 @@ import { useSettingsStore } from "./stores/settings";
 import { useHotkeyStore } from "./stores/hotkey";
 import { initPlayer, playFiles, restoreLastTrack } from "./core/player";
 import { installAndroidBackButton } from "./services/androidBackButton";
+import { startSilentKeepAlive } from "@android/keepAlive";
 import { handleOrpheus } from "./services/orpheus";
 import { installHotkeyManager } from "./core/hotkey/manager";
 import { vRipple } from "./directives/ripple";
@@ -29,6 +30,9 @@ app.use(i18n);
 
 // Android 返回键：覆盖层 → 路由 → 最小化
 void installAndroidBackButton();
+
+// Android 锁屏 JS 保活：Chromium 对 audible 页面豁免冻结，保住补窗/切歌链路
+startSilentKeepAlive();
 
 // 初始化主题
 useThemeStore().init();
