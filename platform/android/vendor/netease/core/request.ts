@@ -91,7 +91,7 @@ const generateRequestId = (): string => {
 };
 
 /** 补齐 cookie：注入 _ntes_nuid/_ntes_nnid/WNMCID/deviceId/appver 等客户端必备字段 */
-const processCookieObject = (
+export const processCookieObject = (
   cookie: Record<string, string>,
   uri: string,
 ): Record<string, string> => {
@@ -281,9 +281,7 @@ export const createRequest = async (
   }
 
   // 收集 set-cookie
-  answer.cookie = res.headers
-    .getSetCookie()
-    .map((x) => x.replace(/\s*Domain=[^(;|$)]+;*/, ""));
+  answer.cookie = res.headers.getSetCookie().map((x) => x.replace(/\s*Domain=[^(;|$)]+;*/, ""));
 
   // xeapi 会话密钥由响应头下发，缓存供后续请求复用
   if (isXeapi) {
@@ -333,4 +331,3 @@ const toBoolean = (val: unknown): boolean => {
   if (val === "") return false;
   return val === "true" || val === "1" || val === 1;
 };
-

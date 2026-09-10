@@ -44,20 +44,32 @@ export const captureMicrophone = async (
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   });
   const ctx = new AudioContext();
-  const blob = new Blob([MICROPHONE_WORKLET_SOURCE], { type: "application/javascript" });
-  const workletUrl = URL.createObjectURL(blob);
+  // 装配失败必须释放 stream/ctx，否则麦克风指示灯常亮
+  let node: AudioWorkletNode;
+  let source: MediaStreamAudioSourceNode;
+  let output: GainNode;
   try {
-    await ctx.audioWorklet.addModule(workletUrl);
-  } finally {
-    URL.revokeObjectURL(workletUrl);
+    const blob = new Blob([MICROPHONE_WORKLET_SOURCE], { type: "application/javascript" });
+    const workletUrl = URL.createObjectURL(blob);
+    try {
+      await ctx.audioWorklet.addModule(workletUrl);
+    } finally {
+      URL.revokeObjectURL(workletUrl);
+    }
+    node = new AudioWorkletNode(ctx, "microphone-capture");
+    source = ctx.createMediaStreamSource(stream);
+    output = ctx.createGain();
+    output.gain.value = 0;
+    source.connect(node);
+    node.connect(output);
+    output.connect(ctx.destination);
+  } catch (err) {
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
+    void ctx.close();
+    throw err;
   }
-  const node = new AudioWorkletNode(ctx, "microphone-capture");
-  const source = ctx.createMediaStreamSource(stream);
-  const output = ctx.createGain();
-  output.gain.value = 0;
-  source.connect(node);
-  node.connect(output);
-  output.connect(ctx.destination);
 
   const chunks: Float32Array[] = [];
   let total = 0;

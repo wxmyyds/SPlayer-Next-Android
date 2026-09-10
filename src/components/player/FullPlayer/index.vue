@@ -88,11 +88,10 @@ const onBeforeLeave = () => {
 /** 收起后 */
 const onAfterLeave = () => {
   lyricMounted.value = false;
-  // 惯性滑出触发的收起：到这里才清掉保持屏外位置的拖拽状态
-  if (closeDragPhase.value === "out") {
-    closeDragPhase.value = "";
-    closeDragY.value = 0;
-  }
+  // 硬件返回等路径可在拖拽中途收起：无条件复位拖拽状态，避免重开时封面带残留偏移
+  clearCloseDragTimers();
+  closeDragPhase.value = "";
+  closeDragY.value = 0;
 };
 
 // 重新挂载时，刷新初始时间
@@ -219,14 +218,25 @@ const coverSwipe = useSwipe(page1Ref, {
       // 从当前位移继续惯性滑出，完成后再收起（inline transform 保持到 leave 结束，避免抽搐）
       closeDragPhase.value = "out";
       closeDragY.value = window.innerHeight;
-      setTimeout(() => collapse(), 260);
+      clearCloseDragTimers();
+      closeDragTimers.push(window.setTimeout(() => collapse(), 260));
     } else if (closeDragPhase.value === "drag") {
       closeDragPhase.value = "snap";
       closeDragY.value = 0;
-      setTimeout(() => (closeDragPhase.value = ""), 260);
+      clearCloseDragTimers();
+      closeDragTimers.push(
+        window.setTimeout(() => {
+          closeDragPhase.value = "";
+        }, 260),
+      );
     }
   },
 });
+/** 悬空定时器：260ms 内二次交互（点开/再拖拽/硬件返回）时旧回调不能迟到触发 */
+const closeDragTimers: number[] = [];
+const clearCloseDragTimers = (): void => {
+  while (closeDragTimers.length) window.clearTimeout(closeDragTimers.pop());
+};
 watch(
   () => [coverSwipe.lengthX.value, coverSwipe.lengthY.value] as const,
   ([lenX, lenY]) => {

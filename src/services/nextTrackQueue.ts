@@ -2,6 +2,7 @@ import { isAndroid } from "@/utils/platform";
 import { getNeteaseCookies } from "@android/vendor/netease";
 import { UA_MAP } from "@android/vendor/netease/core/config";
 import { cookieObjToString } from "@android/vendor/netease/core/cookie";
+import { processCookieObject } from "@android/vendor/netease/core/request";
 import { NETEASE_LEVEL } from "@/apis/song/netease";
 import { useSettingsStore } from "@/stores/settings";
 import type { CandidateResult } from "@/core/player/candidate";
@@ -35,21 +36,23 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
     }));
   if (!items.length) return;
 
-  const cookies = getNeteaseCookies();
+  // 与 request.ts eapi 分支同源：补全设备指纹默认值（deviceId/osver/channel/appver），
+  // 保证原生自解与 JS 侧请求的 cookie 指纹一致；空串用 || 回退默认值
+  const cookies = processCookieObject(getNeteaseCookies(), "/api/song/enhance/player/url/v1");
   const header = {
-    osver: cookies.osver ?? "",
-    deviceId: cookies.deviceId ?? "",
-    os: cookies.os ?? "android",
-    appver: cookies.appver ?? "9.1.65",
-    versioncode: cookies.versioncode ?? "140",
-    mobilename: cookies.mobilename ?? "",
-    buildver: cookies.buildver ?? Math.floor(Date.now() / 1000).toString(),
-    resolution: cookies.resolution ?? "1920x1080",
-    __csrf: cookies.__csrf ?? "",
-    channel: cookies.channel ?? "",
+    osver: cookies.osver || "",
+    deviceId: cookies.deviceId || "",
+    os: cookies.os || "android",
+    appver: cookies.appver || "9.1.65",
+    versioncode: cookies.versioncode || "140",
+    mobilename: cookies.mobilename || "",
+    buildver: cookies.buildver || Math.floor(Date.now() / 1000).toString(),
+    resolution: cookies.resolution || "1920x1080",
+    __csrf: cookies.__csrf || "",
+    channel: cookies.channel || "",
     requestId: `${Date.now()}${Math.floor(Math.random() * 1000)}`,
-    MUSIC_U: cookies.MUSIC_U ?? "",
-    MUSIC_A: cookies.MUSIC_A ?? "",
+    MUSIC_U: cookies.MUSIC_U || "",
+    MUSIC_A: cookies.MUSIC_A || "",
   };
   window.api.player
     .setNextQueue?.({

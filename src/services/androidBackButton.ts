@@ -14,17 +14,17 @@ export const installAndroidBackButton = async (): Promise<void> => {
   await App.addListener("backButton", ({ canGoBack }) => {
     const status = useStatusStore();
     const settingsDialog = useSettingsDialog();
-    // 播放器内队列面板先于播放器本体关闭
+    // 播放器内队列面板、评论页均属播放器内层，先于播放器本体关闭
     if (status.fullQueueOpen) {
       status.fullQueueOpen = false;
       return;
     }
-    if (status.isPlayerExpanded) {
-      status.isPlayerExpanded = false;
-      return;
-    }
     if (status.commentsOpen) {
       status.commentsOpen = false;
+      return;
+    }
+    if (status.isPlayerExpanded) {
+      status.isPlayerExpanded = false;
       return;
     }
     if (status.searchOpen) {

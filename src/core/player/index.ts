@@ -838,6 +838,8 @@ export const syncFromNativeAdvance = async (
   }
   if (index === -1) return false;
   if (index === status.playIndex && useMediaStore().track?.id === trackId) return true;
+  // 解锁后迟到的原生过渡事件：用户已手动切歌正在 load 时，忽略旧事件避免指回原生旧目标
+  if (status.trackLoading) return true;
   const item = queue.getQueueItem(index);
   const track = item?.track;
   if (!track) return false;

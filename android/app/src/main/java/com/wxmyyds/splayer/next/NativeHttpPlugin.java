@@ -103,7 +103,6 @@ public class NativeHttpPlugin extends Plugin {
 
             @Override
             public void onResponse(Call c, Response response) {
-                if (!requestId.isEmpty()) inflight.remove(requestId);
                 try (Response r = response) {
                     JSObject ret = new JSObject();
                     ret.put("status", r.code());
@@ -144,6 +143,8 @@ public class NativeHttpPlugin extends Plugin {
                         bytes = sink.readByteArray();
                     }
                     ret.put("bodyBase64", Base64.encodeToString(bytes, Base64.NO_WRAP));
+                    // 响应体读完才出在途表：读取阶段 abort 仍可生效（connection 拒绝读取即中断）
+                    if (!requestId.isEmpty()) inflight.remove(requestId);
                     call.resolve(ret);
                 } catch (Exception e) {
                     call.reject(e.getMessage(), e);

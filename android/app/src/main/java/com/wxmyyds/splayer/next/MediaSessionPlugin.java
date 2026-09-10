@@ -58,10 +58,11 @@ public class MediaSessionPlugin extends Plugin {
     private static final OkHttpClient ART_HTTP = new OkHttpClient();
     private PluginCall pendingUpdate;
     private Bitmap lastArt;
-    /** 上次渲染通知的签名：曲目/播放态/封面变化才重建通知（见 publishState） */
+    /** 上次渲染通知的签名：曲目/播放态/封面/诊断计数变化才重建通知（见 publishState） */
     private String lastNotifiedTitle = "";
     private boolean lastNotifiedPlaying = false;
     private Bitmap lastNotifiedArt;
+    private String lastNotifiedStats = "";
 
     private final BroadcastReceiver noisyReceiver =
             new BroadcastReceiver() {
@@ -158,7 +159,12 @@ public class MediaSessionPlugin extends Plugin {
         long positionMs = readLong(call, "positionMs", 0);
         long durationMs = readLong(call, "durationMs", 0);
         String artworkUrl = call.getString("artworkUrl", null);
-        getActivity()
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.resolve();
+            return;
+        }
+        activity
                 .runOnUiThread(
                         () -> {
                             if (stopped) {
@@ -283,13 +289,16 @@ public class MediaSessionPlugin extends Plugin {
         // 200ms 级 notify 会被系统节流，表现为通知栏控件“一会有一会没”
         MediaMetadata meta = sSession.getController().getMetadata();
         String title = meta != null ? meta.getString(MediaMetadata.METADATA_KEY_TITLE) : "";
+        String stats = AudioEnginePlugin.queueStats();
         if (!title.equals(lastNotifiedTitle)
                 || playing != lastNotifiedPlaying
-                || art != lastNotifiedArt) {
+                || art != lastNotifiedArt
+                || !stats.equals(lastNotifiedStats)) {
             showNotification(playing, positionMs, durationMs, art);
             lastNotifiedTitle = title;
             lastNotifiedPlaying = playing;
             lastNotifiedArt = art;
+            lastNotifiedStats = stats;
         }
     }
 

@@ -101,6 +101,10 @@ public class AudioEnginePlugin extends Plugin {
             java.util.concurrent.Executors.newSingleThreadExecutor();
     /** requestNextUrl 补窗节拍计数（200ms/拍，每 75 拍 ≈ 15s 提醒 JS 补挂） */
     private long nudgeTick = 0;
+    /** 队列/窗口诊断缓存：200ms 主线程节拍写入，通知构建可能在桥线程，禁止直接读 player */
+    private volatile String queueStatsCache = "";
+    /** 在途解析世代号：load/clear 清队列时递增，完成回调过代即弃（防过时条目挂进新播放列表） */
+    private int resolveGeneration = 0;
     /** 上次过渡的媒体 ID：锁屏播控/自动过渡都靠它判定“真的换了曲”（曲内拖动 mediaId 不变不误同步） */
     private String lastTransitionMediaId;
 
@@ -175,10 +179,8 @@ public class AudioEnginePlugin extends Plugin {
     /** 队列/窗口诊断计数（通知栏 subText，锁屏可直接读出链路健康状态） */
     static String queueStats() {
         AudioEnginePlugin self = sInstance;
-        if (self == null || self.player == null) return "";
-        int current = self.player.getCurrentMediaItemIndex();
-        int window = Math.max(0, self.player.getMediaItemCount() - current - 1);
-        return "q" + self.pendingQueue.size() + " w" + window;
+        // 返回主线程缓存而非直接读 player：通知构建可能发生在桥线程，跨线程读 ExoPlayer 会抛异常
+        return self == null ? "" : self.queueStatsCache;
     }
 
     private float volume = 1.0f;
@@ -217,10 +219,9 @@ public class AudioEnginePlugin extends Plugin {
                         break;
                     case Player.STATE_ENDED:
                         // ENDED：优先原生队列自解下一首（WebView 冻结也能续播）；
-                        // 队列空/连续解析失败才回落 JS 链
+                        // 队列空才回落 JS 链。poll 在途时不发 ended（解析失败分支兜底）
                         acquireSwitchWakeLock();
-                        maybeResolveNext(true);
-                        if (pendingQueue.isEmpty()) {
+                        if (!maybeResolveNext(true)) {
                             Log.i(TAG, "ended (playlist end)");
                             emitEvent("ended", null);
                         }
@@ -302,6 +303,13 @@ public class AudioEnginePlugin extends Plugin {
             @Override
             public void run() {
                 nudgeTick++;
+                if (player != null) {
+                    int current = player.getCurrentMediaItemIndex();
+                    queueStatsCache =
+                            "q" + pendingQueue.size()
+                                    + " w"
+                                    + Math.max(0, player.getMediaItemCount() - current - 1);
+                }
                 if (player != null && isPlaying) {
                     currentPosition = player.getCurrentPosition();
                     currentDuration = player.getDuration();
@@ -342,6 +350,7 @@ public class AudioEnginePlugin extends Plugin {
                 : new MediaItem.Builder().setMediaId(trackId).setUri(source).build();
         mainHandler.post(() -> {
             // JS 主动 load 新曲：待播项与队列已过时，清空（预载/队列推送后会重新登记）
+            resolveGeneration++;
             pendingMeta.clear();
             pendingQueue.clear();
             player.setMediaItem(mediaItem);
@@ -420,6 +429,7 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void clearNextResource(PluginCall call) {
         mainHandler.post(() -> {
+            resolveGeneration++;
             pendingQueue.clear();
             if (player != null) {
                 int current = player.getCurrentMediaItemIndex();
@@ -482,26 +492,29 @@ public class AudioEnginePlugin extends Plugin {
 
     /**
      * 播放列表无下一项且队列非空时，从队列头自解一首挂入（IO 线程解析，主线程挂载）
-     * @param fromEnded - 是否由 ENDED 状态触发（挂载后需主动 seek+play 续播）
+     * @param fromEnded - 是否由 ENDED 状态触发（解析全败时发 ended 回落 JS 链）
+     * @returns 是否已启动在途解析（调用方据此刻定 ENDED 是否真正结束）
      */
-    private void maybeResolveNext(boolean fromEnded) {
-        if (player == null || resolveCtx == null || pendingQueue.isEmpty()) return;
+    private boolean maybeResolveNext(boolean fromEnded) {
+        if (player == null || resolveCtx == null || pendingQueue.isEmpty()) return false;
         if (!fromEnded) {
             int current = player.getCurrentMediaItemIndex();
-            if (current >= 0 && current < player.getMediaItemCount() - 1) return; // 已有预缓冲的下一项
+            if (current >= 0 && current < player.getMediaItemCount() - 1) return false; // 已有预缓冲的下一项
         }
         final JSObject entry = pendingQueue.poll();
-        if (entry == null) return;
+        if (entry == null) return false;
         final String trackId = entry.getString("trackId", "");
         final String songId = entry.getString("songId", "");
         final String level = entry.getString("level", "exhigh");
+        final int gen = resolveGeneration;
         RESOLVE_POOL.execute(
                 () -> {
                     try {
                         String url = NeteaseEapiResolver.resolve(resolveCtx, songId, level);
                         mainHandler.post(
                                 () -> {
-                                    if (player == null) return;
+                                    // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表
+                                    if (player == null || gen != resolveGeneration) return;
                                     pendingMeta.put(trackId, entry);
                                     player.addMediaItem(
                                             new MediaItem.Builder().setMediaId(trackId).setUri(url).build());
@@ -524,13 +537,16 @@ public class AudioEnginePlugin extends Plugin {
                                     resolveFails++;
                                     if (resolveFails < 3) {
                                         maybeResolveNext(fromEnded);
-                                    } else {
+                                    } else if (fromEnded) {
+                                        // 仅 ENDED 场景回落 JS 链；播放中预填失败只能等 nudge 重试，
+                                        // 此刻发 ended 会让 JS 跳过正在播放的曲目
                                         Log.w(TAG, "queueResolve give up, fall back to JS chain");
                                         emitEvent("ended", null);
                                     }
                                 });
                     }
                 });
+        return true;
     }
 
     private static long readLongFrom(JSObject obj, String key) {

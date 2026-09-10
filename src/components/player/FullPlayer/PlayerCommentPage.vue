@@ -31,6 +31,8 @@ const loadingNew = ref(false);
 const loadedFor = ref("");
 
 const loading = computed(() => loadingHot.value || loadingNew.value);
+/** 请求代令牌：切歌后旧响应作废，不允许覆盖新列表 */
+let loadGeneration = 0;
 
 /** 评论源与曲目平台匹配，无匹配用第一个源 */
 const resolveSourceId = (items: CommentSource[], source: string): string =>
@@ -51,6 +53,7 @@ const load = async (): Promise<void> => {
   const key = `${current.source}:${current.id}`;
   if (loadedFor.value === key) return;
   loadedFor.value = key;
+  const gen = ++loadGeneration;
   reset();
   loadingHot.value = true;
   try {
@@ -64,6 +67,7 @@ const load = async (): Promise<void> => {
       page: 1,
       limit: 20,
     });
+    if (gen !== loadGeneration) return;
     if (hot.ok) hotList.value = hot.data.list;
     const fresh = await window.api.comments.get({
       sourceId: sourceId.value,
@@ -72,6 +76,7 @@ const load = async (): Promise<void> => {
       page: 1,
       limit: 20,
     });
+    if (gen !== loadGeneration) return;
     if (fresh.ok) {
       const data: MusicCommentPage = fresh.data;
       newList.value = data.list;
@@ -83,14 +88,17 @@ const load = async (): Promise<void> => {
   } catch {
     // 失败保持空态
   } finally {
-    loadingHot.value = false;
-    loadingNew.value = false;
+    if (gen === loadGeneration) {
+      loadingHot.value = false;
+      loadingNew.value = false;
+    }
   }
 };
 
 const loadMore = async (): Promise<void> => {
   const current = track.value;
   if (!current || !sourceId.value || !hasMore.value || loadingNew.value) return;
+  const gen = loadGeneration;
   loadingNew.value = true;
   try {
     const next = await window.api.comments.get({
@@ -101,6 +109,7 @@ const loadMore = async (): Promise<void> => {
       limit: 20,
       cursor: nextCursor.value,
     });
+    if (gen !== loadGeneration) return;
     if (next.ok) {
       newList.value = [...newList.value, ...next.data.list];
       nextCursor.value = next.data.nextCursor;
@@ -110,7 +119,7 @@ const loadMore = async (): Promise<void> => {
   } catch {
     // 静默
   } finally {
-    loadingNew.value = false;
+    if (gen === loadGeneration) loadingNew.value = false;
   }
 };
 
