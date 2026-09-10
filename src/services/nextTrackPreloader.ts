@@ -53,7 +53,9 @@ const pushNativeWindow = (entries: (WindowEntry | null | undefined)[]): void => 
   const status = useStatusStore();
   if (status.repeatMode === "one" || autoClose.shouldStopAfterCurrentTrack()) return;
   console.log("[nextPreload] native window armed:", items.map((item) => item.trackId).join(","));
-  void window.api.player.setNextResources?.({ items }).catch(() => {});
+  window.api.player
+    .setNextResources?.({ items })
+    .catch((err) => console.error("[nextPreload] setNextResources failed:", err));
 };
 
 let currentToken = 0;
