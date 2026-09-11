@@ -65,6 +65,7 @@ import {
 } from "./db/playStats";
 import { fetchWithProxy } from "./vendor/shim/proxy";
 import { createRecognitionApi } from "./services/recognition";
+import { createStreamingApi } from "./services/streaming";
 import { callAction } from "./plugins/runtime";
 import { matchCover, matchLyric } from "./plugins/metadata";
 import {
@@ -294,34 +295,7 @@ const library: LibraryApi = {
   onScanProgress: noopUnsubscribe,
 };
 
-const emptyStreaming = { songs: [], albums: [], artists: [], playlists: [] };
-
-const streaming: StreamingApi = {
-  loadServers: async () => ({ servers: [], activeServerId: null }),
-  addServer: async () => {
-    throw new Error(unsupported);
-  },
-  updateServer: async () => {
-    throw new Error(unsupported);
-  },
-  removeServer: async () => {},
-  setActiveServer: async () => {},
-  testConnection: async () => ({ ok: false, error: unsupported, code: "unknown" }),
-  connect: async () => ({ ok: false, error: unsupported, code: "unknown" }),
-  disconnect: async () => {},
-  getSnapshot: async () => emptyStreaming,
-  sync: async () => false,
-  onLibraryUpdated: noopUnsubscribe,
-  search: async () => ({ songs: [], albums: [], artists: [] }),
-  getAlbumSongs: async () => [],
-  getPlaylistSongs: async () => [],
-  getArtistAlbums: async () => [],
-  getArtistSongs: async () => [],
-  getStreamUrl: async () => {
-    throw new Error(unsupported);
-  },
-  getLyrics: async () => null,
-};
+const streaming = createStreamingApi() satisfies StreamingApi;
 
 const nowPlaying: NowPlayingApi = {
   update: () => {},
