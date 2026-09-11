@@ -64,6 +64,7 @@ import {
   insertPlayEvent,
 } from "./db/playStats";
 import { fetchWithProxy } from "./vendor/shim/proxy";
+import { createRecognitionApi } from "./services/recognition";
 import { callAction } from "./plugins/runtime";
 import { matchCover, matchLyric } from "./plugins/metadata";
 import {
@@ -632,7 +633,7 @@ const api = {
   stats,
   hotkey,
   streaming,
-  recognition: emptyApi<RecognitionApi>(),
+  recognition: createRecognitionApi() satisfies RecognitionApi,
   lastfm: emptyApi<LastfmApi>(),
   externalApi: externalApi,
   mcp: mcpApi,

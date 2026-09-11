@@ -4,6 +4,7 @@ import type { RecognitionCandidate } from "@shared/types/recognition";
 import { songsByIds as getNeteaseSongsByIds } from "@/apis/song/netease";
 import { toast } from "@/composables/useToast";
 import { useRecognitionSession } from "@/composables/useRecognitionSession";
+import { isAndroid } from "@/utils/platform";
 import * as player from "@/core/player";
 import { withPicSize } from "@/utils/format/netease";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
@@ -17,6 +18,8 @@ const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ "update:open": [value: boolean] }>();
 const session = useRecognitionSession();
 const { phase, level, candidates, error, supported, source } = session;
+// Android 无系统内录：来源固定为麦克风（系统声音选项随平台隐藏）
+if (isAndroid) source.value = "microphone";
 
 const isBusy = computed(() => ["capturing", "fingerprinting", "matching"].includes(phase.value));
 const trackCache = shallowRef(new Map<string, Track>());
@@ -160,7 +163,7 @@ const start = (): void => {
               {{ t("recognition.sourceLabel") }}
             </span>
             <SRadioGroup v-model:value="source" size="small" class="flex gap-4">
-              <SRadio value="system" :label="t('recognition.source.system')" />
+              <SRadio v-if="!isAndroid" value="system" :label="t('recognition.source.system')" />
               <SRadio value="microphone" :label="t('recognition.source.microphone')" />
             </SRadioGroup>
           </div>
