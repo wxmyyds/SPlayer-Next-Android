@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeHttpPlugin.class);
         registerPlugin(LoginWebPlugin.class);
         registerPlugin(MediaSessionPlugin.class);
+        registerPlugin(DownloadPlugin.class);
         registerPlugin(DbPlugin.class);
         registerPlugin(AudioEnginePlugin.class);
         registerPlugin(SystemUiPlugin.class);

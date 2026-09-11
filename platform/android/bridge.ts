@@ -66,6 +66,7 @@ import {
 import { fetchWithProxy } from "./vendor/shim/proxy";
 import { createRecognitionApi } from "./services/recognition";
 import { createStreamingApi } from "./services/streaming";
+import { createDownloadApi } from "./services/download";
 import { callAction } from "./plugins/runtime";
 import { matchCover, matchLyric } from "./plugins/metadata";
 import {
@@ -601,7 +602,7 @@ const api = {
       }
     },
   } satisfies CommentsApi,
-  download: emptyApi<DownloadApi>(),
+  download: createDownloadApi() satisfies DownloadApi,
   theme: { pickBackgroundImage: async () => null, clearBackgroundImages: async () => {} },
   cache,
   stats,
