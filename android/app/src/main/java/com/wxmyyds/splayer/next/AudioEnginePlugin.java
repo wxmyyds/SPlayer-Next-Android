@@ -285,9 +285,10 @@ public class AudioEnginePlugin extends Plugin {
                             meta.getString("artist", ""),
                             meta.getString("album", ""),
                             meta.getString("artwork", ""),
-                            true,
+                            player.isPlaying(),
                             0L,
                             readLongFrom(meta, "durationMs"));
+                    meta.put("playing", player.isPlaying());
                     emitEvent("autoAdvanced", meta);
                 }
                 maybeResolveNext(false);
@@ -462,7 +463,13 @@ public class AudioEnginePlugin extends Plugin {
             return;
         }
         mainHandler.post(() -> {
-            resolveCtx = resolve;
+            resolveGeneration++;
+            try {
+                resolveCtx = new JSONObject(resolve.toString());
+            } catch (Exception e) {
+                call.reject("invalid resolve context", e.getMessage());
+                return;
+            }
             resolveFails = 0;
             pendingQueue.clear();
             int queued = 0;
@@ -507,10 +514,11 @@ public class AudioEnginePlugin extends Plugin {
         final String songId = entry.getString("songId", "");
         final String level = entry.getString("level", "exhigh");
         final int gen = resolveGeneration;
+        final JSONObject ctx = resolveCtx;
         RESOLVE_POOL.execute(
                 () -> {
                     try {
-                        String url = NeteaseEapiResolver.resolve(resolveCtx, songId, level);
+                        String url = NeteaseEapiResolver.resolve(ctx, songId, level);
                         mainHandler.post(
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表
@@ -585,6 +593,10 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         mainHandler.post(() -> {
+            resolveGeneration++;
+            pendingQueue.clear();
+            resolveCtx = null;
+            pendingMeta.clear();
             player.stop();
             player.clearMediaItems();
             call.resolve();
@@ -881,6 +893,9 @@ public class AudioEnginePlugin extends Plugin {
     @Override
     public void handleOnDestroy() {
         // 生命周期回调在主线程执行，直接释放满足 ExoPlayer 线程约束
+        resolveGeneration++;
+        pendingQueue.clear();
+        resolveCtx = null;
         if (player != null) {
             player.release();
             player = null;

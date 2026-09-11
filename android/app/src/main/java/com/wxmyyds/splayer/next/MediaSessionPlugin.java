@@ -57,6 +57,10 @@ public class MediaSessionPlugin extends Plugin {
     /** 封面抓取共享客户端（连接池复用，随进程释放） */
     private static final OkHttpClient ART_HTTP = new OkHttpClient();
     private PluginCall pendingUpdate;
+    /** 权限弹窗在途：期间新的 updateState 只入队不重复发起请求 */
+    private boolean permissionRequestInFlight;
+    /** 封面请求令牌：当前生效的封面 URL，返回时不匹配（同名切歌/停止）即丢弃 */
+    private String pendingArtUrl;
     private Bitmap lastArt;
     /** 上次渲染通知的签名：曲目/播放态/封面/诊断计数变化才重建通知（见 publishState） */
     private String lastNotifiedTitle = "";
@@ -129,10 +133,14 @@ public class MediaSessionPlugin extends Plugin {
                 && getActivity() != null
                 && getActivity().checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
-            // 权限弹窗期间的新推送会覆盖旧 pending 调用，先 resolve 旧的避免桥上悬挂
+            // 权限弹窗期间的新推送会覆盖旧 pending 调用，先 resolve 旧的避免桥上悬挂；
+            // 已有请求在途时不重复发起，避免回调与 pending 错位
             if (pendingUpdate != null) pendingUpdate.resolve();
             pendingUpdate = call;
-            requestPermissionForAlias("notifications", call, "onNotificationPermission");
+            if (!permissionRequestInFlight) {
+                permissionRequestInFlight = true;
+                requestPermissionForAlias("notifications", call, "onNotificationPermission");
+            }
             return;
         }
         doUpdate(call);
@@ -140,13 +148,14 @@ public class MediaSessionPlugin extends Plugin {
 
     @PermissionCallback
     private void onNotificationPermission(PluginCall call) {
-        if (getPermissionState("notifications") == PermissionState.GRANTED && pendingUpdate != null) {
-            PluginCall pending = pendingUpdate;
-            pendingUpdate = null;
-            doUpdate(pending);
-        } else {
-            pendingUpdate = null;
-            call.reject("notification permission denied");
+        permissionRequestInFlight = false;
+        PluginCall pending = pendingUpdate;
+        pendingUpdate = null;
+        if (getPermissionState("notifications") == PermissionState.GRANTED) {
+            if (pending != null) doUpdate(pending);
+        } else if (pending != null) {
+            // 结果必须给最新 pending；回调携带的 call 可能已被后续推送顶替
+            pending.reject("notification permission denied");
         }
     }
 
@@ -171,6 +180,7 @@ public class MediaSessionPlugin extends Plugin {
                                 unregisterNoisyReceiver();
                                 sSession.setActive(false);
                                 lastArt = null;
+                                pendingArtUrl = null;
                                 lastNotifiedTitle = "";
                                 lastNotifiedPlaying = false;
                                 lastNotifiedArt = null;
@@ -266,6 +276,7 @@ public class MediaSessionPlugin extends Plugin {
         }
         publishState(playing, positionMs, durationMs, lastArt);
         if (artworkUrl != null && !artworkUrl.isEmpty()) {
+            pendingArtUrl = artworkUrl;
             loadArtworkAsync(artworkUrl, title, artist, album, playing, positionMs, durationMs);
         }
     }
@@ -360,6 +371,8 @@ public class MediaSessionPlugin extends Plugin {
                     act.runOnUiThread(
                                     () -> {
                                         if (sSession == null) return;
+                                        // 令牌不符：同名切歌/停止后返回的旧封面不得再贴
+                                        if (pendingArtUrl == null || !pendingArtUrl.equals(url)) return;
                                         MediaMetadata old = sSession.getController().getMetadata();
                                         if (old == null) return;
                                         // 曲目没变才贴图，避免串台

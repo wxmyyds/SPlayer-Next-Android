@@ -59,7 +59,11 @@ const load = async (): Promise<void> => {
   try {
     if (!sources.value.length) sources.value = await window.api.comments.sources();
     sourceId.value = resolveSourceId(sources.value, current.source);
-    if (!sourceId.value) return;
+    if (!sourceId.value) {
+      // 失败不留.loadedFor标记：恢复后同一首歌可重试
+      loadedFor.value = "";
+      return;
+    }
     const hot = await window.api.comments.get({
       sourceId: sourceId.value,
       track: toRaw(current),
@@ -86,7 +90,8 @@ const load = async (): Promise<void> => {
       hasMore.value = data.list.length > 0 && !!data.nextCursor;
     }
   } catch {
-    // 失败保持空态
+    // 失败保持空态并清除标记，下次激活可重试
+    if (gen === loadGeneration) loadedFor.value = "";
   } finally {
     if (gen === loadGeneration) {
       loadingHot.value = false;

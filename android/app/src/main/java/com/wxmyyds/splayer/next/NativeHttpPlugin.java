@@ -97,7 +97,7 @@ public class NativeHttpPlugin extends Plugin {
         httpCall.enqueue(new Callback() {
             @Override
             public void onFailure(Call c, IOException e) {
-                if (!requestId.isEmpty()) inflight.remove(requestId);
+                if (!requestId.isEmpty()) inflight.remove(requestId, c);
                 call.reject(e.getMessage(), e);
             }
 
@@ -135,6 +135,7 @@ public class NativeHttpPlugin extends Plugin {
                         try (BufferedSource source = rb.source()) {
                             while (source.read(sink, 65536) != -1) {
                                 if (sink.size() > MAX_BODY) {
+                                    inflight.remove(requestId, c);
                                     call.reject("response too large");
                                     return;
                                 }
@@ -144,9 +145,10 @@ public class NativeHttpPlugin extends Plugin {
                     }
                     ret.put("bodyBase64", Base64.encodeToString(bytes, Base64.NO_WRAP));
                     // 响应体读完才出在途表：读取阶段 abort 仍可生效（connection 拒绝读取即中断）
-                    if (!requestId.isEmpty()) inflight.remove(requestId);
+                    if (!requestId.isEmpty()) inflight.remove(requestId, c);
                     call.resolve(ret);
                 } catch (Exception e) {
+                    inflight.remove(requestId, c);
                     call.reject(e.getMessage(), e);
                 }
             }

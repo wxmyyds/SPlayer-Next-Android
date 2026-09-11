@@ -299,7 +299,7 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
   media.setPlaybackContext(context);
   lyricLoader.beginLoad();
   resetForLoad(track.duration ?? 0);
-  void window.api.player.stop();
+  await window.api.player.stop();
   // 是否可跳曲
   let shouldSkip = false;
   try {
@@ -823,6 +823,7 @@ export const onQueueEnded = async (): Promise<void> => {
 export const syncFromNativeAdvance = async (
   trackId: string,
   playIndex: number,
+  playing = true,
 ): Promise<boolean> => {
   if (!trackId) return false;
   const status = useStatusStore();
@@ -852,10 +853,10 @@ export const syncFromNativeAdvance = async (
   media.setPlaybackContext(item?.context);
   resetForLoad(track.duration ?? 0);
   status.trackLoading = false;
-  status.state = "playing";
+  status.state = playing ? "playing" : "paused";
   // 原生已开播，URL 解析源信息未知；置空避免后续 reload 复用上一首的源（同 SFA 清 currentAudioSource）
   status.currentSource = null;
-  playback.setPlaying(true);
+  playback.setPlaying(playing);
   abLoop.reset();
   // 歌词/取色/封面与常规切歌对齐
   void lyricLoader.loadForTrack(null);
@@ -1039,8 +1040,8 @@ export const insertManyToQueue = (
 export const playNow = async (item: Track, context?: PlaybackContext): Promise<void> => {
   const status = useStatusStore();
   const media = useMediaStore();
-  // 同一首歌且已成功加载
-  if (media.track?.id === item.id && status.currentSource) {
+  // 同一首歌且已成功加载（跨音源同数值 id 不算同一首）
+  if (media.track?.id === item.id && media.track?.source === item.source && status.currentSource) {
     if (!status.isPlaying) play();
     return;
   }

@@ -209,7 +209,7 @@ export type PlayerEvent =
   | { type: "position"; data: { position: number; duration: number } }
   | { type: "seek"; data: { position: number } }
   | { type: "ended" }
-  | { type: "nativeAdvance"; data: { trackId: string; playIndex: number } }
+  | { type: "nativeAdvance"; data: { trackId: string; playIndex: number; playing?: boolean } }
   | { type: "requestNextUrl" }
   | { type: "sourceError" }
   | { type: "play" }

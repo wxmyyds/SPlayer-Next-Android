@@ -125,7 +125,11 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
     case "nativeAdvance": {
       // 原生自治切歌（锁屏 WebView 冻结时）：同步队列指针与界面；
       // 找不到对应曲目（队列已变动）时回落常规 ended 流程
-      const synced = await syncFromNativeAdvance(event.data.trackId, event.data.playIndex);
+      const synced = await syncFromNativeAdvance(
+        event.data.trackId,
+        event.data.playIndex,
+        event.data.playing,
+      );
       if (!synced) await finishCurrentTrack();
       break;
     }
@@ -134,8 +138,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       scheduleNextTrackPreload();
       break;
     case "sourceError":
-      // 音源失效（网络中断 / URL 过期）
-      await recoverFromSourceFailure();
+      // 音源失效（网络中断 / URL 过期）；加载期收到的是旧引擎错误，误伤会造成新曲被跳过
+      if (!status.trackLoading) await recoverFromSourceFailure();
       break;
     case "play":
       await play();

@@ -64,8 +64,10 @@ export const useMediaStore = defineStore("media", () => {
    * @param newDetail - 新的歌曲详细信息；省略则保留现有 detail
    */
   const setTrack = (newTrack: Track, newDetail?: TrackDetail): void => {
+    const idChanged = track.value?.id !== newTrack.id;
     track.value = newTrack;
     if (newDetail) detail.value = newDetail;
+    else if (idChanged) detail.value = null;
   };
 
   /**
@@ -204,7 +206,7 @@ export const useMediaStore = defineStore("media", () => {
 
   /** 清空所有状态 */
   const clear = (): void => {
-    // 任何清空都让在途的简繁转换作废（token 自增）  
+    // 任何清空都让在途的简繁转换作废（token 自增）
     transformToken++;
     track.value = null;
     playbackContext.value = undefined;

@@ -18,11 +18,12 @@ const QUEUE_SIZE = 30;
  * @param candidates - 预载调度算出的候选列表（含首候选在内的接下来至多 QUEUE_SIZE 首）
  */
 export const pushNativeQueue = (candidates: CandidateResult[]): void => {
-  if (!isAndroid || !candidates.length) return;
+  if (!isAndroid) return;
   const level = NETEASE_LEVEL[useSettingsStore().player.songLevel];
+  // 原生只能直接解析网易云；遇到其他音源就在此断开，不能过滤后把后面的网易云曲目提前
+  const firstUnsupported = candidates.findIndex(({ track }) => track.source !== "netease");
   const items = candidates
-    .filter(({ track }) => track.source === "netease")
-    .slice(0, QUEUE_SIZE)
+    .slice(0, firstUnsupported < 0 ? QUEUE_SIZE : firstUnsupported)
     .map(({ track, index }) => ({
       trackId: track.id,
       songId: track.id,
@@ -34,7 +35,10 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
       artwork: track.coverOriginal ?? track.cover ?? "",
       durationMs: track.duration ?? 0,
     }));
-  if (!items.length) return;
+  if (!items.length) {
+    void window.api.player.clearNextResource?.().catch(() => {});
+    return;
+  }
 
   // 与 request.ts eapi 分支同源：补全设备指纹默认值（deviceId/osver/channel/appver），
   // 保证原生自解与 JS 侧请求的 cookie 指纹一致；空串用 || 回退默认值

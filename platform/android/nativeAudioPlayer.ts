@@ -242,6 +242,7 @@ const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | nu
         data: {
           trackId: String(payload.data?.trackId ?? ""),
           playIndex: Number(payload.data?.playIndex ?? -1),
+          playing: payload.data?.playing !== false,
         },
       };
     case "requestNextUrl":

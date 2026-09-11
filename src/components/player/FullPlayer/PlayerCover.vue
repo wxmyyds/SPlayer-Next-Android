@@ -30,7 +30,8 @@ watchEffect(async () => {
   if (status.trackLoading || !id) return;
   if (displayTrack.value?.source !== "local" || hdCache.value?.id === id) return;
   const r = await window.api.player.getCoverRaw();
-  if (displayTrack.value?.id !== id || !r.success || !r.data) return;
+  // 请求返回时已收起（或切歌）：丢弃结果，避免原图 base64 滞留内存
+  if (!status.isPlayerExpanded || displayTrack.value?.id !== id || !r.success || !r.data) return;
   hdCache.value = { id, data: r.data };
 });
 </script>
