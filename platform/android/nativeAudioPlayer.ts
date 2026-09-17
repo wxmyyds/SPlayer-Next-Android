@@ -183,7 +183,7 @@ const ensureStallWatchdog = (): void => {
   noteStallProgress();
   if (stallTimer) return;
   stallTimer = setInterval(() => {
-    if (!enginePlaying) return;
+    // 武装条件（播放中或 BUFFERING 重缓）由调用方保证；这里只看是否有推进
     if (Date.now() - lastAdvanceAt < STALL_TIMEOUT_MS) return;
     stopStallWatchdog();
     enginePlaying = false;
@@ -194,6 +194,7 @@ const ensureStallWatchdog = (): void => {
 /** 推送曲目元数据到系统（标题/歌手/专辑/封面） */
 const publishMetadata = (meta?: LoadOptions["meta"]): void => {
   try {
+    // .catch：桥异步 reject（如通知权限被拒）不会被 try/catch 捕获，未处理的 rejection 无人接
     void MediaBridge.updateState({
       title: meta?.title ?? "",
       artist: (meta?.artists ?? [])
@@ -202,7 +203,7 @@ const publishMetadata = (meta?: LoadOptions["meta"]): void => {
         .join(" / "),
       album: meta?.album?.name ?? "",
       artworkUrl: meta?.coverOriginal ?? meta?.cover,
-    });
+    }).catch(() => {});
   } catch {
     // 忽略
   }
@@ -220,7 +221,7 @@ const publishState = (
       positionMs,
       durationMs,
       stopped: state === "none" || undefined,
-    });
+    }).catch(() => {});
   } catch {
     // 忽略
   }
@@ -321,13 +322,16 @@ const wireEngine = (): void => {
         stopStallWatchdog();
         publishState("paused", lastPositionMs, lastDurationMs);
         break;
-      case "playingChanged":
-        // 引擎播放态快照：同步媒体卡片，不回射指令（振荡环防护见 mapNativeEvent）
+      case "playingChanged": {
+        // 引擎播放态快照：同步媒体卡片，不回射指令（振荡环防护见 mapNativeEvent）。
+        // BUFFERING 时 isPlaying=false 但 playWhenReady=true，看门狗须保持武装，
+        // 否则重缓期间停表后无人重启，恰好在其要检测的卡流场景失效
         enginePlaying = !!data.data?.playing;
-        if (enginePlaying) ensureStallWatchdog();
+        if (enginePlaying || data.data?.playWhenReady) ensureStallWatchdog();
         else stopStallWatchdog();
         publishState(enginePlaying ? "playing" : "paused", lastPositionMs, lastDurationMs);
         break;
+      }
     }
     const event = mapNativeEvent(data);
     if (event) emit(event);
@@ -368,14 +372,16 @@ export const nativeAudioPlayer: PlayerApi = {
         album: options?.meta?.album?.name,
         artwork: options?.meta?.coverOriginal ?? options?.meta?.cover,
       });
-      lastDurationMs = result.duration;
-      publishState(options?.autoPlay ? "playing" : "paused", 0, result.duration);
+      lastDurationMs = result.duration > 0 ? result.duration : (options?.meta?.duration ?? 0);
+      publishState(options?.autoPlay ? "playing" : "paused", 0, lastDurationMs);
       return ok({
         detail: {
           quality: { sampleRate: 0, channels: 0, bitsPerSample: 0, bitRate: 0, codec: "" },
           externalLyrics: [],
         },
-        mediaInfo: { duration: result.duration },
+        // 原生 prepare 异步，load 返回时 getDuration 恒 0；回退 Track 元数据时长，
+        // 首个 position 事件（200ms 后）带真实 duration 再覆盖
+        mediaInfo: { duration: lastDurationMs },
       });
     } catch (err) {
       enginePlaying = false;
@@ -393,6 +399,9 @@ export const nativeAudioPlayer: PlayerApi = {
   pause: async () => {
     try {
       await AudioEngine.pause();
+      enginePlaying = false;
+      // BUFFERING 中暂停不触发原生 playingChanged（isPlaying 本就 false），本地解除武装
+      stopStallWatchdog();
       return ok();
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));

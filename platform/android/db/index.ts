@@ -18,6 +18,9 @@ interface SPlayerDbPlugin {
   query: (options: { sql: string; values?: unknown[] }) => Promise<{
     values: Record<string, unknown>[];
   }>;
+  transaction: (options: {
+    statements: { sql: string; values?: unknown[] }[];
+  }) => Promise<{ changes: number }>;
 }
 
 /** 非原生环境回退：直接抛错（VITE_PLATFORM=android 只跑真机/CI 构建） */
@@ -29,6 +32,9 @@ class SPlayerDbWeb extends WebPlugin implements SPlayerDbPlugin {
     throw new Error("SPlayerDb is native only");
   }
   async query(): Promise<{ values: Record<string, unknown>[] }> {
+    throw new Error("SPlayerDb is native only");
+  }
+  async transaction(): Promise<{ changes: number }> {
     throw new Error("SPlayerDb is native only");
   }
 }
@@ -195,4 +201,35 @@ export const dbRun = async (sql: string, values: unknown[] = []): Promise<number
   await ensureSchema();
   const res = await SPlayerDb.run({ sql, values });
   return res.changes ?? 0;
+};
+
+/**
+ * 事务写入：statements 逐条执行，全部成功才提交，任一失败整体回滚。
+ * 用于多语句写操作（歌单增删/导入）的崩溃一致性
+ * @param statements 语句列表（? 占位）
+ * @returns 变更行数合计
+ */
+export const dbTransaction = async (
+  statements: { sql: string; values?: unknown[] }[],
+): Promise<number> => {
+  if (statements.length === 0) return 0;
+  await ensureSchema();
+  const res = await SPlayerDb.transaction({ statements });
+  return res.changes ?? 0;
+};
+
+/** SQLite 绑定参数上限分块值：API<30 内置 SQLite < 3.32 上限 999，留余量取 500 */
+export const SQLITE_PARAM_CHUNK = 500;
+
+/**
+ * 按绑定参数上限分块（IN 查询 / 多值 INSERT 超 999 参数会抛 too many SQL variables）
+ * @param items 条目列表
+ * @param perItem 每条目的参数数
+ * @returns 分块后的条目组
+ */
+export const chunkByParams = <T>(items: T[], perItem: number): T[][] => {
+  const size = Math.max(1, Math.floor(SQLITE_PARAM_CHUNK / perItem));
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
 };

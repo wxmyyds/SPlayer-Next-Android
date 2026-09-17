@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from "vue";
+import { registerBackOverlay, unregisterBackOverlay } from "@/services/androidBackButton";
 
 export interface SDialogProps {
   /** 控制打开状态（v-model:open） */
@@ -84,10 +85,23 @@ watch(
   },
 );
 
-watch(isOpen, syncMounted, { immediate: true });
+/** 返回键浮层注册用的稳定引用（注册/注销必须是同一函数） */
+const closeForBack = (): void => setOpen(false);
+
+watch(
+  isOpen,
+  (open) => {
+    syncMounted(open);
+    // 返回键接管：打开时注册，关闭/卸载时注销（Capacitor 返回键优先弹栈顶弹窗）
+    if (open) registerBackOverlay(closeForBack);
+    else unregisterBackOverlay(closeForBack);
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
   if (destroyTimer) clearTimeout(destroyTimer);
+  unregisterBackOverlay(closeForBack);
 });
 
 const setOpen = (val: boolean): void => {

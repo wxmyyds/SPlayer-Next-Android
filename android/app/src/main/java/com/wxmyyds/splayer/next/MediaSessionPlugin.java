@@ -59,6 +59,9 @@ public class MediaSessionPlugin extends Plugin {
     private PluginCall pendingUpdate;
     /** 权限弹窗在途：期间新的 updateState 只入队不重复发起请求 */
     private boolean permissionRequestInFlight;
+    /** 用户拒绝过通知权限：后续 updateState 降级为无通知更新，不再弹窗（position
+     * 200ms/拍持续推送，反复发起 requestPermissionForAlias 会形成拒绝循环） */
+    private boolean permissionDenied;
     /** 封面请求令牌：当前生效的封面 URL，返回时不匹配（同名切歌/停止）即丢弃 */
     private String pendingArtUrl;
     private Bitmap lastArt;
@@ -133,6 +136,12 @@ public class MediaSessionPlugin extends Plugin {
                 && getActivity() != null
                 && getActivity().checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
+            // 拒绝过后降级：不弹窗、直接更新 MediaSession（通知不显示，锁屏卡片/播控仍可用；
+            // 用户到系统设置授权后本分支不再命中，通知自动恢复）
+            if (permissionDenied) {
+                doUpdate(call);
+                return;
+            }
             // 权限弹窗期间的新推送会覆盖旧 pending 调用，先 resolve 旧的避免桥上悬挂；
             // 已有请求在途时不重复发起，避免回调与 pending 错位
             if (pendingUpdate != null) pendingUpdate.resolve();
@@ -152,9 +161,11 @@ public class MediaSessionPlugin extends Plugin {
         PluginCall pending = pendingUpdate;
         pendingUpdate = null;
         if (getPermissionState("notifications") == PermissionState.GRANTED) {
+            permissionDenied = false;
             if (pending != null) doUpdate(pending);
         } else if (pending != null) {
             // 结果必须给最新 pending；回调携带的 call 可能已被后续推送顶替
+            permissionDenied = true;
             pending.reject("notification permission denied");
         }
     }
@@ -397,7 +408,18 @@ public class MediaSessionPlugin extends Plugin {
                 if (!response.isSuccessful() || response.body() == null) return null;
                 byte[] bytes = response.body().bytes();
                 if (bytes.length > 4 * 1024 * 1024) return null;
-                return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                Bitmap raw = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                // 3000px 原图解码 ≈ 36MB 堆内存，且整包 Notification 会经 Intent 跨进程
+                // 传给 PlaybackService；通知图标 512px 足够
+                if (raw == null) return null;
+                int side = Math.max(raw.getWidth(), raw.getHeight());
+                if (side <= 512) return raw;
+                float scale = 512f / side;
+                return Bitmap.createScaledBitmap(
+                        raw,
+                        Math.max(1, Math.round(raw.getWidth() * scale)),
+                        Math.max(1, Math.round(raw.getHeight() * scale)),
+                        true);
             }
         } catch (Exception ignored) {
             return null;

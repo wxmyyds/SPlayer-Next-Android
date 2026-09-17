@@ -8,30 +8,28 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-Android music player. Vue 3 renderer (`src/`) 复用上游；外壳换成 **Capacitor 7 + Kotlin**，
-音频保留 Rust `audio-engine`（经 `cargo-ndk` 编 `so` + JNI + Oboe 后端输出）。
+Android music player. Vue 3 renderer (`src/`) 复用上游；外壳换成 **Capacitor 7 + Java 原生壳**，
+音频引擎为 **Media3 ExoPlayer**（`AudioEnginePlugin.java`，含 AudioEffect 均衡器/Visualizer 频谱/锁屏
+MediaSession/原生自解队列）。`native/` 下的 Rust crate（audio-engine 等）是桌面遗留，**Android 不参与
+构建与运行**（无 JNI 绑定，勿在 Android 链路引用）。
 
 ## Commands
 
 ```bash
 pnpm install              # Install deps
-pnpm build                # 复用上游：electron-vite build → dist/（Android 只取 renderer 产物）
-pnpm typecheck            # tsc + vue-tsc (node + web targets)，提交前必须过
+pnpm build                # Android：typecheck + vite build → out/renderer
+pnpm typecheck            # vue-tsc (web targets)，提交前必须过
 pnpm lint / format        # ESLint / Prettier
 ```
 
-Android（`android/` 目录落地后以其 README 为准，大致）：
+Android：
 
 ```bash
-npx cap sync android                                   # Web 产物同步到原生壳
-cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build -p audio-engine
+pnpm cap:sync:android                                  # 构建并同步 Web 产物到原生壳
 ./gradlew -p android assembleDebug
 ```
 
-`SKIP_NATIVE_BUILD=true` 跳过 Rust（只调 UI 时用）。
-
-`audio-engine` 静态链接 FFmpeg（`ffmpeg_audio` crate），无系统依赖；安卓输出后端为 Oboe/AAudio，
-解码/EQ/FFT/响度归一逻辑与桌面共用同一套 Rust 代码。
+无需 Rust 工具链；CI（`.github/workflows/android.yml`）只走 typecheck → web 构建 → cap sync → gradle。
 
 ## Shell
 
@@ -50,9 +48,9 @@ cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build -p audio-engine
 
 ### Native Modules (Rust)
 
-`native/` 中与平台无关的部分（decode/equalizer/fft/tempo/loudness/scanner）**别碰**。
-安卓差异收敛在：`audio_output.rs` 后端抽象（Oboe）、`device_watcher/android.rs` 空实现、
-构建成员按 Android target 直接在 workspace 配置中排除 `taskbar-lyric`/`taskbar-thumbnail`；平台差异使用源代码中的 `cfg` 或显式 Android 分支实现。
+`native/` 中与平台无关的部分（decode/equalizer/fft/tempo/loudness/scanner）是桌面 napi 模块，
+**Android 不参与构建，勿在 Android 链路引用**；Android 平台差异落在 Java 壳（`android/`）与
+`platform/android/` 桥接层。
 
 - `audio-engine` — 唯一满血保留的原生模块，JS 签名（`native/audio-engine/index.d.ts`）不变。
 - `media-ctrl` — Discord RPC 用 `cfg(not(target_os = "android"))` 关掉；播放控制走 MediaSession。
@@ -79,8 +77,8 @@ cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build -p audio-engine
 
 ```
 User action → status store → window.api (Capacitor bridge)
-  → Service → audio-engine (.so via JNI)
-  → Rust events (stateChanged/position/ended/outputStalled)
+  → PlaybackService → AudioEnginePlugin (Media3 ExoPlayer)
+  → ExoPlayer 事件（playingChanged/position/autoAdvanced/sourceError，经 MediaSessionPlugin 桥）
   → bridge → renderer + MediaSession
   → status store 更新响应式状态
   → playback.ts 更新非响应式时间源

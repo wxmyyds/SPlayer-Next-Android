@@ -17,6 +17,7 @@ import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
+import * as autoClose from "@/services/autoClose";
 import { resolveTrackSource, type ResolvedTrackSource } from "@/services/audioSource";
 import {
   consumePreloadedTrack,
@@ -426,7 +427,10 @@ export const recoverFromSourceFailure = async (): Promise<void> => {
 /** 恢复播放 */
 export const play = async (): Promise<void> => {
   const status = useStatusStore();
-  if (status.state === "stopped" && status.currentTrack) {
+  // stopped = 用户主动停止；idle = 上次 load 失败（引擎无源）。两种状态下引擎都没有
+  // 可续播的媒体项，直接 play 会得到假播放（Android ExoPlayer 在 IDLE 上 play() 静默
+  // 成功，UI 显示 playing 但无声），统一走重载
+  if ((status.state === "stopped" || status.state === "idle") && status.currentTrack) {
     await loadTrack(status.currentTrack, status.currentPlaybackContext);
     return;
   }
@@ -622,7 +626,9 @@ export const playFrom = async (
   status.heartMode = false;
   status.fmMode = false;
   const idx = Math.max(0, Math.min(startIndex, items.length - 1));
-  const isSameTrack = media.track?.id === items[idx]?.id;
+  // 跨音源同数值 id 不算同一首（与 playNow 的判定一致）
+  const isSameTrack =
+    media.track?.id === items[idx]?.id && media.track?.source === items[idx]?.source;
   queue.setQueue(items, context);
   status.playIndex = idx;
   if (status.shuffleMode === "on") {
@@ -841,6 +847,13 @@ export const syncFromNativeAdvance = async (
   if (index === status.playIndex && useMediaStore().track?.id === trackId) return true;
   // 解锁后迟到的原生过渡事件：用户已手动切歌正在 load 时，忽略旧事件避免指回原生旧目标
   if (status.trackLoading) return true;
+  // 定时关闭“等本曲结束”兜底：到点时已清空原生队列，但到点前的在途解析仍可能
+  // 抢跑一次过渡，此刻已越到本曲之后，立即暂停兑现停播语义
+  if (autoClose.shouldStopAfterCurrentTrack()) {
+    autoClose.cancel();
+    await pause();
+    return true;
+  }
   const item = queue.getQueueItem(index);
   const track = item?.track;
   if (!track) return false;
@@ -852,6 +865,10 @@ export const syncFromNativeAdvance = async (
   media.setTrack(track);
   media.setPlaybackContext(item?.context);
   resetForLoad(track.duration ?? 0);
+  // 对齐 load()：清掉上一首的 seek 残留，否则新曲 position 推送被旧 seekTarget 持续丢弃
+  // （暂停态锁屏 seek 后锁屏切歌：进度/歌词冻结直到播进旧目标附近）
+  seekTarget = null;
+  playback.setSeeking(false);
   status.trackLoading = false;
   status.state = playing ? "playing" : "paused";
   // 原生已开播，URL 解析源信息未知；置空避免后续 reload 复用上一首的源（同 SFA 清 currentAudioSource）
@@ -1203,13 +1220,23 @@ export const restoreLastTrack = async (): Promise<void> => {
   media.setTrack(lastTrack);
   media.setPlaybackContext(status.currentPlaybackContext);
   lyricLoader.beginLoad();
+  // 令牌 + loading 守卫（与 reloadCurrentTrack 同款）：冷启动伴随 pending mediaKey
+  // （如通知栏 next）时，先到的 nextTrack→loadTrack 不被 restore 的迟到 load 结果覆盖
+  const myToken = ++trackToken;
+  status.trackLoading = true;
   const loaded = await loadTrackSourceWithFallback(
     lastTrack,
     status.currentPlaybackContext,
     settings.system.player.autoPlay,
-    () => true,
+    () => myToken === trackToken,
   );
-  if (loaded.status === "loaded" && loaded.result.ok) {
+  // 被更新的加载接管：由它负责结果与 loading 态
+  if (loaded.status === "cancelled") return;
+  if (loaded.status === "unresolved") {
+    status.trackLoading = false;
+    status.state = "idle";
+  } else if (loaded.result.ok) {
+    // load() 成功路径已解除 trackLoading；断点恢复与缓存调度同原逻辑
     if (settings.system.player.rememberLastTrack && lastPosition > 0) {
       await seek(lastPosition);
     }

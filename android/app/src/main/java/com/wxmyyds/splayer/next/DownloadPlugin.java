@@ -75,6 +75,20 @@ public class DownloadPlugin extends Plugin {
         return dir;
     }
 
+    /** legacy 路径同名冲突时追加序号（对齐 MediaStore 的 "xxx (1)" 行为），不静默覆盖既有文件 */
+    private File legacyConflictFreeTarget(String name) {
+        File dir = legacyMusicDir();
+        File target = new File(dir, name);
+        if (!target.exists()) return target;
+        int dot = name.lastIndexOf('.');
+        String base = dot > 0 ? name.substring(0, dot) : name;
+        String ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 1; target.exists(); i++) {
+            target = new File(dir, base + " (" + i + ")" + ext);
+        }
+        return target;
+    }
+
     /**
      * 下载音频到公共媒体库
      * @param call - { taskId, url, displayName, ext, title, artist, album, declaredSize }
@@ -99,6 +113,7 @@ public class DownloadPlugin extends Plugin {
         pool.execute(() -> {
             Uri contentUri = null;
             File legacyFile = null;
+            File legacyFinal = null;
             try {
                 Request request = new Request.Builder().url(url).build();
                 okhttp3.Call httpCall = CLIENT.newCall(request);
@@ -133,8 +148,10 @@ public class DownloadPlugin extends Plugin {
                     }
                 }
                 if (activeCalls.remove(taskId) == null) {
-                    // 已被 cancel：清理半成品后不再 emit（cancel 方负责状态）
-                    cleanup(ctx, contentUri, legacyFile, null);
+                    // 已被 cancel：清理半成品后不再 emit（cancel 方负责状态）；
+                    // call 必须有终态，否则 JS 侧 await saveAudio 永久悬挂
+                    cleanup(ctx, contentUri, legacyFile);
+                    call.resolve();
                     return;
                 }
                 if (contentUri != null) {
@@ -145,21 +162,23 @@ public class DownloadPlugin extends Plugin {
                     if (!album.isEmpty()) values.put(MediaStore.Audio.Media.ALBUM, album);
                     ctx.getContentResolver().update(contentUri, values, null, null);
                 } else if (legacyFile != null) {
-                    File target = new File(legacyMusicDir(), name);
-                    if (target.exists()) target.delete();
-                    if (!legacyFile.renameTo(target)) throw new IOException("rename failed");
+                    legacyFinal = legacyConflictFreeTarget(name);
+                    if (!legacyFile.renameTo(legacyFinal)) throw new IOException("rename failed");
                 }
                 String path = contentUri != null
-                        ? "/storage/emulated/0/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/" + name
-                        : (legacyFile != null
-                                ? new File(legacyMusicDir(), name).getAbsolutePath() : "");
+                        ? Environment.getExternalStorageDirectory().getAbsolutePath()
+                                + "/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/" + name
+                        : (legacyFinal != null ? legacyFinal.getAbsolutePath() : "");
                 JSObject ret = new JSObject();
                 ret.put("taskId", taskId);
                 ret.put("filePath", path);
                 emitState(ret);
                 call.resolve();
             } catch (Exception e) {
-                cleanup(ctx, contentUri, legacyFile, name);
+                // 只清理本次产物；注意不能按最终文件名删——失败可能发生在任何产物创建前，
+                // 那样会误删之前已完成的同名下载
+                cleanup(ctx, contentUri, legacyFile);
+                activeCalls.remove(taskId);
                 JSObject ret = new JSObject();
                 ret.put("taskId", taskId);
                 ret.put("errorCode", e.getMessage() != null ? e.getMessage() : "unknown");
@@ -206,15 +225,12 @@ public class DownloadPlugin extends Plugin {
     }
 
     /** 半成品清理：删除 pending 行或 .part 文件 */
-    private void cleanup(Context ctx, Uri contentUri, File legacyFile, String legacyFinalName) {
+    private void cleanup(Context ctx, Uri contentUri, File legacyFile) {
         try {
             if (contentUri != null) {
                 ctx.getContentResolver().delete(contentUri, null, null);
             } else if (legacyFile != null && legacyFile.exists()) {
                 legacyFile.delete();
-            } else if (legacyFinalName != null) {
-                File target = new File(legacyMusicDir(), legacyFinalName);
-                if (target.exists()) target.delete();
             }
         } catch (Exception ignored) {
             // 清理失败不影响错误上报
@@ -234,6 +250,7 @@ public class DownloadPlugin extends Plugin {
             call.reject("name required");
             return;
         }
+        Uri pendingUri = null;
         try {
             if (Build.VERSION.SDK_INT >= 29) {
                 ContentValues values = new ContentValues();
@@ -245,6 +262,7 @@ public class DownloadPlugin extends Plugin {
                 Uri uri = getContext().getContentResolver().insert(
                         MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                 if (uri == null) throw new IOException("MediaStore insert failed");
+                pendingUri = uri;
                 try (OutputStream out = getContext().getContentResolver().openOutputStream(uri)) {
                     if (out == null) throw new IOException("output stream null");
                     out.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -260,6 +278,14 @@ public class DownloadPlugin extends Plugin {
             }
             call.resolve();
         } catch (Exception e) {
+            // 与 saveAudio 一致：失败时删除 pending 行，否则媒体扫描器里残留幽灵条目
+            if (pendingUri != null) {
+                try {
+                    getContext().getContentResolver().delete(pendingUri, null, null);
+                } catch (Exception ignored) {
+                    // 清理失败不影响错误上报
+                }
+            }
             call.reject(e.getMessage(), e);
         }
     }

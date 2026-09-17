@@ -294,9 +294,11 @@ const stackDragPx = computed(() => {
         : null;
   if (!active) return 0;
   const len = active.lengthX.value;
-  if (active.lengthY.value >= len) return 0;
+  // vueuse lengthX = start.x - end.x：左滑为正、右滑为负，统一取负号才是跟手位移；
+  // 垂直分量绝对值不小于横向时不跟手（原判定对负 len 恒真，右滑完全失效）
+  if (Math.abs(active.lengthY.value) >= Math.abs(len)) return 0;
   const dir = active.direction.value;
-  const px = dir === "left" ? -len : dir === "right" ? len : 0;
+  const px = dir === "left" || dir === "right" ? -len : 0;
   // 首末页边界阻尼：越界方向钳位
   if (stackPage.value === 0) return Math.min(0, px);
   if (stackPage.value === stackTotal.value - 1) return Math.max(0, px);

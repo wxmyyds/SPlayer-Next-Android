@@ -82,8 +82,11 @@ public class AudioEnginePlugin extends Plugin {
     private long currentDuration = 0;
 
     /** 曲目结束后保护切歌决策链的短时锁（ENDED 后 WAKE_MODE_LOCAL 已释放， */
-    // JS 决策 + load 新曲的间隙 CPU 掉睡会卡住切歌；新曲开播即交还，30s 兜底超时）
+    // JS 决策 + load 新曲的间隙 CPU 掉睡会卡住切歌；新曲开播即交还，超时兜底）
     private android.os.PowerManager.WakeLock switchWakeLock;
+    /** 切歌锁自管超时的释放任务（acquire(timeout) 的 releaser 不可取消，无法续借） */
+    private Runnable wakeLockReleaser;
+    private static final long SWITCH_WAKE_LOCK_TIMEOUT_MS = 30_000L;
     /**
      * 队列化自治切歌（参照 SFA PlaybackQueue）：JS 预解析的下一首以播放列表待播项挂入 ExoPlayer，
      * 当前曲播放时 ExoPlayer 自动预缓冲下一首字节，ENDED 瞬间零网络零 WebView 依赖直接过渡。
@@ -249,6 +252,9 @@ public class AudioEnginePlugin extends Plugin {
                 // BUFFERING 等瞬态不产生 play/pause 指令事件，避免 JS 回射形成暂停/续播振荡环
                 JSObject data = new JSObject();
                 data.put("playing", playing);
+                // playWhenReady：BUFFERING（isPlaying=false 但已 queued play）时 JS 侧
+                // 停滞看门狗据此保持武装，否则重缓/卡流场景看门狗永远不会再启动
+                data.put("playWhenReady", player.getPlayWhenReady());
                 data.put("volume", volume);
                 data.put("speed", speed);
                 emitEvent("playingChanged", data);
@@ -523,10 +529,32 @@ public class AudioEnginePlugin extends Plugin {
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表
                                     if (player == null || gen != resolveGeneration) return;
+                                    // 队列/窗口双链并发解析同一首：JS 预载窗口（setNextResources）可能
+                                    // 已把该曲挂在当前曲之后，再 addMediaItem 会重复挂载 → 同曲连播，
+                                    // 且二次过渡被“同曲判定”压制（不发事件不刷通知）。复用既有条目
+                                    int existing = -1;
+                                    int curIdx = player.getCurrentMediaItemIndex();
+                                    for (int i = 0; i < player.getMediaItemCount(); i++) {
+                                        if (i == curIdx) continue;
+                                        if (trackId.equals(player.getMediaItemAt(i).mediaId)) {
+                                            existing = i;
+                                            break;
+                                        }
+                                    }
+                                    resolveFails = 0;
+                                    if (existing >= 0) {
+                                        Log.i(TAG, "queueResolve dedup trackId=" + trackId + " at " + existing);
+                                        if (player.getPlaybackState() == Player.STATE_ENDED) {
+                                            player.seekTo(existing, 0);
+                                            player.play();
+                                            Log.i(TAG, "endedAdvance -> reuse trackId=" + trackId);
+                                        }
+                                        maybeResolveNext(false);
+                                        return;
+                                    }
                                     pendingMeta.put(trackId, entry);
                                     player.addMediaItem(
                                             new MediaItem.Builder().setMediaId(trackId).setUri(url).build());
-                                    resolveFails = 0;
                                     Log.i(TAG, "queueResolve trackId=" + trackId + " songId=" + songId);
                                     int index = player.getCurrentMediaItemIndex();
                                     // ENDED 状态下挂上即续播（无论来源：队列推送/过渡预填/ENDED 自身触发）
@@ -586,6 +614,16 @@ public class AudioEnginePlugin extends Plugin {
     public void pause(PluginCall call) {
         mainHandler.post(() -> {
             player.pause();
+            // BUFFERING 中暂停不会触发 onIsPlayingChanged（isPlaying 本就 false），
+            // 显式补发快照，JS 侧停滞看门狗据此解除武装（否则暂停后仍可能误报卡流）
+            if (!isPlaying) {
+                JSObject data = new JSObject();
+                data.put("playing", false);
+                data.put("playWhenReady", player.getPlayWhenReady());
+                data.put("volume", volume);
+                data.put("speed", speed);
+                emitEvent("playingChanged", data);
+            }
             call.resolve();
         });
     }
@@ -892,10 +930,12 @@ public class AudioEnginePlugin extends Plugin {
 
     @Override
     public void handleOnDestroy() {
-        // 生命周期回调在主线程执行，直接释放满足 ExoPlayer 线程约束
+        // 生命周期回调在主线程执行；先撤掉在途主线程任务再释放，
+        // 否则先置空后，仍在队列的 load/play Runnable 会在主线程 NPE
         resolveGeneration++;
         pendingQueue.clear();
         resolveCtx = null;
+        mainHandler.removeCallbacksAndMessages(null);
         if (player != null) {
             player.release();
             player = null;
@@ -903,7 +943,6 @@ public class AudioEnginePlugin extends Plugin {
         releaseAudioEffects();
         releaseVisualizer();
         releaseSwitchWakeLock();
-        mainHandler.removeCallbacksAndMessages(null);
         super.handleOnDestroy();
     }
 
@@ -916,7 +955,14 @@ public class AudioEnginePlugin extends Plugin {
                 switchWakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "SPlayer::TrackSwitch");
                 switchWakeLock.setReferenceCounted(false);
             }
-            if (!switchWakeLock.isHeld()) switchWakeLock.acquire(30_000L);
+            // 不用 acquire(timeout)：其超时靠内部 postDelayed releaser，公开 API 无法取消，
+            // “续借”会是空操作。改自管超时：无超时持有 + 主线程调度释放
+            if (!switchWakeLock.isHeld()) switchWakeLock.acquire();
+            if (wakeLockReleaser == null) {
+                wakeLockReleaser = this::releaseSwitchWakeLock;
+            }
+            mainHandler.removeCallbacks(wakeLockReleaser);
+            mainHandler.postDelayed(wakeLockReleaser, SWITCH_WAKE_LOCK_TIMEOUT_MS);
         } catch (Exception e) {
             Log.w(TAG, "switch wake lock acquire failed", e);
         }
@@ -924,6 +970,9 @@ public class AudioEnginePlugin extends Plugin {
 
     /** 新曲开播后交还给 WAKE_MODE_LOCAL */
     private void releaseSwitchWakeLock() {
+        if (wakeLockReleaser != null) {
+            mainHandler.removeCallbacks(wakeLockReleaser);
+        }
         if (switchWakeLock != null && switchWakeLock.isHeld()) switchWakeLock.release();
     }
 

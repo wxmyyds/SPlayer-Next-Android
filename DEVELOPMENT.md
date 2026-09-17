@@ -3,6 +3,11 @@
 > 上游：`https://github.com/SPlayer-Dev/SPlayer-Next`（`v1.2.0-alpha.1`，`AGPL-3.0`）
 > 目标：以最小改动把 SPlayer-Next 移植到 Android，功能尽量完整，长期可同步上游。
 
+> **现状更正（2026-09）**：本文沿袭的早期方案中“Rust audio-engine 经 cargo-ndk + JNI + Oboe
+> 接入 Android”**未实施**。实际实现：音频引擎为 `AudioEnginePlugin.java`（Media3 ExoPlayer +
+> AudioEffect/Visualizer + 原生自解队列），`native/` 下的 Rust crate 为桌面遗留，不参与 Android
+> 构建与运行；无 cargo-ndk/jniLibs 工具链。§2/§4 中涉及 Rust→Android 的路线以本说明为准。
+
 ---
 
 ## 1. 上游架构速览（只看结论）

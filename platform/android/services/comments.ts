@@ -157,7 +157,9 @@ const normalizeNeteaseCommentPage = (
   limit: number,
 ): MusicCommentPage => {
   const rawList =
-    type === "hot" ? (body.hotComments ?? body.data?.comments ?? []) : (body.comments ?? body.data?.comments ?? []);
+    type === "hot"
+      ? (body.hotComments ?? body.data?.comments ?? [])
+      : (body.comments ?? body.data?.comments ?? []);
   const list = rawList
     .map((item) => normalizeNeteaseComment(item))
     .filter((item): item is MusicCommentItem => item !== null);
@@ -221,7 +223,8 @@ const normalizeKugouComment = (raw: KugouComment): MusicCommentItem | null => {
   if (avatar) item.avatar = avatar;
   const time = optionalString(raw.addtime);
   if (time) {
-    const timestamp = new Date(time.replace(" ", "T")).getTime();
+    // 酷狗返回的是北京时间墙钟字符串，不带时区会被按设备本地时区解析而偏移
+    const timestamp = new Date(`${time.replace(" ", "T")}+08:00`).getTime();
     if (Number.isFinite(timestamp)) item.time = timestamp;
   }
   const location = optionalString(raw.location);
@@ -293,12 +296,7 @@ const getNeteaseComments = async (args: MusicCommentQuery): Promise<MusicComment
     limit: args.limit,
     offset: (args.page - 1) * args.limit,
   });
-  return normalizeNeteaseCommentPage(
-    body as NeteaseCommentBody,
-    args.type,
-    args.page,
-    args.limit,
-  );
+  return normalizeNeteaseCommentPage(body as NeteaseCommentBody, args.type, args.page, args.limit);
 };
 
 const findQQMusicId = async (track: Track): Promise<string | null> => {
@@ -307,7 +305,12 @@ const findQQMusicId = async (track: Track): Promise<string | null> => {
   }
   const keyword = toKeyword(track);
   if (!keyword) return null;
-  const body = (await callQQMusic("search", { keywords: keyword, type: 0, page: 1, limit: 20 })) as {
+  const body = (await callQQMusic("search", {
+    keywords: keyword,
+    type: 0,
+    page: 1,
+    limit: 20,
+  })) as {
     songs?: Array<{
       id?: string;
       name?: string;
@@ -343,10 +346,15 @@ const findKugouId = async (track: Track): Promise<string | null> => {
   if (track.source === "kugou" && track.extId) return track.extId;
   const keyword = toKeyword(track);
   if (!keyword) return null;
-  const body = await callKugou<{ songs?: Array<{ albumAudioId?: number; name: string; artist: string; album: string; duration: number }> }>(
-    "search",
-    { keywords: keyword, type: 0, page: 1, limit: 20 },
-  );
+  const body = await callKugou<{
+    songs?: Array<{
+      albumAudioId?: number;
+      name: string;
+      artist: string;
+      album: string;
+      duration: number;
+    }>;
+  }>("search", { keywords: keyword, type: 0, page: 1, limit: 20 });
   const candidates: LyricCandidate<{ id: string }>[] = (body.songs ?? [])
     .filter((song) => song.albumAudioId)
     .map((song) => ({
@@ -404,8 +412,18 @@ const normalizeQuery = (args: MusicCommentQuery): MusicCommentQuery => ({
 /** 构建可用评论源：内置 3 个 + 已就绪插件的 musicSearch+musicComment 音源 */
 const getCommentSources = async (): Promise<CommentSource[]> => {
   const sources: CommentSource[] = [
-    { id: NETEASE_SOURCE_ID, name: PLATFORM_SHORT_NAME.netease, kind: "builtin", platform: "netease" },
-    { id: QQMUSIC_SOURCE_ID, name: PLATFORM_SHORT_NAME.qqmusic, kind: "builtin", platform: "qqmusic" },
+    {
+      id: NETEASE_SOURCE_ID,
+      name: PLATFORM_SHORT_NAME.netease,
+      kind: "builtin",
+      platform: "netease",
+    },
+    {
+      id: QQMUSIC_SOURCE_ID,
+      name: PLATFORM_SHORT_NAME.qqmusic,
+      kind: "builtin",
+      platform: "qqmusic",
+    },
     {
       id: KUGOU_SOURCE_ID,
       name: PLATFORM_SHORT_NAME.kugou,

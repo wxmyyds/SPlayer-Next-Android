@@ -6,7 +6,7 @@
  */
 
 import type { Album, Artist, AudioQuality, Track } from "@shared/types/player";
-import { dbQuery } from "./index";
+import { chunkByParams, dbQuery } from "./index";
 
 /** 数据库行类型（与上游一致） */
 interface TrackRow {
@@ -78,12 +78,17 @@ const rowToTrack = (row: TrackRow): Track => {
 };
 
 /**
- * 按 ID 批量获取曲目
+ * 按 ID 批量获取曲目（按参数上限分块：千首以上 IN 查询会超 SQLite 变量上限）
  * @param ids 曲目 ID
  */
 export const getTracksByIds = async (ids: string[]): Promise<Track[]> => {
   if (ids.length === 0) return [];
-  const placeholders = ids.map(() => "?").join(",");
-  const rows = await dbQuery<TrackRow>(`SELECT * FROM tracks WHERE id IN (${placeholders})`, ids);
+  const rows: TrackRow[] = [];
+  for (const chunk of chunkByParams(ids, 1)) {
+    const placeholders = chunk.map(() => "?").join(",");
+    rows.push(
+      ...(await dbQuery<TrackRow>(`SELECT * FROM tracks WHERE id IN (${placeholders})`, chunk)),
+    );
+  }
   return rows.map(rowToTrack);
 };

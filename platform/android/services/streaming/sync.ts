@@ -70,13 +70,22 @@ const syncServer = async (
       limit = SONG_BATCH_SIZE;
     }
 
-    const albums = await adapter.listAlbums(config, { offset: 0, limit: 500 });
-    if (cancelledServers.has(config.id)) return false;
-    await upsertAlbums(
-      albums.flatMap((album) =>
-        album.id ? [{ serverId: config.id, remoteId: album.id, album, generation }] : [],
-      ),
-    );
+    // 专辑增量翻页（与歌曲同模式）：单次拉取会在大库静默截断，
+    // 且 deleteStaleAlbums 会把上一轮旧专辑删掉，造成“越同步越少”
+    let albumCount = 0;
+    let lastAlbumCount = 0;
+    while (true) {
+      const albums = await adapter.listAlbums(config, { offset: albumCount, limit: 500 });
+      if (cancelledServers.has(config.id)) return false;
+      await upsertAlbums(
+        albums.flatMap((album) =>
+          album.id ? [{ serverId: config.id, remoteId: album.id, album, generation }] : [],
+        ),
+      );
+      albumCount += albums.length;
+      if (albums.length < 500 || albums.length === lastAlbumCount) break;
+      lastAlbumCount = albums.length;
+    }
 
     const artists = await adapter.listArtists(config);
     if (cancelledServers.has(config.id)) return false;
@@ -100,7 +109,7 @@ const syncServer = async (
     await deleteStalePlaylists(config.id, generation);
     notifyLibraryUpdated(config.id);
     streamingLog.info(
-      `${config.type} 媒体库同步完成 [${config.name}]: 歌曲 ${songCount}，专辑 ${albums.length}，歌手 ${artists.length}，歌单 ${playlists.length}`,
+      `${config.type} 媒体库同步完成 [${config.name}]: 歌曲 ${songCount}，专辑 ${albumCount}，歌手 ${artists.length}，歌单 ${playlists.length}`,
     );
     return true;
   } catch (error) {

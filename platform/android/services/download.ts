@@ -175,6 +175,8 @@ const wire = (): void => {
     const task = tasks.find((item) => item.taskId === taskId);
     if (!task) return;
     if (data.type === "progress") {
+      // 进度事件仅对正在传输的任务有效：取消/重试后的迟到事件不进 UI
+      if (task.status !== "downloading") return;
       task.received = Number(raw.received ?? 0);
       if (Number(raw.total ?? 0) > 0) task.total = Number(raw.total);
       emitProgress({ taskId, received: task.received, total: task.total });
@@ -182,11 +184,14 @@ const wire = (): void => {
     }
     if (data.type !== "state") return;
     if (raw.filePath) {
+      // 终态归属校验：仅接受原生正在传输（downloading）的任务。取消后迟到的完成事件
+      // 不得打穿 pump 启动的新任务的占位（activeTaskId 条件清空）
+      if (task.status !== "downloading" && task.status !== "canceled") return;
       task.status = "done";
       task.filePath = String(raw.filePath);
       if (task.total > 0) task.received = task.total;
       task.finishedAt = Date.now();
-      activeTaskId = null;
+      if (activeTaskId === taskId) activeTaskId = null;
       // 歌词伴生文件（.lrc / .ttml）
       const base = displayName(task);
       if (task.lyricText && task.tagOptions.writeLrc) {
@@ -203,12 +208,13 @@ const wire = (): void => {
       pump();
       return;
     }
-    // 取消后迟到的失败事件：本地已是终态则忽略
-    if (task.status === "canceled") return;
+    // 迟到的失败事件：仅 downloading 态有效（canceled/重试后旧传输的事件一律忽略，
+    // 不打穿新任务）；retry 已换新 taskId，旧事件按 taskId 失配在上方丢弃
+    if (task.status !== "downloading") return;
     task.status = "failed";
     task.errorCode = String(raw.errorCode ?? "unknown");
     task.finishedAt = Date.now();
-    activeTaskId = null;
+    if (activeTaskId === taskId) activeTaskId = null;
     emitState(task);
     pump();
   });
@@ -287,8 +293,10 @@ export const createDownloadApi = (): DownloadApi => {
       pump();
     },
     retry: async (req) => {
+      // 换新 taskId：旧传输收尾的原生事件沿旧 id 派发后按 taskId 失配丢弃，不打穿新任务
+      const fresh: DownloadRequest = { ...req, taskId: crypto.randomUUID() };
       tasks = tasks.filter((task) => task.taskId !== req.taskId);
-      const { result } = enqueue(req);
+      const { result } = enqueue(fresh);
       persist();
       pump();
       return result;

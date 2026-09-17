@@ -20,16 +20,16 @@ public class PlaybackService extends Service {
 
     private static final String EXTRA_NOTIFICATION = "notification";
 
-    /** 服务是否已在前台态；运行中时通知更新走 NotificationManager，不再重复 startIntent */
-    private static boolean sRunning;
-
     /**
-     * 以给定通知进入前台态（已运行时为空操作）
+     * 以给定通知进入前台态
      * @param context 来源上下文
      * @param notification 通知（含 MediaSession token 与播控按钮）
      */
     static void startForegroundWith(Context context, Notification notification) {
-        if (sRunning) return;
+        // 不能以“已运行”短路：stop→play 相邻时（JS 的 publishState("none") 与下首
+        // playing 是毫秒级相邻的桥调用）onDestroy 异步派发，此时 startForegroundService
+        // 会被跳过 → 服务随后销毁、前台态静默丢失。onStartCommand 的 startForeground
+        // 幂等，重复启动无害
         Intent intent =
                 new Intent(context, PlaybackService.class).putExtra(EXTRA_NOTIFICATION, notification);
         try {
@@ -47,7 +47,6 @@ public class PlaybackService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        sRunning = true;
         Notification notification = null;
         if (intent != null) {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -68,12 +67,6 @@ public class PlaybackService extends Service {
         }
         startForeground(MediaSessionPlugin.NOTIFICATION_ID, notification);
         return START_NOT_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        sRunning = false;
-        super.onDestroy();
     }
 
     @Override

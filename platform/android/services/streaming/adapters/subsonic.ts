@@ -373,9 +373,21 @@ export const subsonicAdapter: StreamingAdapter = {
   async getLyrics(config, trackId, hint) {
     try {
       const result = await callApi<{
-        lyricsList?: { structuredLyrics?: { line?: { start?: number; value: string }[] }[] };
+        lyricsList?: {
+          structuredLyrics?: {
+            synced?: boolean;
+            line?: { start?: number; value: string }[];
+          }[];
+        };
       }>(config, "getLyricsBySongId", { id: trackId });
-      const lines = result.lyricsList?.structuredLyrics?.[0]?.line ?? [];
+      // 同曲可能同时返回 synced 与 plain 两条，优先带时间轴的（plain 排前时
+      // 盲取 [0] 会让歌词全部落在 00:00.00）
+      const structured = result.lyricsList?.structuredLyrics ?? [];
+      const preferred =
+        structured.find((entry) => entry.synced) ??
+        structured.find((entry) => entry.line?.some((line) => line.start != null)) ??
+        structured[0];
+      const lines = preferred?.line ?? [];
       if (lines.length > 0) {
         return lines
           .map((line) => {

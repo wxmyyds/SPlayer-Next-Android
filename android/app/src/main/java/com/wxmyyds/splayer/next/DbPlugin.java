@@ -96,6 +96,9 @@ public class DbPlugin extends Plugin {
                             if (sql.trim().regionMatches(true, 0, "INSERT", 0, 6)) {
                                 long rowId = stmt.executeInsert();
                                 ret.put("lastInsertRowId", rowId);
+                                // INSERT 也回传变更行数（rowId<0 即 OR IGNORE 未插入），
+                                // 否则 JS 侧按返回值判断“是否真插入”的调用恒判未插入
+                                ret.put("changes", rowId > 0 ? 1 : 0);
                             } else {
                                 // UPDATE/DELETE：executeInsert 会抛异常，用 executeUpdateDelete 取变更行数
                                 ret.put("changes", stmt.executeUpdateDelete());
@@ -103,6 +106,61 @@ public class DbPlugin extends Plugin {
                             call.resolve(ret);
                         } finally {
                             stmt.close();
+                        }
+                    } catch (Exception e) {
+                        call.reject(e.getMessage(), e);
+                    }
+                });
+    }
+
+    /** 事务写入：statements 逐条执行，全部成功才提交，任一失败整体回滚 */
+    @PluginMethod
+    public void transaction(PluginCall call) {
+        JSArray statements = call.getArray("statements", new JSArray());
+        List<String> sqls = new ArrayList<>();
+        List<List<Object>> valuesList = new ArrayList<>();
+        for (int i = 0; i < statements.length(); i++) {
+            JSONObject stmt = statements.optJSONObject(i);
+            if (stmt == null) {
+                call.reject("invalid statement at " + i);
+                return;
+            }
+            String sql = stmt.optString("sql", "");
+            if (sql.isEmpty()) {
+                call.reject("missing sql at " + i);
+                return;
+            }
+            sqls.add(sql);
+            valuesList.add(toList(stmt.optJSONArray("values")));
+        }
+        queue.execute(
+                () -> {
+                    if (db == null) {
+                        call.reject("database not ready");
+                        return;
+                    }
+                    try {
+                        db.beginTransaction();
+                        try {
+                            long changes = 0;
+                            for (int i = 0; i < sqls.size(); i++) {
+                                SQLiteStatement stmt = db.compileStatement(sqls.get(i));
+                                try {
+                                    bind(stmt, valuesList.get(i));
+                                    changes +=
+                                            sqls.get(i).trim().regionMatches(true, 0, "INSERT", 0, 6)
+                                                    ? 1
+                                                    : stmt.executeUpdateDelete();
+                                } finally {
+                                    stmt.close();
+                                }
+                            }
+                            db.setTransactionSuccessful();
+                            JSObject ret = new JSObject();
+                            ret.put("changes", changes);
+                            call.resolve(ret);
+                        } finally {
+                            db.endTransaction();
                         }
                     } catch (Exception e) {
                         call.reject(e.getMessage(), e);

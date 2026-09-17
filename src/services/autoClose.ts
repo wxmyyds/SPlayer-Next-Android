@@ -36,6 +36,9 @@ const tick = (): void => {
     if (autoClose.waitSongEnd) {
       // 等本曲播完再停；标记一下，由 onTrackEnded 钩子处理
       pendingPauseOnEnd = true;
+      // Android 原生自治链在 ENDED 时自解下一首并只发 autoAdvanced（不经过 JS ended），
+      // 到点即拆掉原生队列/窗口，否则本曲终了后会被原生续播越过停播语义
+      void window.api.player.clearNextResource?.().catch(() => {});
     } else {
       player.pause().catch(() => {});
       cancel();

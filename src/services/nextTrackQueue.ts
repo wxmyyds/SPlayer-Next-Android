@@ -1,4 +1,6 @@
 import { isAndroid } from "@/utils/platform";
+import { useStatusStore } from "@/stores/status";
+import * as autoClose from "@/services/autoClose";
 import { getNeteaseCookies } from "@android/vendor/netease";
 import { UA_MAP } from "@android/vendor/netease/core/config";
 import { cookieObjToString } from "@android/vendor/netease/core/cookie";
@@ -19,6 +21,13 @@ const QUEUE_SIZE = 30;
  */
 export const pushNativeQueue = (candidates: CandidateResult[]): void => {
   if (!isAndroid) return;
+  const status = useStatusStore();
+  // 单曲循环由 ExoPlayer 原生接管（REPEAT_MODE_ONE，永不 ENDED）、定时关闭“等本曲结束”
+  // 须停在当前曲：两种语义下原生队列必须保持为空，否则 ENDED 会被队列自解续播越过
+  if (status.repeatMode === "one" || autoClose.shouldStopAfterCurrentTrack()) {
+    void window.api.player.clearNextResource?.().catch(() => {});
+    return;
+  }
   const level = NETEASE_LEVEL[useSettingsStore().player.songLevel];
   // 原生只能直接解析网易云；遇到其他音源就在此断开，不能过滤后把后面的网易云曲目提前
   const firstUnsupported = candidates.findIndex(({ track }) => track.source !== "netease");

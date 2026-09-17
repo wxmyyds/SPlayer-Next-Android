@@ -52,8 +52,13 @@ public class LoginWebPlugin extends Plugin {
         }
         String url = call.getString("url", "https://music.163.com/#/login");
         String watchCookie = call.getString("watchCookie", "MUSIC_U");
+        android.app.Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("activity unavailable");
+            return;
+        }
         pending = call;
-        getActivity().runOnUiThread(() -> showLoginDialog(url, watchCookie));
+        activity.runOnUiThread(() -> showLoginDialog(url, watchCookie));
     }
 
     private void showLoginDialog(String url, String watchCookie) {

@@ -6,14 +6,24 @@
  * 避免一个组件卸载时误关掉另一个仍在使用的推送。
  */
 
+import { isAndroid } from "@/utils/platform";
+
 /** 当前持有 FFT 推送的消费者数量 */
 let refCount = 0;
+
+/** 页面隐藏时关闭推送：WebView 冻结时原生仍在主线程构建 128 元素 JSON 推送并排队，
+ * 解锁后风暴回放；恢复可见时重开（原生侧 isPlaying 才真正初始化 Visualizer） */
+const onVisibilityChange = (): void => {
+  if (refCount === 0) return;
+  void window.api.player.setFftEnabled(document.visibilityState !== "hidden").catch(() => {});
+};
 
 /** 申请 FFT 推送；首个消费者负责开启后端推送 */
 export const acquireFft = (): void => {
   refCount++;
   if (refCount === 1) {
     window.api.player.setFftEnabled(true);
+    if (isAndroid) document.addEventListener("visibilitychange", onVisibilityChange);
   }
 };
 
@@ -23,5 +33,6 @@ export const releaseFft = (): void => {
   refCount--;
   if (refCount === 0) {
     window.api.player.setFftEnabled(false);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
   }
 };

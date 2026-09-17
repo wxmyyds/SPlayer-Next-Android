@@ -81,6 +81,12 @@ const syncDeviceState = (session: Record<string, string>): void => {
 const loadSession = (): Record<string, string> => {
   if (!sessionCache) {
     sessionCache = getSessionCookies("netease");
+    // 装机级设备指纹：扫码登录/手动导入 cookie 的会话没有 deviceId，若逐次启动
+    // 随机重生成，网易侧风控画像会逐进程漂移。首次缺省时生成一次并落库，此后复用
+    if (!sessionCache.deviceId) {
+      sessionCache.deviceId = getDeviceId();
+      saveSessionCookies("netease", sessionCache);
+    }
     syncDeviceState(sessionCache);
   }
   return sessionCache;
