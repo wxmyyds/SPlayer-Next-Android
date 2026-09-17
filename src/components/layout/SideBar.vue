@@ -198,7 +198,6 @@ const navItems = computed<SMenuItem[]>(() => {
       if (isAndroid && BOTTOM_TAB_KEYS.has(key)) continue;
       if (key === "/download" && !systemSettings.download.enabled) continue;
       if (key === "/streaming" && !systemSettings.streaming.enabled) continue;
-      if (key === "/stats" && !appearance.showStatsInSidebar) continue;
       const item: SMenuItem = { key, label: t(entry.labelKey), icon: markRaw(entry.icon) };
       if (key === "/liked") item.trailing = renderHeartModeTrailing;
       if (key === "/download" && downloadStore.activeCount > 0)
@@ -377,9 +376,7 @@ onMounted(() => {
     <SContextMenu :items="contextMenuItems" @select="onContextMenuSelect">
       <div
         class="flex-1 min-h-0 pb-3 overflow-y-auto transition-[padding] duration-300"
-        :class="
-          collapsed ? 'px-2 [&::-webkit-scrollbar]:hidden' : 'px-3 [scrollbar-gutter:stable]'
-        "
+        :class="collapsed ? 'px-2 [&::-webkit-scrollbar]:hidden' : 'px-3 [scrollbar-gutter:stable]'"
         @contextmenu.capture="onMenuContextMenu"
       >
         <SMenu

@@ -50,8 +50,9 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
   }
 
   // 与 request.ts eapi 分支同源：补全设备指纹默认值（deviceId/osver/channel/appver），
-  // 保证原生自解与 JS 侧请求的 cookie 指纹一致；空串用 || 回退默认值
-  const cookies = processCookieObject(getNeteaseCookies(), "/api/song/enhance/player/url/v1");
+  // 保证原生自解与 JS 侧请求的 cookie 指纹一致；空串用 || 回退默认值。
+  // 第二参传 "eapi"：参与服务端 NMTID 下发的缓存复用（老版第二参是 uri，已废弃）
+  const cookies = processCookieObject(getNeteaseCookies(), "eapi");
   const header = {
     osver: cookies.osver || "",
     deviceId: cookies.deviceId || "",
