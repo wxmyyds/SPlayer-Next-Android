@@ -171,12 +171,9 @@ export const ensureNeteaseAnonymousSession = async (): Promise<void> => {
  * @param name 见 modules/index.ts 中的 key
  * @param params 业务参数；cookie 自动注入，无需调用方传
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const callNetease = async (
   name: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: Record<string, any> = {},
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ status: number; body: any }> => {
   // hasOwn 守卫
   const fn = Object.hasOwn(modules, name) ? modules[name] : undefined;

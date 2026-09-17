@@ -299,6 +299,8 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
   const media = useMediaStore();
   media.setTrack(track);
   media.setPlaybackContext(context);
+  // 按曲目恢复持久化的歌词偏移，避免上一曲的偏移残留到本曲
+  useStatusStore().lyricOffsetMs = settings.system.player.lyricOffsets[track.id] ?? 0;
   lyricLoader.beginLoad();
   resetForLoad(track.duration ?? 0);
   await window.api.player.stop();
@@ -442,7 +444,9 @@ export const play = async (): Promise<void> => {
   // 可续播的媒体项，直接 play 会得到假播放（Android ExoPlayer 在 IDLE 上 play() 静默
   // 成功，UI 显示 playing 但无声），统一走重载
   if ((status.state === "stopped" || status.state === "idle") && status.currentTrack) {
-    const memoryPos = status.position;
+    // 播完停止时 position = duration，seek 到曲末会立即 ENDED 切下一首，此时应从头播
+    const ended = status.duration > 0 && status.position >= status.duration;
+    const memoryPos = ended ? 0 : status.position;
     await loadTrack(status.currentTrack, status.currentPlaybackContext);
     if (useSettingsStore().system.player.rememberLastTrack && memoryPos > 0) {
       await seek(memoryPos);
@@ -1255,8 +1259,14 @@ export const initPlayer = async (): Promise<void> => {
     (liked) => window.api.player.syncLikeState(liked),
     { immediate: true },
   );
-  window.api.nowPlaying.onLyricOffsetChange(({ offsetMs }) => {
+  window.api.nowPlaying.onLyricOffsetChange(({ trackId, offsetMs }) => {
     status.lyricOffsetMs = offsetMs;
+    // 同步到设置 store 的运行时副本（配置落盘由桥接层负责），供 loadTrack/恢复按曲目读取
+    if (trackId) {
+      const offsets = useSettingsStore().system.player.lyricOffsets;
+      if (offsetMs === 0) delete offsets[trackId];
+      else offsets[trackId] = offsetMs;
+    }
     media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
   });
   // 获取歌曲偏移
@@ -1304,6 +1314,8 @@ export const restoreLastTrack = async (): Promise<void> => {
     // 被更新的加载接管：由它负责结果与 loading 态
     if (loaded.status === "cancelled") return;
     if (loaded.status === "loaded" && loaded.result.ok) {
+      // 按曲目恢复持久化的歌词偏移
+      status.lyricOffsetMs = settings.system.player.lyricOffsets[lastTrack.id] ?? 0;
       if (settings.system.player.rememberLastTrack && lastPosition > 0) {
         await seek(lastPosition);
       }

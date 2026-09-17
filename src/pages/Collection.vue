@@ -153,8 +153,7 @@ const sourcePageUrl = computed(() => {
   const current = collection.value;
   if (!current || (type !== "playlist" && type !== "album")) return "";
   const id = current.id;
-  if (current.source === "netease")
-    return `https://music.163.com/#/${type}?id=${id}`;
+  if (current.source === "netease") return `https://music.163.com/#/${type}?id=${id}`;
   if (current.source === "qqmusic")
     return type === "playlist"
       ? `https://y.qq.com/n/ryqq/playlist/${id}`
@@ -167,9 +166,7 @@ const sourcePageUrl = computed(() => {
 });
 
 /** 播放全部按钮：加载中无数据时禁用并显示加载文案 */
-const playAllDisabled = computed(
-  () => (collection.value?.tracks.length ?? 0) === 0,
-);
+const playAllDisabled = computed(() => (collection.value?.tracks.length ?? 0) === 0);
 const playAllLabel = computed(() =>
   loading.value && (collection.value?.tracks.length ?? 0) === 0
     ? t("common.loading")
@@ -397,7 +394,7 @@ onBeforeUnmount(() => {
                     <IconLucideUser class="shrink-0" />
                     <span class="min-w-0 truncate">
                       <template v-for="(artist, index) in artistLinks" :key="artist.id">
-                        <span v-if="index > 0" class="text-on-surface-variant/40"> / </span>
+                        <span v-if="index > 0" class="text-on-surface-variant/40">/</span>
                         <button
                           type="button"
                           class="cursor-pointer border-0 bg-transparent p-0 text-left text-inherit active:text-primary"

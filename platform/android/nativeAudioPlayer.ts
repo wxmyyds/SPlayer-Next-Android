@@ -16,7 +16,6 @@ import type {
   FftData,
   IpcResponse,
   LoadOptions,
-  LoadResult,
   PlayerApi,
   PlayerEvent,
   PlayerStatus,
@@ -42,11 +41,13 @@ interface MediaBridgePlugin {
 interface SystemUiBridgePlugin {
   setImmersive: (options: { enabled: boolean }) => Promise<void>;
   setLightBars: (options: { light: boolean }) => Promise<void>;
+  openUrl: (options: { url: string }) => Promise<void>;
 }
 
 class SystemUiWeb extends WebPlugin implements SystemUiBridgePlugin {
   async setImmersive(): Promise<void> {}
   async setLightBars(): Promise<void> {}
+  async openUrl(): Promise<void> {}
 }
 
 /** 供 bridge.ts 的 system.setImmersive 消费 */
@@ -526,7 +527,7 @@ export const nativeAudioPlayer: PlayerApi = {
   getCoverRaw: async () => ok(null),
   readLyricFile: async () => fail("unsupported"),
   reinit: async () => ok(),
-  setNormalizationEnabled: async (enabled: boolean) => {
+  setNormalizationEnabled: async (_enabled: boolean) => {
     try {
       // LoudnessEnhancer 由原生插件管理
       return ok();

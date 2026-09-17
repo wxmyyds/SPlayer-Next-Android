@@ -1,9 +1,9 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 
-import { normalizeLxMusicInfo } from "./lx-shim";
+import { normalizeInfo } from "./lx-shim";
 
-describe("normalizeLxMusicInfo", () => {
+describe("normalizeInfo", () => {
   it("处理网易云等无 hash 歌曲时，不应设置空串 hash，且 ?? 能正确兜底到 songmid", () => {
     const raw = {
       songmid: "208902",
@@ -13,14 +13,15 @@ describe("normalizeLxMusicInfo", () => {
       albumName: "若你碰到他",
     };
 
-    const info = normalizeLxMusicInfo(raw, "wy");
+    const info = normalizeInfo(raw, "wy");
+    const meta = info.meta as Record<string, unknown>;
 
     assert.equal(info.songmid, "208902");
     assert.equal(info.id, "208902");
     assert.equal(info.hash, undefined);
     assert.equal("hash" in info, false);
-    assert.equal(info.meta.hash, undefined);
-    assert.equal("hash" in info.meta, false);
+    assert.equal(meta.hash, undefined);
+    assert.equal("hash" in meta, false);
 
     // 验证第三方插件常见写法：const songId = musicInfo.hash ?? musicInfo.songmid
     const resolvedSongId = info.hash ?? info.songmid;
@@ -42,12 +43,13 @@ describe("normalizeLxMusicInfo", () => {
       },
     };
 
-    const info = normalizeLxMusicInfo(raw, "wy");
+    const info = normalizeInfo(raw, "wy");
+    const meta = info.meta as Record<string, unknown>;
 
     assert.equal(info.hash, undefined);
     assert.equal("hash" in info, false);
-    assert.equal(info.meta.hash, undefined);
-    assert.equal("hash" in info.meta, false);
+    assert.equal(meta.hash, undefined);
+    assert.equal("hash" in meta, false);
 
     const resolvedSongId = info.hash ?? info.songmid;
     assert.equal(resolvedSongId, "208902");
@@ -61,10 +63,11 @@ describe("normalizeLxMusicInfo", () => {
       singer: "测试歌手",
     };
 
-    const info = normalizeLxMusicInfo(raw, "kg");
+    const info = normalizeInfo(raw, "kg");
+    const meta = info.meta as Record<string, unknown>;
 
     assert.equal(info.hash, hex32);
-    assert.equal(info.meta.hash, hex32);
+    assert.equal(meta.hash, hex32);
 
     const resolvedSongId = info.hash ?? info.songmid;
     assert.equal(resolvedSongId, hex32);
@@ -79,10 +82,11 @@ describe("normalizeLxMusicInfo", () => {
       hash: customHash,
     };
 
-    const info = normalizeLxMusicInfo(raw, "kg");
+    const info = normalizeInfo(raw, "kg");
+    const meta = info.meta as Record<string, unknown>;
 
     assert.equal(info.hash, customHash);
-    assert.equal(info.meta.hash, customHash);
+    assert.equal(meta.hash, customHash);
     assert.equal(info.songmid, "123456");
   });
 
@@ -93,7 +97,7 @@ describe("normalizeLxMusicInfo", () => {
       copyrightId: "",
     };
 
-    const info = normalizeLxMusicInfo(raw, "wy");
+    const info = normalizeInfo(raw, "wy");
     assert.equal(info.copyrightId, undefined);
     assert.equal("copyrightId" in info, false);
   });

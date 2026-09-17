@@ -23,7 +23,6 @@ const chunkedUpsert = async (
   conflictKeys: string[],
   rows: unknown[][],
 ): Promise<void> => {
-  const width = columns.length;
   const placeholder = `(${columns.map(() => "?").join(", ")})`;
   for (let start = 0; start < rows.length; start += INSERT_CHUNK) {
     const chunk = rows.slice(start, start + INSERT_CHUNK);

@@ -30,7 +30,6 @@ import {
 } from "./storage";
 import { fetchScript } from "./net";
 import {
-  getRuntime,
   loadPlugin,
   unloadPlugin,
   deliverPlaybackEvent,

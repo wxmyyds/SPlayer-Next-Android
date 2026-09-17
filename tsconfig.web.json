@@ -25,11 +25,5 @@
     },
     "types": ["./auto-imports.d.ts", "./components.d.ts"]
   },
-  "include": [
-    "src/env.d.ts",
-    "src/**/*",
-    "src/**/*.vue",
-    "platform/android/**/*.ts",
-    "shared/**/*"
-  ]
+  "include": ["src/env.d.ts", "src/**/*", "src/**/*.vue", "platform/android/**/*.ts", "shared/**/*"]
 }

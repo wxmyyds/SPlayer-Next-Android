@@ -24,7 +24,12 @@ const onAccept = async (): Promise<void> => {
   <div class="flex flex-col h-screen w-screen bg-app text-on-surface overflow-hidden">
     <div class="flex-1 min-h-0 flex flex-col items-center px-8 pb-10">
       <div class="w-full max-w-2xl flex-1 min-h-0 flex flex-col">
-        <StepAgreement variant="update" :loading="accepting" @next="onAccept" @reject="router.back()" />
+        <StepAgreement
+          variant="update"
+          :loading="accepting"
+          @next="onAccept"
+          @reject="router.back()"
+        />
       </div>
     </div>
   </div>

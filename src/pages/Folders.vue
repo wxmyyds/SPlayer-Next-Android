@@ -118,7 +118,9 @@ onMounted(async () => {
         <h1
           class="font-bold text-on-surface text-balance"
           :class="isAndroid ? 'text-xl' : 'text-3xl'"
-        >{{ t("folder.label") }}</h1>
+        >
+          {{ t("folder.label") }}
+        </h1>
         <div
           v-if="trackCount > 0"
           class="flex items-center gap-3 text-sm text-on-surface-variant/50"
@@ -142,9 +144,7 @@ onMounted(async () => {
       <!-- 文件夹树：竖屏置顶横排，限高滚动 -->
       <div
         class="bg-surface-panel border border-solid border-primary/12 rounded-xl overflow-hidden"
-        :class="
-          isAndroid ? 'w-auto max-h-44 ml-3 mr-3 mb-2 shrink-0' : 'w-64 shrink-0 ml-3 mb-3'
-        "
+        :class="isAndroid ? 'w-auto max-h-44 ml-3 mr-3 mb-2 shrink-0' : 'w-64 shrink-0 ml-3 mb-3'"
       >
         <STree
           v-model="selectedFolder"

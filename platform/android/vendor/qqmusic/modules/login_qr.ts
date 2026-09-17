@@ -84,10 +84,13 @@ export const login_qr_key: QMModule = async (params: QMParams) => {
       state: "STATE",
       href: "https://y.qq.com/mediastyle/music_v17/src/css/popup_wechat.css#wechat_redirect",
     });
-    const res = await fetchWithProxy(`https://open.weixin.qq.com/connect/qrconnect?${searchParams}`, {
-      headers: { "User-Agent": WEB_UA },
-      signal: AbortSignal.timeout(8000),
-    });
+    const res = await fetchWithProxy(
+      `https://open.weixin.qq.com/connect/qrconnect?${searchParams}`,
+      {
+        headers: { "User-Agent": WEB_UA },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
     if (!res.ok) throw new Error(`获取微信登录页面失败: HTTP ${res.status}`);
     const html = await res.text();
     const match = /uuid=([^"]+)"/.exec(html) || /uuid=([a-zA-Z0-9_-]+)/.exec(html);

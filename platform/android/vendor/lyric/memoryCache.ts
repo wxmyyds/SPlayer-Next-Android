@@ -27,11 +27,7 @@ const matchCache = new Map<string, string>();
 export const getCachedLyric = (platform: string, id: string): LyricMatchResult | null =>
   lyricCache.get(`${platform}:${id}`) ?? null;
 
-export const setCachedLyric = (
-  platform: string,
-  id: string,
-  result: LyricMatchResult,
-): void => {
+export const setCachedLyric = (platform: string, id: string, result: LyricMatchResult): void => {
   if (lyricCache.size > 500) lyricCache.clear();
   lyricCache.set(`${platform}:${id}`, result);
 };
@@ -39,11 +35,7 @@ export const setCachedLyric = (
 export const getMatchedId = (fingerprint: string, platform: string): string | null =>
   matchCache.get(`${fingerprint}:${platform}`) ?? null;
 
-export const setMatchedId = (
-  fingerprint: string,
-  platform: string,
-  platformId: string,
-): void => {
+export const setMatchedId = (fingerprint: string, platform: string, platformId: string): void => {
   if (matchCache.size > 500) matchCache.clear();
   matchCache.set(`${fingerprint}:${platform}`, platformId);
 };

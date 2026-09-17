@@ -1,12 +1,6 @@
 import { defaultHotkeyConfig } from "@shared/defaults/hotkeys";
 import { defaultSystemConfig } from "@shared/defaults/settings";
-import type {
-  IpcResponse,
-  PlayerApi,
-  PlayerEvent,
-  PlayerStatus,
-  TrackSource,
-} from "@shared/types/player";
+import type { IpcResponse, PlayerApi, TrackSource } from "@shared/types/player";
 import type {
   ConfigApi,
   ExternalApiStatus,
@@ -17,7 +11,7 @@ import type {
   SystemConfig,
 } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
-import type { NowPlayingApi } from "@shared/types/nowPlaying";
+import type { NowPlayingApi, NowPlayingLyricOffsetSync } from "@shared/types/nowPlaying";
 import type { MusicUrlRes, PluginsApi } from "@shared/types/plugin";
 import type { ApisApi } from "@shared/types/apis";
 import type { LyricsApi } from "@shared/types/lyrics";
@@ -126,15 +120,6 @@ const ok = <T = void>(data?: T): IpcResponse<T> => ({
 const fail = <T = never>(): IpcResponse<T> => ({ success: false, error: unsupported });
 const unsupportedAsync = async <T = never>(): Promise<IpcResponse<T>> => fail<T>();
 
-const defaultStatus: PlayerStatus = {
-  state: "idle",
-  position: 0,
-  duration: 0,
-  volume: 1,
-  speed: 1,
-  isFinished: false,
-};
-
 const emptyConfig = (): SystemConfig => structuredClone(defaultSystemConfig);
 
 const CONFIG_PREFIX = "splayer.android.config.";
@@ -183,7 +168,9 @@ const config: ConfigApi = {
   async reset() {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {
       const key = localStorage.key(index);
-      if (key?.startsWith(CONFIG_PREFIX)) localStorage.removeItem(key);
+      if (!key?.startsWith(CONFIG_PREFIX)) continue;
+      localStorage.removeItem(key);
+      if (key === `${CONFIG_PREFIX}player.lyricOffsets`) lyricOffsetStore = {};
     }
   },
   async replaceAll() {},
@@ -229,6 +216,8 @@ interface AndroidSystemApi {
   setImmersive: (enabled: boolean) => Promise<void>;
   /** Android：系统栏图标明暗（true = 深色图标，浅色背景用） */
   setLightBars: (light: boolean) => Promise<void>;
+  /** Android：用系统浏览器打开外链（WebView 无 onCreateWindow，window.open 不可靠） */
+  openUrl: (url: string) => Promise<void>;
 }
 
 const system: AndroidSystemApi = {
@@ -268,6 +257,9 @@ const system: AndroidSystemApi = {
   getPathForFile: (file: File) => file.name,
   setImmersive: (enabled: boolean) => SystemUi.setImmersive({ enabled }),
   setLightBars: (light: boolean) => SystemUi.setLightBars({ light }),
+  openUrl: async (url: string) => {
+    await SystemUi.openUrl({ url });
+  },
 };
 
 const library: LibraryApi = {
@@ -298,6 +290,17 @@ const library: LibraryApi = {
 
 const streaming = createStreamingApi() satisfies StreamingApi;
 
+/** 歌词偏移限制：±60s，与上游 main 实现一致 */
+const LYRIC_OFFSET_LIMIT_MS = 60000;
+/** 歌词偏移事件监听器（渲染端实现，桌面原由 main 进程存取） */
+const lyricOffsetListeners = new Set<(data: NowPlayingLyricOffsetSync) => void>();
+/** 按曲目持久化的歌词偏移（ms），启动时从配置懒加载，config.reset 时一并清除 */
+let lyricOffsetStore: Record<string, number> | null = null;
+
+const emitLyricOffset = (data: NowPlayingLyricOffsetSync): void => {
+  for (const listener of lyricOffsetListeners) listener(data);
+};
+
 const nowPlaying: NowPlayingApi = {
   update: () => {},
   requestSnapshot: async () => ({
@@ -311,11 +314,27 @@ const nowPlaying: NowPlayingApi = {
     lyricOffsetMs: 0,
     sendTimestamp: Date.now(),
   }),
-  setLyricOffset: () => {},
+  setLyricOffset: (trackId: string, offsetMs: number) => {
+    if (!trackId) return;
+    // NaN/Infinity 会污染下游时间叠加计算，统一视为清除；写入前 clamp 到 ±60s
+    const normalized = Number.isFinite(offsetMs) ? Math.trunc(offsetMs) : 0;
+    const value = Math.max(-LYRIC_OFFSET_LIMIT_MS, Math.min(LYRIC_OFFSET_LIMIT_MS, normalized));
+    if (lyricOffsetStore === null) lyricOffsetStore = {};
+    if (value === 0) delete lyricOffsetStore[trackId];
+    else lyricOffsetStore[trackId] = value;
+    // 持久化到 system 配置（设置 store 启动时从同一配置补水）
+    void config.set("player.lyricOffsets", { ...lyricOffsetStore });
+    emitLyricOffset({ trackId, offsetMs: value });
+  },
   onTrackChange: noopUnsubscribe,
   onLyricChange: noopUnsubscribe,
   onPositionSync: noopUnsubscribe,
-  onLyricOffsetChange: noopUnsubscribe,
+  onLyricOffsetChange: (callback) => {
+    lyricOffsetListeners.add(callback);
+    return () => {
+      lyricOffsetListeners.delete(callback);
+    };
+  },
 };
 
 /** 插件：与共享类型一致的全量实现（WebView 直跑运行时） */

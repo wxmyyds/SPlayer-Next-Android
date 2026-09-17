@@ -62,7 +62,10 @@ const fetchPublicKey = async (
   if (json?.code !== 200 || !payload?.encryptedData) {
     throw new Error("xeapi public key request failed");
   }
-  if (!payload.signature || (await xeapiSign(payload.timestamp ?? "", nonce)) !== payload.signature) {
+  if (
+    !payload.signature ||
+    (await xeapiSign(payload.timestamp ?? "", nonce)) !== payload.signature
+  ) {
     throw new Error("xeapi public key response signature mismatch");
   }
   const key = xeapiDecryptPublicKey(payload.encryptedData);

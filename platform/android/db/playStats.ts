@@ -26,7 +26,13 @@ export const insertPlayEvent = async (event: PlayEventInput): Promise<void> => {
     await dbRun(
       `INSERT INTO play_history (track_id, source, started_at, listened_ms, track_json)
        VALUES (?, ?, ?, ?, ?)`,
-      [event.track.id, event.track.source, event.startedAt, event.listenedMs, JSON.stringify(event.track)],
+      [
+        event.track.id,
+        event.track.source,
+        event.startedAt,
+        event.listenedMs,
+        JSON.stringify(event.track),
+      ],
     );
   } catch (error) {
     mediaLog.error("写入播放记录失败:", error);

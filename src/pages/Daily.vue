@@ -146,7 +146,9 @@ watch(
             <h1
               class="font-bold text-on-surface text-balance"
               :class="isAndroid ? 'text-xl' : 'text-3xl'"
-            >{{ t("daily.title") }}</h1>
+            >
+              {{ t("daily.title") }}
+            </h1>
             <span
               v-if="selectedDay && selectedDay.tracks.length > 0"
               class="flex items-center gap-1 text-sm text-on-surface-variant/50"

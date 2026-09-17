@@ -12,7 +12,7 @@ import type {
   StreamingServerConfig,
   StreamingServerInput,
 } from "@shared/types/streaming";
-import type { Album, Artist, Playlist, Track } from "@shared/types/player";
+import type { Album, Track } from "@shared/types/player";
 import {
   addStreamingServer,
   getStreamingConfig,

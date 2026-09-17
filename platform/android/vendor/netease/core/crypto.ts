@@ -59,7 +59,11 @@ export const aesEncrypt = async (
  * @param format 输入格式
  * @returns 解密后的字节
  */
-export const aesDecrypt = (ciphertext: string, key: string, format: "base64" | "hex" = "base64"): Uint8Array => {
+export const aesDecrypt = (
+  ciphertext: string,
+  key: string,
+  format: "base64" | "hex" = "base64",
+): Uint8Array => {
   const input = format === "base64" ? b64Decode(ciphertext) : hexDecode(ciphertext);
   return aesEcbDecryptRaw(utf8(key), input);
 };

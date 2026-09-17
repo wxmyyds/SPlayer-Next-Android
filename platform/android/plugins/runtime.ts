@@ -12,16 +12,12 @@ import type {
   PluginGrant,
   PluginManifest,
   PluginSettingItem,
-  PluginStatus,
   RegisterArgs,
   SourceCapability,
 } from "@shared/types/plugin";
 import { PluginErrorCodes } from "@shared/defaults/plugin-api";
 import { getCurrentTime } from "@/services/playback";
 import * as player from "@/core/player";
-import { useSettingsStore } from "@/stores/settings";
-import { APP_VERSION } from "@/utils/config";
-import { fetchWithProxy } from "../vendor/shim/proxy";
 import { randomBytes, md5Hex, hexEncode } from "../vendor/shim/webcrypto";
 import { Buffer, PluginBuffer } from "./buffer";
 import {

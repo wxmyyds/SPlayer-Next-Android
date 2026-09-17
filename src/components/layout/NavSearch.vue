@@ -277,7 +277,11 @@ onMounted(() => {
 
 <template>
   <!-- 搜索框触发器与听歌识曲 -->
-  <div :class="isAndroid ? 'flex items-center gap-2 flex-1 min-w-0' : 'flex items-center gap-2 shrink-0'">
+  <div
+    :class="
+      isAndroid ? 'flex items-center gap-2 flex-1 min-w-0' : 'flex items-center gap-2 shrink-0'
+    "
+  >
     <div
       role="button"
       :aria-label="t('nav.searchPlaceholder')"

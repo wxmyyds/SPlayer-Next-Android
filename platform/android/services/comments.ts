@@ -12,7 +12,6 @@ import type {
   MusicCommentPage,
   MusicCommentQuery,
 } from "@shared/types/comment";
-import type { PluginInfo } from "@shared/types/plugin";
 import type { Track } from "@shared/types/player";
 import { PLATFORM_SHORT_NAME } from "@shared/types/platform";
 import { callNetease } from "../vendor/netease";
@@ -26,12 +25,6 @@ import { findMatch } from "../plugins/metadata";
 const NETEASE_SOURCE_ID = "builtin:netease";
 const QQMUSIC_SOURCE_ID = "builtin:qqmusic";
 const KUGOU_SOURCE_ID = "builtin:kugou";
-
-const PLATFORM_TO_PLUGIN_SOURCE: Record<string, string> = {
-  netease: "wy",
-  qqmusic: "tx",
-  kugou: "kg",
-};
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;

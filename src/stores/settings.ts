@@ -308,6 +308,16 @@ export const useSettingsStore = defineStore(
         if (typeof lyric.detectBackgroundLyrics !== "boolean") {
           lyric.detectBackgroundLyrics = true;
         }
+        // 上游歌词设置改名：amll 专属罗马音开关并入通用开关，老存档一次性迁移后删除旧键
+        const legacyLyric = lyric as unknown as Record<string, unknown>;
+        if (typeof legacyLyric.amllShowLineRomanization === "boolean") {
+          lyric.showRomanization = legacyLyric.amllShowLineRomanization;
+          delete legacyLyric.amllShowLineRomanization;
+        }
+        if (typeof legacyLyric.amllShowWordRomanization === "boolean") {
+          lyric.showWordRomanization = legacyLyric.amllShowWordRomanization;
+          delete legacyLyric.amllShowWordRomanization;
+        }
         lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, ALL_PLATFORMS);
         lyric.lyricFormatOrder = reconcileOrder(lyric.lyricFormatOrder, DEFAULT_LYRIC_FORMAT_ORDER);
         appearance.sidebarNavGroups = reconcileNavGroups(appearance.sidebarNavGroups ?? []);

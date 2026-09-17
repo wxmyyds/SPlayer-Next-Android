@@ -40,7 +40,7 @@ export default defineConfig({
   ],
   test: {
     environment: "happy-dom",
-    include: ["src/**/*.spec.ts", "docs/**/*.spec.ts"],
+    include: ["src/**/*.spec.ts", "docs/**/*.spec.ts", "platform/android/**/*.spec.ts"],
     clearMocks: true,
     restoreMocks: true,
   },

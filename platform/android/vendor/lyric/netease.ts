@@ -107,8 +107,19 @@ export const getByQuery = async (track: Track): Promise<LyricMatchResult | null>
     });
     if (status !== 200) return null;
     const songs =
-      (body as { result?: { songs?: Array<{ id: number; name: string; artists?: Array<{ name: string }>; album?: { name: string }; duration?: number }> } })
-        .result?.songs ?? [];
+      (
+        body as {
+          result?: {
+            songs?: Array<{
+              id: number;
+              name: string;
+              artists?: Array<{ name: string }>;
+              album?: { name: string };
+              duration?: number;
+            }>;
+          };
+        }
+      ).result?.songs ?? [];
     for (const song of songs) {
       candidates.push({
         name: song.name,

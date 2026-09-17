@@ -10,7 +10,7 @@ import type {
   SourceCapability,
 } from "@shared/types/plugin";
 import { randomBytes } from "../vendor/shim/webcrypto";
-import { aesEncryptNode, md5Bytes, rsaEncryptNoPadding, toBytes } from "./crypto";
+import { aesEncryptNode, md5Bytes, rsaEncryptNoPadding } from "./crypto";
 import { Buffer, PluginBuffer } from "./buffer";
 import * as pako from "pako";
 
@@ -63,14 +63,33 @@ const bytes = (value: unknown): PluginBuffer => {
   return Buffer.alloc(0);
 };
 
-const normalizeInfo = (raw: MusicUrlReq["musicInfo"], source: string): Record<string, unknown> => {
+/**
+ * 归一化 LX 音乐信息：统一 id/hash 字段，供歌曲链接解析使用
+ * @param raw - 插件上报的音乐信息
+ * @param source - 平台标识（wy/tx/kg）
+ * @returns 归一化后的字段映射
+ */
+export const normalizeInfo = (
+  raw: MusicUrlReq["musicInfo"],
+  source: string,
+): Record<string, unknown> => {
   const info = raw ?? { songmid: "" };
   const id = String(info.id ?? info.songmid ?? info.songId ?? "");
   const meta =
     typeof info.meta === "object" && info.meta !== null
       ? (info.meta as Record<string, unknown>)
       : {};
-  return {
+  // hash：显式/有效串优先，酷狗源回退 32 位十六进制的 songmid；空串会打穿第三方插件
+  // `hash ?? songmid` 的空值兜底链，无有效值时不挂载该字段
+  const rawHash = info.hash ?? meta.hash;
+  const isKg = source === "kg" || source === "kugou";
+  const hash =
+    typeof rawHash === "string" && rawHash.trim().length > 0
+      ? rawHash.trim()
+      : isKg && /^[0-9a-fA-F]{32}$/.test(id)
+        ? id
+        : undefined;
+  const result: Record<string, unknown> = {
     ...info,
     id,
     songmid: id,
@@ -85,11 +104,21 @@ const normalizeInfo = (raw: MusicUrlReq["musicInfo"], source: string): Record<st
     types: Array.isArray(info.types) ? info.types : [],
     _types: info._types ?? {},
     typeUrl: info.typeUrl ?? {},
-    hash: info.hash ?? meta.hash ?? "",
     strMediaMid: info.strMediaMid ?? id,
-    copyrightId: info.copyrightId ?? "",
     meta: { ...meta, songId: id },
   };
+  if (hash) {
+    result.hash = hash;
+    result.meta = { ...(result.meta as Record<string, unknown>), hash };
+  } else {
+    delete result.hash;
+    delete (result.meta as Record<string, unknown>).hash;
+  }
+  // 同理：无 copyrightId 时不挂载空串
+  const copyrightId = String(info.copyrightId ?? meta.copyrightId ?? "").trim();
+  if (copyrightId) result.copyrightId = copyrightId;
+  else delete result.copyrightId;
+  return result;
 };
 
 /** 将 LX 的请求回调协议桥接到 HostApi.request。 */

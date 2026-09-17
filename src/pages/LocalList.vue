@@ -104,7 +104,9 @@ onMounted(async () => {
           <h1
             class="font-bold text-on-surface text-balance"
             :class="isAndroid ? 'text-xl' : 'text-3xl'"
-          >{{ config.title }}</h1>
+          >
+            {{ config.title }}
+          </h1>
           <span
             v-if="items.length > 0"
             class="flex items-center gap-1 text-sm text-on-surface-variant/50"

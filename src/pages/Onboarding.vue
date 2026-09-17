@@ -60,7 +60,6 @@ const complete = async (): Promise<void> => {
 
 <template>
   <div class="flex flex-col h-screen w-screen bg-app text-on-surface overflow-hidden">
-
     <div class="flex-1 min-h-0 flex flex-col items-center px-8 py-6">
       <div class="w-full max-w-2xl flex-1 min-h-0 flex flex-col">
         <header class="flex items-center gap-4 mb-8 shrink-0">

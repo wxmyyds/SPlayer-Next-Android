@@ -117,11 +117,15 @@ watch(
   },
 );
 
-const fullscreenCover = computed(() => settings.player.coverLayout === "fullscreen");
+const fullscreenCover = computed(
+  () => settings.player.coverLayout === "fullscreen" && !stackedLayout.value,
+);
 const coverWidth = computed(() => `${settings.player.coverLyricRatio * 100}%`);
 
 const coverCentered = computed(() => {
   if (fullscreenCover.value || status.fullQueueOpen) return false;
+  // 堆叠布局里歌词是独立页，“封面居中则隐藏歌词”的桌面语义不适用，否则歌词页整页隐藏成空白
+  if (stackedLayout.value) return false;
   return !showLyric.value || (settings.player.autoCenterCover && !hasLyric.value);
 });
 
@@ -381,7 +385,9 @@ const {
   openPicker,
 } = usePlaylistPicker();
 
-const lyricToggleDisabled = computed(() => !hasLyric.value || fullscreenCover.value);
+const lyricToggleDisabled = computed(
+  () => !hasLyric.value || fullscreenCover.value || stackedLayout.value,
+);
 const lyricToggleActive = computed(
   () => showLyric.value && hasLyric.value && !status.fullQueueOpen && !fullscreenCover.value,
 );

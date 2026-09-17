@@ -37,7 +37,6 @@ export const storeSet = (key: string, value: unknown): void => {
 
 /** 与上游 `@main/store` 同形的最小 store（get 返回 any，与桌面一致） */
 export const store: { get: (key: string) => any; set: (key: string, value: unknown) => void } = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get: (key: string): any => storeGet(key),
   set: (key: string, value: unknown): void => storeSet(key, value),
 };

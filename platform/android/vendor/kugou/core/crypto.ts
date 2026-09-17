@@ -49,9 +49,7 @@ const currentSalts = () => ({
  */
 export const cryptoMd5 = (data: string | Uint8Array | Record<string, unknown>): string => {
   const content =
-    typeof data === "string" || data instanceof Uint8Array
-      ? data
-      : JSON.stringify(data ?? {});
+    typeof data === "string" || data instanceof Uint8Array ? data : JSON.stringify(data ?? {});
   return md5Hex(content);
 };
 

@@ -75,6 +75,8 @@ const isEmptyResult = (value: unknown): boolean => {
   if (Array.isArray(v.albums) && v.albums.length === 0) return true;
   if (Array.isArray(v.artists) && v.artists.length === 0) return true;
   if (Array.isArray(v.playlists) && v.playlists.length === 0) return true;
+  // 非 200 的业务错误对象（如歌词模块的 {code,message}）不能缓存，否则瞬时失败被冻结 2 分钟
+  if (typeof v.code === "number" && v.code !== 200) return true;
   return false;
 };
 

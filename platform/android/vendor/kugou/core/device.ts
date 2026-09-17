@@ -67,18 +67,21 @@ const registerDevice = async (): Promise<string> => {
   const query = new URLSearchParams(
     Object.entries(params).map(([key, value]) => [key, String(value)]),
   );
-  const response = await fetchWithProxy(`https://userservice.kugou.com/risk/v2/r_register_dev?${query}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "Android15-1070-11083-46-0-DiscoveryDRADProtocol-wifi",
-      dfid: "-",
-      mid: getDeviceMid(),
-      clienttime: String(clienttime),
+  const response = await fetchWithProxy(
+    `https://userservice.kugou.com/risk/v2/r_register_dev?${query}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Android15-1070-11083-46-0-DiscoveryDRADProtocol-wifi",
+        dfid: "-",
+        mid: getDeviceMid(),
+        clienttime: String(clienttime),
+      },
+      body: encrypted.content,
+      signal: AbortSignal.timeout(8000),
     },
-    body: encrypted.content,
-    signal: AbortSignal.timeout(8000),
-  });
+  );
   if (!response.ok) throw new Error(`KG register device HTTP ${response.status}`);
   const result = (await decryptKugouDeviceData(
     new Uint8Array(await response.arrayBuffer()),

@@ -1,6 +1,8 @@
 package com.wxmyyds.splayer.next;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.view.View;
 import android.view.Window;
 import androidx.core.view.WindowInsetsCompat;
@@ -42,6 +44,27 @@ public class SystemUiPlugin extends Plugin {
                     }
                     call.resolve(new JSObject());
                 });
+    }
+
+    /**
+     * 用系统浏览器打开外链：WebView 未实现 onCreateWindow，window.open(_blank) 带
+     * noopener 时在部分版本上静默失败，外链统一走 ACTION_VIEW
+     * @param url 要打开的 http/https 链接
+     */
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        String url = call.getString("url", "");
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            call.reject("invalid url");
+            return;
+        }
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("activity unavailable");
+            return;
+        }
+        activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        call.resolve(new JSObject());
     }
 
     /**

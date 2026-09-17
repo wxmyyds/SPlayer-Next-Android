@@ -69,7 +69,10 @@ export const clearVendorSession = (platform: ApiPlatform): void => {
 
 /** 应用内 WebView 官方登录插件（原生 LoginWebPlugin） */
 interface LoginWebPlugin {
-  open: (options: { url: string; watchCookie: string }) => Promise<{ cookies: Record<string, string> }>;
+  open: (options: {
+    url: string;
+    watchCookie: string;
+  }) => Promise<{ cookies: Record<string, string> }>;
 }
 
 const LoginWeb = registerPlugin<LoginWebPlugin>("LoginWeb");

@@ -14,7 +14,7 @@ import type {
 } from "@shared/types/plugin";
 import { PLUGIN_GRANTS, PLUGIN_TYPES } from "@shared/types/plugin";
 import { ACTION_TIMEOUTS, HOST_API_LEVEL, PluginErrorCodes } from "@shared/defaults/plugin-api";
-import { callAction, getRuntime } from "./runtime";
+import { callAction } from "./runtime";
 import { getRuntimeState } from "./registry";
 import { b64Decode } from "../vendor/shim/webcrypto";
 import { sha1Bytes } from "./crypto";
@@ -207,7 +207,8 @@ export const findMatch = async (
       album: track.album?.name,
       durationMs: track.duration,
     };
-  }  const keyword =
+  }
+  const keyword =
     `${track.title} ${track.artists?.map((artist) => artist.name).join(" ") ?? ""}`.trim();
   if (!keyword) return null;
   const result = await callAction<{ list?: MusicSearchCandidate[] }>(

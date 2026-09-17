@@ -11,12 +11,7 @@ const settings = useSettingsStore();
 const { families: fonts, loading: loadingFonts, ensureLoaded } = useSystemFonts();
 
 type FontDraftKey =
-  | "global"
-  | "lyric"
-  | "lyricChinese"
-  | "lyricJapanese"
-  | "lyricKorean"
-  | "lyricLatin";
+  "global" | "lyric" | "lyricChinese" | "lyricJapanese" | "lyricKorean" | "lyricLatin";
 type FontGroup = "general" | "appLyric";
 type FontMode = "select" | "custom";
 

@@ -114,7 +114,7 @@ Renderer IndexedDB（localforage）键名沿用上游（`splayer/library`、`spl
 ### Config
 
 `shared/defaults/settings.ts` 的桌面默认值不改。安卓低端机降级（关 `lyric.enableBlur` /
-`imageBackground.blur`）在 Android 源代码分支中通过首次启动配置写入，不修改桌面默认路径。
+`imageBackground.blur`）依赖共享默认值本身即为保守取值（两者默认关闭），无需额外首启写入。
 
 ### i18n
 
