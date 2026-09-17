@@ -72,7 +72,11 @@ jobs:
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        # android-actions/setup-android@v3 在新版 runner 镜像上请求已被 Google 移除的
+        # legacy 'tools' 包导致必败；镜像已预装 SDK，这里只需把工具目录加入 PATH
+        run: |
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -87,7 +91,10 @@ jobs:
         run: pnpm exec cap sync android
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        # setup-android 动作移除后由这里代为接受许可证（镜像预装许可证可能过期）
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build Debug APK
         working-directory: android
