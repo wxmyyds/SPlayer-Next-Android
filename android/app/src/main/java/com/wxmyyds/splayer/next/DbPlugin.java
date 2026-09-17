@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -223,7 +224,7 @@ public class DbPlugin extends Plugin {
                 });
     }
 
-    private static List<Object> toList(JSArray array) {
+    private static List<Object> toList(JSONArray array) {
         List<Object> out = new ArrayList<>();
         if (array == null) return out;
         for (int i = 0; i < array.length(); i++) {
