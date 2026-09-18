@@ -154,10 +154,33 @@
           }
         } catch (e) {}
         document.documentElement.style.setProperty("--splash-primary", primary);
+        // Android WebView 的 prefers-color-scheme 部分机型误报暗色：
+        // 优先用上次会话由原生写入的缓存值，无缓存时才回退媒体查询
+        let cachedDark = null;
+        try {
+          const cached = localStorage.getItem("splayer-system-dark");
+          if (cached === "0" || cached === "1") cachedDark = cached === "1";
+        } catch (e) {}
         const isDark =
           mode === "dark" ||
-          (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          (mode === "system" &&
+            (cachedDark !== null
+              ? cachedDark
+              : window.matchMedia("(prefers-color-scheme: dark)").matches));
         if (!isDark) document.documentElement.classList.add("light");
+        // 首次启动无缓存：异步问原生（桥注入早于页面脚本），把首启也纠准
+        const systemUi =
+          window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SystemUi;
+        if (systemUi && typeof systemUi.getSystemTheme === "function") {
+          systemUi
+            .getSystemTheme()
+            .then((res) => {
+              if (mode === "system") {
+                document.documentElement.classList.toggle("light", !(res && res.dark));
+              }
+            })
+            .catch(() => {});
+        }
       })();
     </script>
   </head>

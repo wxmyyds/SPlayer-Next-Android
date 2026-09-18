@@ -317,4 +317,6 @@ export const applyThemeToDOM = (
   );
   root.style.setProperty("--s-cover-base", coverColorHex ? hexToRgb(coverColorHex) : "20 20 28");
   root.classList.toggle("dark", isDark);
+  // 启动页 CSS 按 html.light 着色，dark 类切换不会移除它，须同步管理
+  root.classList.toggle("light", !isDark);
 };

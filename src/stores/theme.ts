@@ -46,11 +46,23 @@ export const useThemeStore = defineStore(
      * 不一致，开启跟随系统会误报暗色），初始值先用媒体查询，随后被原生值覆盖；桌面沿用媒体查询 */
     const systemDark = ref(usePreferredDark().value);
     if (isAndroid) {
+      /** 原生值落到 localStorage：下次启动的内联脚本用它取代不可靠的 prefers-color-scheme */
+      const persistSystemDark = (dark: boolean): void => {
+        try {
+          localStorage.setItem("splayer-system-dark", dark ? "1" : "0");
+        } catch {}
+      };
       void window.api.system
         .getSystemTheme()
-        .then((dark) => (systemDark.value = dark))
+        .then((dark) => {
+          systemDark.value = dark;
+          persistSystemDark(dark);
+        })
         .catch(() => {});
-      window.api.system.onSystemThemeChange((dark) => (systemDark.value = dark));
+      window.api.system.onSystemThemeChange((dark) => {
+        systemDark.value = dark;
+        persistSystemDark(dark);
+      });
     } else {
       watch(usePreferredDark(), (v) => (systemDark.value = v));
     }
