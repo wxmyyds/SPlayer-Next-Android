@@ -10,7 +10,8 @@ use base64::Engine;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
-use rquickjs::{Context, Func, Function, Runtime, Value};
+use rquickjs::{Context, Function, Runtime, Value};
+use rquickjs::prelude::Func;
 use std::collections::BinaryHeap;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -326,7 +327,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
 fn pump_jobs(runtime: &Runtime) {
     let mut guard = 0;
     while runtime.is_job_pending() && guard < 10_000 {
-        runtime.execute_pending_job();
+        let _ = runtime.execute_pending_job();
         guard += 1;
     }
 }
