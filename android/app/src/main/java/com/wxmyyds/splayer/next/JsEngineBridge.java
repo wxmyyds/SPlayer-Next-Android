@@ -100,7 +100,7 @@ public class JsEngineBridge {
                 out.put("setCookies", setCookies);
                 out.put(
                     "bodyBase64",
-                    Base64.encodeToString(bytes, Base64.NO_WRAP),
+                    Base64.encodeToString(bytes, Base64.NO_WRAP)
                 );
                 return out.toString();
             } finally {
