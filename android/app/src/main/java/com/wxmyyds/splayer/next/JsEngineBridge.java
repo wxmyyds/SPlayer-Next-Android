@@ -81,7 +81,7 @@ public class JsEngineBridge {
                     ? RequestBody.create(bodyBytes, MediaType.parse("application/octet-stream"))
                     : RequestBody.create(new byte[0], null);
             }
-            Call call = client.newCall(builder.method(method, requestBody).build());
+            Call call = CLIENT.newCall(builder.method(method, requestBody).build());
             if (!requestId.isEmpty()) calls.put(requestId, call);
             try {
                 Response resp = call.execute();
