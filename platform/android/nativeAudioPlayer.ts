@@ -11,6 +11,7 @@
  * 接口形状与桌面 Rust audio-engine 一致，渲染层零改动。
  */
 
+import type { PluginListenerHandle } from "@capacitor/core";
 import type {
   AudioDevice,
   IpcResponse,
@@ -35,17 +36,25 @@ interface MediaBridgePlugin {
   }) => Promise<void>;
 }
 
-/** 系统栏沉浸插件（SystemUiPlugin）：隐藏状态栏/导航小白条 */
+/** 系统栏沉浸插件（SystemUiPlugin）：隐藏状态栏/导航小白条 + 系统深浅色读取 */
 interface SystemUiBridgePlugin {
   setImmersive: (options: { enabled: boolean }) => Promise<void>;
   setLightBars: (options: { light: boolean }) => Promise<void>;
   openUrl: (options: { url: string }) => Promise<void>;
+  getSystemTheme: () => Promise<{ dark: boolean }>;
+  addListener(
+    eventName: "systemThemeChanged",
+    listenerFunc: (data: { dark: boolean }) => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 class SystemUiWeb extends WebPlugin implements SystemUiBridgePlugin {
   async setImmersive(): Promise<void> {}
   async setLightBars(): Promise<void> {}
   async openUrl(): Promise<void> {}
+  async getSystemTheme(): Promise<{ dark: boolean }> {
+    return { dark: window.matchMedia("(prefers-color-scheme: dark)").matches };
+  }
 }
 
 /** 供 bridge.ts 的 system.setImmersive 消费 */

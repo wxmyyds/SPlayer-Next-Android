@@ -116,6 +116,14 @@ Renderer IndexedDB（localforage）键名沿用上游（`splayer/library`、`spl
 `shared/defaults/settings.ts` 的桌面默认值不改。安卓低端机降级（关 `lyric.enableBlur` /
 `imageBackground.blur`）依赖共享默认值本身即为保守取值（两者默认关闭），无需额外首启写入。
 
+### 主题（深浅色跟随）
+
+Android WebView 的 `prefers-color-scheme` 媒体查询与系统设置可能不一致（部分 ROM
+误报暗色）。深浅色跟随以原生为准：`SystemUi.getSystemTheme` 读
+`Configuration.uiMode`，切换经 `systemThemeChanged` 事件（manifest 已声明
+`uiMode` configChanges，Activity 不重建）；index.html 启动脚本的 splash 背景仍用
+媒体查询，仅影响首帧着色，store 初始化后立即被原生值覆盖。
+
 ### i18n
 
 沿用 `src/i18n/locales/{zh-CN,en-US}.json`；Android 不新增独立翻译表，平台分支直接复用现有 locale。

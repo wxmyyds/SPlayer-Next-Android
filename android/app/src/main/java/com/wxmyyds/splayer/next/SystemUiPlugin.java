@@ -2,6 +2,7 @@ package com.wxmyyds.splayer.next;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.view.View;
 import android.view.Window;
@@ -65,6 +66,28 @@ public class SystemUiPlugin extends Plugin {
         }
         activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
         call.resolve(new JSObject());
+    }
+
+    /**
+     * 读取系统深浅色：WebView 的 prefers-color-scheme 在部分 ROM 上与系统设置不一致，
+     * 主题跟随一律以 Configuration.uiMode 为准
+     */
+    @PluginMethod
+    public void getSystemTheme(PluginCall call) {
+        int mask = getContext().getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        JSObject result = new JSObject();
+        result.put("dark", mask == Configuration.UI_MODE_NIGHT_YES);
+        call.resolve(result);
+    }
+
+    /** 系统深浅色切换：manifest 已声明 uiMode configChanges，Activity 不重建，走此钩子推送 */
+    @Override
+    protected void handleOnConfigurationChanged(Configuration newConfig) {
+        super.handleOnConfigurationChanged(newConfig);
+        int mask = newConfig.uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        JSObject payload = new JSObject();
+        payload.put("dark", mask == Configuration.UI_MODE_NIGHT_YES);
+        notifyListeners("systemThemeChanged", payload);
     }
 
     /**

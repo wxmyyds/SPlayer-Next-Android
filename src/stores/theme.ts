@@ -42,8 +42,18 @@ export const useThemeStore = defineStore(
       appearanceStyle.value === "image" && !imageBackground.src ? "solid" : appearanceStyle.value,
     );
 
-    /** 系统暗色偏好 */
-    const systemDark = usePreferredDark();
+    /** 系统暗色偏好：Android 经原生桥读取（WebView 的 prefers-color-scheme 与部分系统设置
+     * 不一致，开启跟随系统会误报暗色），初始值先用媒体查询，随后被原生值覆盖；桌面沿用媒体查询 */
+    const systemDark = ref(usePreferredDark().value);
+    if (isAndroid) {
+      void window.api.system
+        .getSystemTheme()
+        .then((dark) => (systemDark.value = dark))
+        .catch(() => {});
+      window.api.system.onSystemThemeChange((dark) => (systemDark.value = dark));
+    } else {
+      watch(usePreferredDark(), (v) => (systemDark.value = v));
+    }
 
     /** 当前是否为暗色 */
     const isDark = computed(() => {

@@ -213,6 +213,10 @@ interface AndroidSystemApi {
   setLightBars: (light: boolean) => Promise<void>;
   /** Android：用系统浏览器打开外链（WebView 无 onCreateWindow，window.open 不可靠） */
   openUrl: (url: string) => Promise<void>;
+  /** Android：系统深浅色（WebView 的 prefers-color-scheme 与部分系统设置不一致，以原生为准） */
+  getSystemTheme: () => Promise<boolean>;
+  /** Android：系统深浅色切换（uiMode configChanges 推送） */
+  onSystemThemeChange: (callback: (dark: boolean) => void) => () => void;
 }
 
 const system: AndroidSystemApi = {
@@ -249,6 +253,13 @@ const system: AndroidSystemApi = {
   setLightBars: (light: boolean) => SystemUi.setLightBars({ light }),
   openUrl: async (url: string) => {
     await SystemUi.openUrl({ url });
+  },
+  getSystemTheme: async () => (await SystemUi.getSystemTheme()).dark,
+  onSystemThemeChange: (callback) => {
+    const handleP = SystemUi.addListener("systemThemeChanged", (data) => callback(data.dark));
+    return () => {
+      void handleP.then((handle) => handle.remove());
+    };
   },
 };
 
