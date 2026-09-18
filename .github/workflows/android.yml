@@ -85,6 +85,8 @@ jobs:
           rustup default stable
           rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
           cargo install cargo-ndk
+          # rquickjs-sys bindgen 需要 libclang
+          sudo apt-get update -qq && sudo apt-get install -y -qq libclang-dev
           # 镜像未预装 NDK：按 AGP 8.7 默认版本安装并导出
           sdkmanager --install "ndk;26.3.11579264" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"

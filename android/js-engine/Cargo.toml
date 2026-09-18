@@ -12,6 +12,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rquickjs = "0.9"
+# Android 目标无预打包绑定：启用 bindgen 运行时生成（CI 需 libclang）
+rquickjs-sys = { version = "0.9", features = ["bindgen"] }
 jni = "0.21"
 flate2 = "1"
 base64 = "0.22"
