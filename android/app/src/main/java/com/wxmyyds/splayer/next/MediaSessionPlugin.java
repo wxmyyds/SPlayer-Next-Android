@@ -193,7 +193,15 @@ public class MediaSessionPlugin extends Plugin {
                             ensureChannel();
 
                             // 焦点礼让交由 WebView 内部媒体栈处理（原生再申请会与其互斥，元素被瞬时暂停）
-                            applyMetadataUpdate(title, artist, album, playing, positionMs, durationMs, artworkUrl);
+                            applyMetadataUpdate(
+                                    title,
+                                    artist,
+                                    album,
+                                    playing,
+                                    positionMs,
+                                    durationMs,
+                                    artworkUrl,
+                                    speed);
                             call.resolve();
                         });
     }
@@ -218,12 +226,20 @@ public class MediaSessionPlugin extends Plugin {
             long durationMs) {
         MediaSessionPlugin instance = sInstance;
         if (instance == null || sSession == null || instance.getActivity() == null) return;
+        // 速率取 lastSpeed（doUpdate 的 updateState 推送已先行到达）
         instance
                 .getActivity()
                 .runOnUiThread(
                         () ->
                                 instance.applyMetadataUpdate(
-                                        title, artist, album, playing, positionMs, durationMs, artworkUrl));
+                                        title,
+                                        artist,
+                                        album,
+                                        playing,
+                                        positionMs,
+                                        durationMs,
+                                        artworkUrl,
+                                        lastSpeed));
     }
 
     /** 元数据/通知更新主体（doUpdate 与原生自治切歌共用）；须在主线程调用 */
@@ -234,6 +250,7 @@ public class MediaSessionPlugin extends Plugin {
             boolean playing,
             long positionMs,
             long durationMs,
+            float speed,
             String artworkUrl) {
         // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
         MediaMetadata current =

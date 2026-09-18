@@ -1,6 +1,7 @@
 package com.wxmyyds.splayer.next;
 
 import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 
 /**
