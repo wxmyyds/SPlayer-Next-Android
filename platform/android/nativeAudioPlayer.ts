@@ -117,10 +117,14 @@ interface AudioEnginePlugin {
   }): Promise<void>;
   setNextQueue(options: {
     items: {
+      platform: "netease" | "kugou" | "qqmusic";
       trackId: string;
       songId: string;
       playIndex: number;
       level: string;
+      extId: string;
+      albumId: string;
+      mediaId: string;
       title: string;
       artist: string;
       album: string;
@@ -129,6 +133,10 @@ interface AudioEnginePlugin {
     }[];
     resolve: {
       cookie: string;
+      sessions?: {
+        kugou?: Record<string, string>;
+        qqmusic?: Record<string, string>;
+      };
     };
   }): Promise<void>;
   clearNextResource(): Promise<void>;

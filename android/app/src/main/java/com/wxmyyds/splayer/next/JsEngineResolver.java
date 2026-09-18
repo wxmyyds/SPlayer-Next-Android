@@ -94,21 +94,13 @@ public final class JsEngineResolver {
     }
 
     /**
-     * 解析网易云播放地址
-     * @param cookieJson - 登录 cookie（header 形式字符串，可空）
-     * @param songId - 歌曲 id
-     * @param level - 音质 level
-     * @return { ok, url, trial } JSON 或 null（引擎不可用/解析失败，调用方回落）
+     * 引擎解析（按平台分发的请求 JSON）
+     * @param requestJson - 引擎请求 JSON（platform/songId/level 及平台参数）
+     * @return { ok, url, trial } JSON 或 null（引擎不可用/解析失败，调用方走重试语义）
      */
-    public static String resolve(String cookieJson, String songId, String level) {
+    public static String resolve(String requestJson) {
         if (!ensureEngine()) return null;
-        Future<String> future = EXECUTOR.submit(() -> {
-            JSObject req = new JSObject();
-            req.put("songId", songId);
-            req.put("level", level);
-            if (cookieJson != null && !cookieJson.isEmpty()) req.put("cookie", cookieJson);
-            return JsEngine.nativeCall(enginePtr, req.toString());
-        });
+        Future<String> future = EXECUTOR.submit(() -> JsEngine.nativeCall(enginePtr, requestJson));
         try {
             String result = future.get(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             if (result == null) return null;

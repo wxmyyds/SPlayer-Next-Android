@@ -3,6 +3,7 @@ import { useStatusStore } from "@/stores/status";
 import * as autoClose from "@/services/autoClose";
 import { getNeteaseCookies } from "@android/vendor/netease";
 import { cookieObjToString } from "@android/vendor/netease/core/cookie";
+import { getSessionCookies } from "@android/vendor/shim/sessions";
 import { processCookieObject } from "@android/vendor/netease/core/request";
 import { NETEASE_LEVEL } from "@/apis/song/netease";
 import { useSettingsStore } from "@/stores/settings";
@@ -13,9 +14,9 @@ const QUEUE_SIZE = 30;
 
 /**
  * 向原生推送自治切歌队列（SFA PlaybackQueue 等价）：
- * 只推元数据 + eapi 解析上下文（cookie/设备指纹由 JS 组装，易变知识不下沉原生），
- * ENDED/预填时原生逐条自解 URL，锁屏连续切歌完全不等 WebView。
- * 仅 netease 源可被原生解析，其余源交给预解析窗口（setNextResources）覆盖。
+ * 只推元数据 + 登录态（cookie/会话种子由 JS 组装，易变知识不下沉原生），
+ * ENDED/预填时引擎逐条自解 URL，锁屏连续切歌完全不等 WebView。
+ * netease / kugou / qqmusic 可被引擎解析，其余源交给预解析窗口（setNextResources）覆盖。
  * @param candidates - 预载调度算出的候选列表（含首候选在内的接下来至多 QUEUE_SIZE 首）
  */
 export const pushNativeQueue = (candidates: CandidateResult[]): void => {
@@ -27,16 +28,25 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
     void window.api.player.clearNextResource?.().catch(() => {});
     return;
   }
-  const level = NETEASE_LEVEL[useSettingsStore().player.songLevel];
-  // 原生只能直接解析网易云；遇到其他音源就在此断开，不能过滤后把后面的网易云曲目提前
-  const firstUnsupported = candidates.findIndex(({ track }) => track.source !== "netease");
+  const songLevel = useSettingsStore().player.songLevel;
+  const level = NETEASE_LEVEL[songLevel];
+  // 引擎可解析的音源；遇到不支持的音源在此断开（其后的曲目已不可达，预解析窗口兜底）
+  const firstUnsupported = candidates.findIndex(
+    ({ track }) =>
+      track.source !== "netease" && track.source !== "kugou" && track.source !== "qqmusic",
+  );
   const items = candidates
     .slice(0, firstUnsupported < 0 ? QUEUE_SIZE : firstUnsupported)
     .map(({ track, index }) => ({
+      platform: track.source as "netease" | "kugou" | "qqmusic",
       trackId: track.id,
       songId: track.id,
       playIndex: index,
+      // netease 音质档位映射；kugou/qq 直接使用原始档位（引擎侧 kugou 有各自裁剪）
       level,
+      extId: track.extId ?? "",
+      albumId: (track.album?.id as string | undefined) ?? "",
+      mediaId: track.mediaId ?? "",
       title: track.title,
       artist: track.artists?.map((a) => a.name).join(" / ") ?? "",
       album: track.album?.name ?? "",
@@ -48,8 +58,8 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
     return;
   }
 
-  // 登录态经 cookie 透传给引擎（引擎的会话存储与 WebView 隔离，独立注册匿名会话）。
-  // 与 request.ts eapi 分支同源：补全设备指纹默认值，第二参传 "eapi" 参与 NMTID 缓存复用
+  // 登录态经 cookie/会话种子透传给引擎（引擎存储与 WebView 隔离）。
+  // netease 与 request.ts eapi 分支同源：补全设备指纹默认值，第二参传 "eapi" 参与 NMTID 缓存复用
   const cookies = processCookieObject(getNeteaseCookies(), "eapi");
   const header = {
     osver: cookies.osver || "",
@@ -69,7 +79,13 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
   window.api.player
     .setNextQueue?.({
       items,
-      resolve: { cookie: cookieObjToString(header) },
+      resolve: {
+        cookie: cookieObjToString(header),
+        sessions: {
+          kugou: getSessionCookies("kugou"),
+          qqmusic: getSessionCookies("qqmusic"),
+        },
+      },
     })
     .catch((err) => console.error("[nextQueue] setNextQueue failed:", err));
 };

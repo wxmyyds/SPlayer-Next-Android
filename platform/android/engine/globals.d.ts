@@ -11,6 +11,9 @@ declare function __nativeHttp(reqJson: string): Promise<string>;
 /** 取消在途请求（requestId 与请求时的传入值对应） */
 declare function __nativeHttpCancel(requestId: string): Promise<string>;
 
+/** crypto.subtle 原语（sha256/hmac/aes-cbc/aes-gcm/x25519），入参出参 JSON + base64 */
+declare function __nativeSubtle(reqJson: string): Promise<string>;
+
 /** 密码学安全随机字节（base64），n ≤ 65536 */
 declare function __nativeRandom(n: number): string;
 

@@ -100,9 +100,6 @@ struct EngineState {
     timers: Arc<TimerScheduler>,
 }
 
-/// 取消注册表（Phase 1 占位：HTTP 取消语义由 Kotlin 侧 Call 池承接）
-type CancelSet = Arc<Mutex<std::collections::HashSet<String>>>;
-
 /// 把 Rust 字符串写成 Java 字符串
 fn to_jstring(env: &mut JNIEnv, s: &str) -> jstring {
     match env.new_string(s) {
@@ -213,6 +210,160 @@ fn inflate(b64_data: &str, format: &str) -> Result<String, String> {
     Ok(B64.encode(&out))
 }
 
+/// JSON 帮助：b64 字段提取
+fn jget_b64(obj: &serde_json::Value, key: &str) -> Result<Vec<u8>, String> {
+    let s = obj
+        .get(key)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("missing {key}"))?;
+    B64.decode(s).map_err(|e| format!("bad {key} b64: {e}"))
+}
+
+fn jget_str<'a>(obj: &'a serde_json::Value, key: &str) -> Result<&'a str, String> {
+    obj.get(key)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("missing {key}"))
+}
+
+/// crypto.subtle 原语：sha256 / hmac-sha256 / aes-cbc / aes-gcm / x25519
+fn native_subtle(req_json: String) -> Result<String, rquickjs::Error> {
+    let out = subtle_dispatch(&req_json).map_err(native_err)?;
+    serde_json::to_string(&out).map_err(|e| native_err(&e.to_string()))
+}
+
+fn subtle_dispatch(req_json: &str) -> Result<serde_json::Value, String> {
+    let req: serde_json::Value = serde_json::from_str(req_json).map_err(|e| e.to_string())?;
+    let op = jget_str(&req, "op")?;
+    match op {
+        "sha256" => {
+            let data = jget_b64(&req, "data")?;
+            use sha2::Digest;
+            Ok(serde_json::json!({ "out": B64.encode(sha2::Sha256::digest(&data)) }))
+        }
+        "hmac-sha256" => {
+            use hmac::Mac;
+            let key = jget_b64(&req, "key")?;
+            let data = jget_b64(&req, "data")?;
+            let mut mac =
+                hmac::Hmac::<sha2::Sha256>::new_from_slice(&key).map_err(|e| e.to_string())?;
+            mac.update(&data);
+            Ok(serde_json::json!({ "out": B64.encode(mac.finalize().into_bytes()) }))
+        }
+        "aes-cbc-encrypt" | "aes-cbc-decrypt" => {
+            use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+            use cbc::cipher::block_padding::Pkcs7;
+            type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
+            type Aes192CbcEnc = cbc::Encryptor<aes::Aes192>;
+            type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
+            type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
+            type Aes192CbcDec = cbc::Decryptor<aes::Aes192>;
+            type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+            let key = jget_b64(&req, "key")?;
+            let iv = jget_b64(&req, "iv")?;
+            let data = jget_b64(&req, "data")?;
+            let encrypting = op.ends_with("encrypt");
+            let out: Vec<u8> = match (encrypting, key.len()) {
+                (true, 16) => Aes128CbcEnc::new_from_slices(&key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .encrypt_padded_vec_mut::<Pkcs7>(&data),
+                (true, 24) => Aes192CbcEnc::new_from_slices(&key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .encrypt_padded_vec_mut::<Pkcs7>(&data),
+                (true, 32) => Aes256CbcEnc::new_from_slices(&key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .encrypt_padded_vec_mut::<Pkcs7>(&data),
+                (false, 16) => Aes128CbcDec::new_from_slices(&key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .decrypt_padded_vec_mut::<Pkcs7>(&data)
+                    .map_err(|e| e.to_string())?,
+                (false, 24) => Aes192CbcDec::new_from_slices(&key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .decrypt_padded_vec_mut::<Pkcs7>(&data)
+                    .map_err(|e| e.to_string())?,
+                (false, 32) => Aes256CbcDec::new_from_slices(&key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .decrypt_padded_vec_mut::<Pkcs7>(&data)
+                    .map_err(|e| e.to_string())?,
+                _ => return Err(format!("unsupported aes-cbc key length {}", key.len())),
+            };
+            Ok(serde_json::json!({ "out": B64.encode(out) }))
+        }
+        "aes-gcm-encrypt" | "aes-gcm-decrypt" => {
+            use aes_gcm::aead::{Aead, KeyInit, Payload};
+            type Aes128GcmAlg = aes_gcm::Aes128Gcm;
+            type Aes192GcmAlg = aes_gcm::Aes192Gcm;
+            type Aes256GcmAlg = aes_gcm::Aes256Gcm;
+            let key = jget_b64(&req, "key")?;
+            let iv = jget_b64(&req, "iv")?;
+            let data = jget_b64(&req, "data")?;
+            let aad = match req.get("aad") {
+                Some(v) => Some(jget_b64(&serde_json::json!({ "aad": v }), "aad")?),
+                None => None,
+            };
+            // WebCrypto 语义：iv/aad 为 Payload 的 msg 部分，密文尾部带 16 字节 tag
+            let payload = match &aad {
+                Some(a) => Payload { msg: &data, aad: a },
+                None => Payload { msg: &data, aad: b"" },
+            };
+            let out: Vec<u8> = match (op.ends_with("encrypt"), key.len()) {
+                (true, 16) => Aes128GcmAlg::new_from_slice(&key)
+                    .map_err(|e| e.to_string())?
+                    .encrypt(iv.as_slice().into(), payload)
+                    .map_err(|e| e.to_string())?,
+                (true, 24) => Aes192GcmAlg::new_from_slice(&key)
+                    .map_err(|e| e.to_string())?
+                    .encrypt(iv.as_slice().into(), payload)
+                    .map_err(|e| e.to_string())?,
+                (true, 32) => Aes256GcmAlg::new_from_slice(&key)
+                    .map_err(|e| e.to_string())?
+                    .encrypt(iv.as_slice().into(), payload)
+                    .map_err(|e| e.to_string())?,
+                (false, 16) => Aes128GcmAlg::new_from_slice(&key)
+                    .map_err(|e| e.to_string())?
+                    .decrypt(iv.as_slice().into(), payload)
+                    .map_err(|e| e.to_string())?,
+                (false, 24) => Aes192GcmAlg::new_from_slice(&key)
+                    .map_err(|e| e.to_string())?
+                    .decrypt(iv.as_slice().into(), payload)
+                    .map_err(|e| e.to_string())?,
+                (false, 32) => Aes256GcmAlg::new_from_slice(&key)
+                    .map_err(|e| e.to_string())?
+                    .decrypt(iv.as_slice().into(), payload)
+                    .map_err(|e| e.to_string())?,
+                _ => return Err(format!("unsupported aes-gcm key length {}", key.len())),
+            };
+            Ok(serde_json::json!({ "out": B64.encode(out) }))
+        }
+        "x25519-keypair" => {
+            use x25519_dalek::{PublicKey, StaticSecret};
+            let mut seed = [0u8; 32];
+            getrandom::getrandom(&mut seed).map_err(|e| e.to_string())?;
+            let secret = StaticSecret::from(seed);
+            let public = PublicKey::from(&secret);
+            Ok(serde_json::json!({
+                "private": B64.encode(secret.to_bytes()),
+                "public": B64.encode(public.as_bytes()),
+            }))
+        }
+        "x25519-derive" => {
+            use x25519_dalek::{PublicKey, StaticSecret};
+            let private = jget_b64(&req, "private")?;
+            let peer = jget_b64(&req, "peer")?;
+            if private.len() != 32 || peer.len() != 32 {
+                return Err("x25519 keys must be 32 bytes".into());
+            }
+            let mut secret_bytes = [0u8; 32];
+            secret_bytes.copy_from_slice(&private);
+            let mut peer_bytes = [0u8; 32];
+            peer_bytes.copy_from_slice(&peer);
+            let secret = StaticSecret::from(secret_bytes);
+            let shared = secret.diffie_hellman(&PublicKey::from(peer_bytes));
+            Ok(serde_json::json!({ "out": B64.encode(shared.as_bytes()) }))
+        }
+        other => Err(format!("unsupported subtle op: {other}")),
+    }
+}
+
 /// native 错误（JS 侧收到 Error）
 fn native_err(message: &str) -> rquickjs::Error {
     rquickjs::Error::FromJs {
@@ -223,7 +374,7 @@ fn native_err(message: &str) -> rquickjs::Error {
 }
 
 /// 创建运行时并注入原生函数
-fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String> {
+fn build_engine(state: &mut EngineState) -> Result<(), String> {
     let timers = state.timers.clone();
     state.context.with(|ctx| {
         // 随机
@@ -307,15 +458,23 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
             )
             .map_err(|e| e.to_string())?;
 
-        // HTTP 取消：转发 Kotlin 注册表
-        let cancel = cancel.clone();
+        // HTTP 取消：透传 Kotlin Call 池
         ctx.globals()
             .set(
                 "__nativeHttpCancel",
                 Func::from(move |request_id: String| {
-                    cancel.lock().unwrap().insert(request_id);
+                    call_java_void(
+                        "httpCancelFromEngine",
+                        "(Ljava/lang/String;)Ljava/lang/String;",
+                        &[request_id.as_str()],
+                    );
                 }),
             )
+            .map_err(|e| e.to_string())?;
+
+        // crypto.subtle 原语
+        ctx.globals()
+            .set("__nativeSubtle", Func::from(native_subtle))
             .map_err(|e| e.to_string())?;
 
         Ok::<(), String>(())
@@ -397,8 +556,7 @@ pub extern "system" fn Java_com_wxmyyds_splayer_next_JsEngine_nativeCreate(
         context,
         timers: Arc::new(TimerScheduler::default()),
     };
-    let cancel: CancelSet = Arc::new(Mutex::new(std::collections::HashSet::new()));
-    if build_engine(&mut state, cancel).is_err() {
+    if build_engine(&mut state).is_err() {
         return 0;
     }
     Box::into_raw(Box::new(state)) as jlong

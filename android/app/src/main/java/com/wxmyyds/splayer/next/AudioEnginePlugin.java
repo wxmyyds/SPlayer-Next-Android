@@ -481,10 +481,14 @@ public class AudioEnginePlugin extends Plugin {
                     JSONObject raw = items.optJSONObject(i);
                     if (raw == null || raw.optString("songId", "").isEmpty()) continue;
                     JSObject entry = new JSObject();
+                    entry.put("platform", raw.optString("platform", "netease"));
                     entry.put("trackId", raw.optString("trackId", ""));
                     entry.put("songId", raw.optString("songId", ""));
                     entry.put("playIndex", raw.optInt("playIndex", -1));
                     entry.put("level", raw.optString("level", "exhigh"));
+                    entry.put("extId", raw.optString("extId", ""));
+                    entry.put("albumId", raw.optString("albumId", ""));
+                    entry.put("mediaId", raw.optString("mediaId", ""));
                     entry.put("title", raw.optString("title", ""));
                     entry.put("artist", raw.optString("artist", ""));
                     entry.put("album", raw.optString("album", ""));
@@ -501,22 +505,33 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     /**
-     * 经内嵌引擎解析（vendor 同源代码）：提取 url 字段。唯一解析路径，
+     * 经内嵌引擎解析（vendor 同源代码）：按平台组装请求并提取 url。唯一解析路径，
      * 失败抛出（含引擎不可用），由调用方 catch 走 resolveFails 重试语义
-     * @param ctx - JS 推入的解析上下文（取 cookie）
-     * @param songId - 歌曲 id
-     * @param level - 音质 level
+     * @param entry - 队列条目（platform/songId/level 及平台参数）
+     * @param ctx - JS 推入的解析上下文（cookie/会话种子）
      * @return 播放地址
      * @throws IOException 引擎不可用/解析失败/无 url
      */
-    private static String resolveViaEngine(JSONObject ctx, String songId, String level)
-            throws IOException {
-        String cookie = ctx.optString("cookie", "");
-        String result = JsEngineResolver.resolve(cookie, songId, level);
-        if (result == null) {
-            throw new IOException("engine resolve unavailable or failed");
-        }
+    private static String resolveViaEngine(JSONObject entry, JSONObject ctx) throws IOException {
         try {
+            org.json.JSONObject req = new org.json.JSONObject();
+            req.put("platform", entry.optString("platform", "netease"));
+            req.put("songId", entry.optString("songId", ""));
+            req.put("level", entry.optString("level", "exhigh"));
+            String cookie = ctx.optString("cookie", "");
+            if (!cookie.isEmpty()) req.put("cookie", cookie);
+            String extId = entry.optString("extId", "");
+            if (!extId.isEmpty()) req.put("extId", extId);
+            String albumId = entry.optString("albumId", "");
+            if (!albumId.isEmpty()) req.put("albumId", albumId);
+            String mediaId = entry.optString("mediaId", "");
+            if (!mediaId.isEmpty()) req.put("mediaId", mediaId);
+            org.json.JSONObject sessions = ctx.optJSONObject("sessions");
+            if (sessions != null) req.put("sessions", sessions);
+            String result = JsEngineResolver.resolve(req.toString());
+            if (result == null) {
+                throw new IOException("engine resolve unavailable or failed");
+            }
             String url = new org.json.JSONObject(result).optString("url", null);
             if (url == null) {
                 throw new IOException("engine resolve missing url");
@@ -525,7 +540,7 @@ public class AudioEnginePlugin extends Plugin {
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
-            throw new IOException("engine resolve parse failed", e);
+            throw new IOException("engine resolve failed", e);
         }
     }
 
@@ -552,7 +567,7 @@ public class AudioEnginePlugin extends Plugin {
                     try {
                         // 引擎单链路：vendor 同源代码在 rquickjs 里跑（WebView 冻结不受影响）；
                         // 失败抛出，走既有 resolveFails 重试 → 回落 JS 链语义
-                        final String url = resolveViaEngine(ctx, songId, level);
+                        final String url = resolveViaEngine(entry, ctx);
                         mainHandler.post(
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表

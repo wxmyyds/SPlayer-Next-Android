@@ -312,10 +312,14 @@ export interface PlayerApi {
   /** Android：登记原生自治切歌队列（元数据 + eapi 解析上下文，WebView 冻结时原生自解 URL） */
   setNextQueue?: (options: {
     items: {
+      platform: "netease" | "kugou" | "qqmusic";
       trackId: string;
       songId: string;
       playIndex: number;
       level: string;
+      extId: string;
+      albumId: string;
+      mediaId: string;
       title: string;
       artist: string;
       album: string;
@@ -324,6 +328,10 @@ export interface PlayerApi {
     }[];
     resolve: {
       cookie: string;
+      sessions?: {
+        kugou?: Record<string, string>;
+        qqmusic?: Record<string, string>;
+      };
     };
   }) => Promise<IpcResponse>;
   /** Android：清除原生登记的下一首资源（队列变化/预载作废时） */
