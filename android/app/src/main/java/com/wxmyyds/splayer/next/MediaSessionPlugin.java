@@ -68,7 +68,7 @@ public class MediaSessionPlugin extends Plugin {
     private Bitmap lastNotifiedArt;
     private String lastNotifiedStats = "";
     /** 上次速率：锁屏卡片按真实速率外推进度；纯进度推送不带 speed 时沿用 */
-    private float lastSpeed = 1.0f;
+    private static float lastSpeed = 1.0f;
 
 
     @Override
@@ -250,8 +250,8 @@ public class MediaSessionPlugin extends Plugin {
             boolean playing,
             long positionMs,
             long durationMs,
-            float speed,
-            String artworkUrl) {
+            String artworkUrl,
+            float speed) {
         // 进度节流调用只带播放态：不重建元数据，否则标题/封面被冲空
         MediaMetadata current =
                 sSession.getController() != null ? sSession.getController().getMetadata() : null;
