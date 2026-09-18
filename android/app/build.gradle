@@ -17,13 +17,18 @@ tasks.register('buildJsEngine') {
             println '[js-engine] cargo/cargo-ndk 不可用，跳过原生构建（运行时回落 Java 解析器）'
             return
         }
+        def ndkDir = System.getenv('ANDROID_NDK_HOME')
+        if (ndkDir == null || !new File(ndkDir).exists()) {
+            println "[js-engine] NDK 不可用，跳过原生构建（运行时回落 Java 解析器）"
+            return
+        }
         def outDir = layout.buildDirectory.dir('jsEngine').get().asFile
         engineAbis.each { target ->
             exec {
                 workingDir '../js-engine'
                 commandLine 'cargo', 'ndk', '--platform', '23', '-t', target, '-o',
                         '../app/src/main/jniLibs', '--', 'build', '--release'
-                environment 'ANDROID_NDK_HOME', android.ndkDirectory
+                environment 'ANDROID_NDK_HOME', ndkDir
                 environment 'CARGO_TARGET_DIR', outDir
             }
         }
@@ -39,6 +44,7 @@ preBuild.dependsOn buildJsEngine, buildEngineBundle
 android {
     namespace "com.wxmyyds.splayer.next"
     compileSdk rootProject.ext.compileSdkVersion
+    ndkVersion "26.3.11579264"
     defaultConfig {
         applicationId "com.wxmyyds.splayer.next"
         minSdkVersion rootProject.ext.minSdkVersion
