@@ -50,7 +50,9 @@ const SYNC_CONVERGE_RATE = 0.2;
 export const getCurrentTime = (): number => {
   if (!playing || seeking) return currentTimeMs;
   const elapsed = performance.now() - lastSyncAt;
-  return Math.min(currentTimeMs + elapsed * speed, totalDurationMs);
+  // 未知时长（0）不做上限截断，否则插值恒为 0，RAF 组件读到跳变
+  const projected = currentTimeMs + elapsed * speed;
+  return totalDurationMs > 0 ? Math.min(projected, totalDurationMs) : projected;
 };
 
 /** 获取总时长（毫秒） */

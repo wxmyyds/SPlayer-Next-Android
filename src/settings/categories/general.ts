@@ -21,17 +21,6 @@ const generalCategory: SettingCategory = {
       ],
     },
     {
-      id: "systemConfig",
-      items: [
-        {
-          key: "orpheusProtocol",
-          type: "switch",
-          binding: { store: "settings", path: "system.system.registerOrpheusProtocol" },
-          defaultValue: false,
-        },
-      ],
-    },
-    {
       id: "update",
       items: [
         {

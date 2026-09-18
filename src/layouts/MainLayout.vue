@@ -8,8 +8,6 @@ const route = useRoute();
 const status = useStatusStore();
 const settings = useSettingsStore();
 
-// 接入 orpheus 协议唤起与外部音频文件播放
-
 /** 有歌曲信息时显示播放栏 */
 const showPlayerBar = computed(() => !!useMediaStore().track);
 const { isPlayerExpanded } = storeToRefs(status);

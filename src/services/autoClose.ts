@@ -13,6 +13,8 @@ import * as player from "@/core/player";
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 /** "等本曲结束"模式下，时间到了但还没 pause —— 等 ended 事件触发 */
 let pendingPauseOnEnd = false;
+/** 到点时原生单曲循环已被临时拆掉（否则永不 ENDED），停播后按此恢复 */
+let repeatOneDisarmed = false;
 
 const stopTick = (): void => {
   if (tickHandle !== null) {
@@ -36,6 +38,12 @@ const tick = (): void => {
     if (autoClose.waitSongEnd) {
       // 等本曲播完再停；标记一下，由 onTrackEnded 钩子处理
       pendingPauseOnEnd = true;
+      // 单曲循环由 ExoPlayer REPEAT_MODE_ONE 原生接管，永不触发 ENDED，
+      // 到点须临时拆掉才能走到停播；停播后在 onTrackEnded/cancel 里恢复
+      if (status.repeatMode === "one") {
+        repeatOneDisarmed = true;
+        void window.api.player.setRepeatMode?.({ mode: "none" }).catch(() => {});
+      }
       // Android 原生自治链在 ENDED 时自解下一首并只发 autoAdvanced（不经过 JS ended），
       // 到点即拆掉原生队列/窗口，否则本曲终了后会被原生续播越过停播语义
       void window.api.player.clearNextResource?.().catch(() => {});
@@ -54,6 +62,8 @@ const tick = (): void => {
 export const start = (durationMin: number, waitSongEnd: boolean): void => {
   const status = useStatusStore();
   const safe = Math.max(1, Math.round(durationMin));
+  // 上一轮到点后遗留的原生循环拆除非终态，先恢复再开新一轮
+  restoreRepeatMode();
   status.autoClose.enable = true;
   status.autoClose.duration = safe;
   status.autoClose.endTime = Date.now() + safe * 60 * 1000;
@@ -67,6 +77,7 @@ export const start = (durationMin: number, waitSongEnd: boolean): void => {
 /** 取消定时关闭，重置状态 */
 export const cancel = (): void => {
   const status = useStatusStore();
+  restoreRepeatMode();
   status.autoClose.enable = false;
   status.autoClose.endTime = 0;
   status.autoClose.remainTime = 0;
@@ -86,6 +97,13 @@ export const onTrackEnded = (): boolean => {
   player.pause().catch(() => {});
   cancel();
   return true;
+};
+
+/** 停播收尾后恢复被临时拆掉的原生单曲循环 */
+const restoreRepeatMode = (): void => {
+  if (!repeatOneDisarmed) return;
+  repeatOneDisarmed = false;
+  void window.api.player.setRepeatMode?.({ mode: useStatusStore().repeatMode }).catch(() => {});
 };
 
 /** 是否已到点且设置为“等本曲结束”停播（原生自治切歌前须排除） */

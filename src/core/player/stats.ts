@@ -59,6 +59,14 @@ const finalize = (): void => {
  * 歌曲自然播完时调用
  * @param restart - 单曲循环:结算后立即为同一首开新会话,使每圈各成一行
  */
+/**
+ * 丢弃当前会话不落记录：切歌失败/取消时曲目从未真正出声，
+ * 不 discard 会把乐观换曲后的解析耗时计成收听（>=5s 即虚记一条历史）
+ */
+export const discard = (): void => {
+  session = null;
+};
+
 export const onTrackEnded = (restart: boolean): void => {
   finalize();
   if (!restart) return;

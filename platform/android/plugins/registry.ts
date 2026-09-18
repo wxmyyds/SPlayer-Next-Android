@@ -193,6 +193,7 @@ const start = async (runtime: RuntimeState): Promise<void> => {
 
 export const ensureInitialized = async (): Promise<void> => {
   if (initialized) return;
+  // 拒绝后清掉缓存 promise：否则 IndexedDB 一次打开失败就永久锁死插件系统
   initPromise ??= (async () => {
     const [manifests, enabled] = await Promise.all([readManifests(), readEnabled()]);
     for (const [id, manifest] of Object.entries(manifests)) {
@@ -223,7 +224,13 @@ export const ensureInitialized = async (): Promise<void> => {
     void Promise.all(Array.from(runtimes.values()).map((item) => checkUpdate(item.manifest.id)));
     ensureEventBridge();
   })();
-  await initPromise;
+  try {
+    await initPromise;
+  } catch (err) {
+    // 拒绝后清缓存，下次调用重新初始化，否则一次存储故障永久锁死插件系统
+    initPromise = null;
+    throw err;
+  }
 };
 
 export const listInfo = async (): Promise<PluginInfo[]> => {

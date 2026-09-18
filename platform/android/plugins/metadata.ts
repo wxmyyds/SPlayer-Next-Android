@@ -1,6 +1,7 @@
 /** 插件脚本元数据解析与插件歌词/封面回退匹配。 */
 
 import * as pako from "pako";
+import { bothContains, normalizeText } from "@shared/utils/textMatch";
 import type { Track } from "@shared/types/player";
 import type {
   MusicLyricRes,
@@ -114,12 +115,6 @@ export const parseScript = (raw: string): PluginManifest => {
 
 const PLATFORM_SOURCE: Record<string, string> = { netease: "wy", qqmusic: "tx", kugou: "kg" };
 
-const normalize = (text?: string | null): string =>
-  (text ?? "").toLowerCase().replace(/[、&;，,/|()·・\s\-_'"`~!?？！.。]+/g, "");
-
-const bothContains = (left: string, right: string): boolean =>
-  left.length > 0 && right.length > 0 && (left.includes(right) || right.includes(left));
-
 const durationClose = (left?: number, right?: number, tolerance = 5000): boolean => {
   if (!left || !right) return false;
   return Math.abs(left - right) <= tolerance;
@@ -134,10 +129,10 @@ const artistMatches = (
   candidate: string,
   artists: string[],
 ): { exact: boolean; contains: boolean } => {
-  const candidateName = normalize(candidate);
+  const candidateName = normalizeText(candidate);
   const parts = candidateName
     .split(/[\/，、]/)
-    .map(normalize)
+    .map(normalizeText)
     .filter(Boolean);
   if (artists.includes(candidateName)) return { exact: true, contains: false };
   const contains = artists.some(
@@ -152,14 +147,14 @@ const pickBestCandidate = <E>(
   candidates: { name: string; artist: string; album?: string; duration?: number; extra: E }[],
   track: Track,
 ): E | null => {
-  const trackName = normalize(track.title);
-  const trackArtists = (track.artists ?? []).map((artist) => normalize(artist.name));
-  const trackAlbum = normalize(track.album?.name);
+  const trackName = normalizeText(track.title);
+  const trackArtists = (track.artists ?? []).map((artist) => normalizeText(artist.name));
+  const trackAlbum = normalizeText(track.album?.name);
   const trackDuration = track.duration;
   let best: { score: number; extra: E } | null = null;
   for (const candidate of candidates) {
-    const candidateName = normalize(candidate.name);
-    const candidateAlbum = normalize(candidate.album);
+    const candidateName = normalizeText(candidate.name);
+    const candidateAlbum = normalizeText(candidate.album);
     const exact = candidateName !== "" && candidateName === trackName;
     if (!exact) {
       if (!bothContains(candidateName, trackName)) continue;

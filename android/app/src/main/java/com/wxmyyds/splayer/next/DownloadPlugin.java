@@ -1,6 +1,7 @@
 package com.wxmyyds.splayer.next;
 
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
@@ -92,6 +93,56 @@ public class DownloadPlugin extends Plugin {
      * 下载音频到公共媒体库
      * @param call - { taskId, url, displayName, ext, title, artist, album, declaredSize }
      */
+    /**
+     * 删除已完成的下载文件（兑现"删除记录并删除本地文件"语义）
+     * @param path saveAudio 返回的 filePath，只允许下载目录内的文件
+     */
+    @PluginMethod
+    public void deleteAudio(PluginCall call) {
+        String path = call.getString("path", "");
+        if (path.isEmpty()) {
+            call.reject("path required");
+            return;
+        }
+        Context ctx = getContext();
+        pool.execute(() -> {
+            try {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    String base = Environment.getExternalStorageDirectory().getAbsolutePath()
+                            + "/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/";
+                    if (!path.startsWith(base)) {
+                        call.reject("path outside download dir");
+                        return;
+                    }
+                    String displayName = new File(path).getName();
+                    int deleted = ctx.getContentResolver().delete(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            MediaStore.Audio.Media.DISPLAY_NAME + "=? AND "
+                                    + MediaStore.Audio.Media.RELATIVE_PATH + "=?",
+                            new String[] {
+                                displayName,
+                                Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR
+                            });
+                    if (deleted == 0) {
+                        // MediaStore 行已不在（被系统/用户清理）时直接删残留文件
+                        new File(path).delete();
+                    }
+                } else {
+                    File dir = legacyMusicDir();
+                    File target = new File(path);
+                    if (!target.getCanonicalPath().startsWith(dir.getCanonicalPath())) {
+                        call.reject("path outside download dir");
+                        return;
+                    }
+                    target.delete();
+                }
+                call.resolve();
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
     @PluginMethod
     public void saveAudio(PluginCall call) {
         String taskId = call.getString("taskId", "");
@@ -153,6 +204,7 @@ public class DownloadPlugin extends Plugin {
                     call.resolve();
                     return;
                 }
+                String path;
                 if (contentUri != null) {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Audio.Media.IS_PENDING, 0);
@@ -160,14 +212,29 @@ public class DownloadPlugin extends Plugin {
                     if (!artist.isEmpty()) values.put(MediaStore.Audio.Media.ARTIST, artist);
                     if (!album.isEmpty()) values.put(MediaStore.Audio.Media.ALBUM, album);
                     ctx.getContentResolver().update(contentUri, values, null, null);
-                } else if (legacyFile != null) {
+                    // 同 RELATIVE_PATH 同 DISPLAY_NAME 时 MediaStore 自动改存 "xxx (1).ext"，
+                    // 必须读回实际文件名拼路径，否则 filePath 指向不存在的文件
+                    String actualName = name;
+                    try (Cursor c = ctx.getContentResolver().query(
+                            contentUri,
+                            new String[] {MediaStore.Audio.Media.DISPLAY_NAME},
+                            null,
+                            null,
+                            null)) {
+                        if (c != null && c.moveToFirst()) {
+                            String n = c.getString(0);
+                            if (n != null && !n.isEmpty()) actualName = n;
+                        }
+                    } catch (Exception ignored) {
+                        // 读回失败时退回原始名（同名冲突场景退化）
+                    }
+                    path = Environment.getExternalStorageDirectory().getAbsolutePath()
+                            + "/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/" + actualName;
+                } else {
                     legacyFinal = legacyConflictFreeTarget(name);
                     if (!legacyFile.renameTo(legacyFinal)) throw new IOException("rename failed");
+                    path = legacyFinal != null ? legacyFinal.getAbsolutePath() : "";
                 }
-                String path = contentUri != null
-                        ? Environment.getExternalStorageDirectory().getAbsolutePath()
-                                + "/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/" + name
-                        : (legacyFinal != null ? legacyFinal.getAbsolutePath() : "");
                 JSObject ret = new JSObject();
                 ret.put("taskId", taskId);
                 ret.put("filePath", path);

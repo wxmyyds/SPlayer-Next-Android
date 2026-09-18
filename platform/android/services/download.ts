@@ -29,6 +29,8 @@ interface DownloadSaverPlugin {
     declaredSize?: number;
   }): Promise<void>;
   saveText(options: { name: string; content: string }): Promise<void>;
+  /** 删除已完成的下载文件（Java 侧限定只能删下载目录内的路径） */
+  deleteAudio(options: { path: string }): Promise<void>;
   cancel(options: { taskId: string }): Promise<void>;
   getDir(): Promise<{ path: string }>;
   addListener(
@@ -111,6 +113,9 @@ const displayName = (task: AndroidDownloadTask): string => {
   return raw.replaceAll(/[\\/:*?"<>|]/g, "_").trim() || task.taskId;
 };
 
+/** 在途 URL 解析任务：pump 会被 start/cancel/retry 反复触发，去重防 resolver 重复执行 */
+const resolvingIds = new Set<string>();
+
 /** 启动当前队首任务的传输（FIFO） */
 const pump = (): void => {
   if (activeTaskId) return;
@@ -119,6 +124,9 @@ const pump = (): void => {
     .sort((a, b) => a.createdAt - b.createdAt)[0];
   if (!head) return;
   if (!head.url) {
+    // 解析已在途：等 submitResolution/failResolution 回来再 pump
+    if (resolvingIds.has(head.taskId)) return;
+    resolvingIds.add(head.taskId);
     // 轮到下载但缺少 URL：广播解析请求（渲染层 resolver 异步回传 submitResolution）
     const payload: DownloadResolvePayload = {
       taskId: head.taskId,
@@ -302,6 +310,7 @@ export const createDownloadApi = (): DownloadApi => {
       return result;
     },
     remove: async (taskId) => {
+      resolvingIds.delete(taskId);
       const task = tasks.find((item) => item.taskId === taskId);
       if (task && isActive(task.status)) {
         if (activeTaskId === taskId) {
@@ -310,6 +319,10 @@ export const createDownloadApi = (): DownloadApi => {
         }
         task.status = "canceled";
         pump();
+      }
+      // 兑现"删除已下载的本地文件"：仅已完成的任务有 filePath
+      if (task?.status === "done" && task.filePath) {
+        void DownloadSaver.deleteAudio({ path: task.filePath }).catch(() => {});
       }
       tasks = tasks.filter((item) => item.taskId !== taskId);
       persist();
@@ -335,6 +348,7 @@ export const createDownloadApi = (): DownloadApi => {
       }
     },
     submitResolution: async (taskId, res: DownloadResolution) => {
+      resolvingIds.delete(taskId);
       const task = tasks.find((item) => item.taskId === taskId);
       if (!task || task.status !== "queued") return;
       task.url = res.url;
@@ -346,6 +360,7 @@ export const createDownloadApi = (): DownloadApi => {
       pump();
     },
     failResolution: async (taskId) => {
+      resolvingIds.delete(taskId);
       const task = tasks.find((item) => item.taskId === taskId);
       if (!task || task.status !== "queued") return;
       task.status = "failed";

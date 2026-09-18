@@ -216,14 +216,8 @@ export type PlayerEvent =
   | { type: "pause" }
   | { type: "next" }
   | { type: "prev" }
-  | { type: "playTrack"; data: { track: Track } }
-  | { type: "setShuffle"; data: { mode: ShuffleMode } }
-  | { type: "setRepeat"; data: { mode: RepeatMode } }
-  | { type: "addToQueue"; data: { tracks: Track[]; position: "next" | "end" } }
-  | { type: "toggleLike" }
   | { type: "fftData"; data: FftData }
-  | { type: "error"; error: string }
-  | { type: "deviceChanged"; data: { defaultDevice: string | null } };
+  | { type: "error"; error: string };
 
 /** FFT 数据 */
 export interface FftData {

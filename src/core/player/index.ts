@@ -25,7 +25,7 @@ import {
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
 } from "@/services/nextTrackPreloader";
-import { installPlayStats } from "./stats";
+import { discard as discardPlayStats, installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
 import { extractColorFromUrl } from "@/utils/color";
 import { handleError, isSkippableError } from "@/utils/errors";
@@ -80,9 +80,11 @@ const SKIP_ON_ERROR_DELAY_MS = 1000;
  */
 const skipOnFailure = async (myToken: number, getCurrentToken: () => number): Promise<void> => {
   consecutiveFailures++;
+  // FM 模式队列长度无意义（曲池动态拉取），仅受连续失败上限约束
+  const fmMode = useStatusStore().fmMode;
   if (
     consecutiveFailures >= MAX_CONSECUTIVE_FAILURES ||
-    consecutiveFailures >= queue.queueLength.value
+    (!fmMode && consecutiveFailures >= queue.queueLength.value)
   ) {
     const reachedMax = consecutiveFailures >= MAX_CONSECUTIVE_FAILURES;
     consecutiveFailures = 0;
@@ -131,6 +133,8 @@ export const load = async (
 ): Promise<LoadOutcome> => {
   const status = useStatusStore();
   const token = ++loadToken;
+  // 快照发起时的当前曲：慢解析期间用户已乐观切到下一曲时，迟到结果不得合并进新曲
+  const expectedTrackId = useMediaStore().track?.id ?? null;
   // 切歌即清空 AB 循环（per-song 状态）
   abLoop.reset();
   // 清除上一次 seek 残留
@@ -150,8 +154,9 @@ export const load = async (
       meta,
       context: options.context,
     });
-    // 竞态保护
+    // 竞态保护：loadToken 防更新的 load 调用；trackId 防乐观 setTrack 后旧曲迟到合并
     if (token !== loadToken) return { ok: false };
+    if (expectedTrackId && useMediaStore().track?.id !== expectedTrackId) return { ok: false };
     if (result.success && result.data) {
       const { detail, mediaInfo } = result.data;
       consecutiveFailures = 0;
@@ -314,18 +319,23 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
       false,
       preloaded?.source,
     );
-    if (loaded.status === "cancelled") return;
+    if (loaded.status === "cancelled") {
+      discardPlayStats();
+      return;
+    }
     if (loaded.status === "unresolved") {
       const status = useStatusStore();
       status.currentSource = null;
       status.state = "idle";
       void window.api.player.stop();
       useMediaStore().setLyric(null, null);
+      discardPlayStats();
       shouldSkip = true;
     } else {
       const { result, resolved } = loaded;
       if (!result.ok && result.error && isSkippableError(result.error)) {
         handleError(result.error);
+        discardPlayStats();
         shouldSkip = true;
       } else if (result.ok) {
         // 用户主动触发的成功播放记入历史；initPlayer 的恢复路径走 load() 不经此处
@@ -336,6 +346,7 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
         scheduleNextTrackPreload();
       } else if (result.error) {
         handleError(result.error);
+        discardPlayStats();
       }
     }
   } finally {
@@ -450,6 +461,12 @@ export const play = async (): Promise<void> => {
     if (useSettingsStore().system.player.rememberLastTrack && memoryPos > 0) {
       await seek(memoryPos);
     }
+    return;
+  }
+  // 无当前曲（清空队列/FM 空池后按播放键）：引擎 IDLE 上 play() 会静默成功造成假播放
+  if (!status.currentTrack) {
+    status.state = "idle";
+    playback.setPlaying(false);
     return;
   }
   const prev = status.state;
@@ -827,6 +844,8 @@ export const nextTrack = async (): Promise<void> => {
   if (status.fmMode) {
     const next = await fm.next();
     if (next) await loadTrack(next);
+    // 曲池耗尽/拉取失败：走队列结束收尾，否则引擎已 ENDED 而 UI 卡在 playing
+    else await onQueueEnded();
     return;
   }
   if (queue.queueLength.value === 0) return;
@@ -930,6 +949,8 @@ export const syncFromNativeAdvance = async (
   const media = useMediaStore();
   media.setTrack(track);
   media.setPlaybackContext(item?.context);
+  // 对齐 loadTrack：按曲目恢复歌词偏移，否则上一曲偏移残留/本曲偏移丢失
+  status.lyricOffsetMs = useSettingsStore().system.player.lyricOffsets[track.id] ?? 0;
   resetForLoad(track.duration ?? 0);
   // 对齐 load()：清掉上一首的 seek 残留，否则新曲 position 推送被旧 seekTarget 持续丢弃
   // （暂停态锁屏 seek 后锁屏切歌：进度/歌词冻结直到播进旧目标附近）

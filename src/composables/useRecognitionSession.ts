@@ -49,8 +49,8 @@ export const useRecognitionSession = () => {
   const candidates = ref<RecognitionCandidate[]>([]);
   /** error 阶段的错误信息 */
   const error = ref<RecognitionError | null>(null);
-  /** 本次会话的采集来源 */
-  const source = ref<RecognitionSource>("system");
+  /** 本次会话的采集来源：Android 无系统内录，麦克风为唯一来源 */
+  const source = ref<RecognitionSource>("microphone");
 
   let unsubscribe: (() => void) | null = null;
   let abort = new AbortController();

@@ -348,6 +348,10 @@ public class AudioEnginePlugin extends Plugin {
                 ? MediaItem.fromUri(source)
                 : new MediaItem.Builder().setMediaId(trackId).setUri(source).build();
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             // JS 主动 load 新曲：待播项与队列已过时，清空（预载/队列推送后会重新登记）
             resolveGeneration++;
             pendingMeta.clear();
@@ -597,6 +601,10 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void play(PluginCall call) {
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             player.play();
             call.resolve();
         });
@@ -605,6 +613,10 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void pause(PluginCall call) {
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             player.pause();
             // BUFFERING 中暂停不会触发 onIsPlayingChanged（isPlaying 本就 false），
             // 显式补发快照，JS 侧停滞看门狗据此解除武装（否则暂停后仍可能误报卡流）
@@ -623,6 +635,10 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             resolveGeneration++;
             pendingQueue.clear();
             resolveCtx = null;
@@ -637,6 +653,10 @@ public class AudioEnginePlugin extends Plugin {
     public void seek(PluginCall call) {
         long position = optLong(call, "position", 0L);
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             // 歌曲播完停在末尾后拖动：ExoPlayer 不会自动恢复播放，主动续播
             boolean wasEnded = player.getPlaybackState() == Player.STATE_ENDED;
             player.seekTo(position);
@@ -651,6 +671,10 @@ public class AudioEnginePlugin extends Plugin {
         float vol = optFloat(call, "volume", 1.0f);
         volume = Math.max(0, Math.min(1, vol));
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             player.setVolume(volume);
             call.resolve();
         });
@@ -679,9 +703,11 @@ public class AudioEnginePlugin extends Plugin {
 
     private void applyPlaybackParameters() {
         float pitch = pitchSync ? 1.0f : speed;
-        mainHandler.post(() -> {
-            player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
-        });
+        mainHandler.post(
+                () -> {
+                    if (player == null) return;
+                    player.setPlaybackParameters(new PlaybackParameters(speed, pitch));
+                });
     }
 
     @PluginMethod
@@ -790,6 +816,10 @@ public class AudioEnginePlugin extends Plugin {
         boolean enabled = call.getBoolean("enabled", true);
         // 拔出设备暂停由 ExoPlayer handleAudioBecomingNoisy 承担
         mainHandler.post(() -> {
+            if (player == null) {
+                call.resolve();
+                return;
+            }
             player.setHandleAudioBecomingNoisy(enabled);
             call.resolve();
         });
@@ -890,6 +920,8 @@ public class AudioEnginePlugin extends Plugin {
         releaseAudioEffects();
         releaseVisualizer();
         releaseSwitchWakeLock();
+        // 静态实例持有插件→Activity 上下文，不清会泄漏到下次 load；静态消费方均已判空
+        sInstance = null;
         super.handleOnDestroy();
     }
 

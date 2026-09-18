@@ -20,21 +20,26 @@ public class MediaActionReceiver extends BroadcastReceiver {
         String key = intent.getStringExtra("key");
         if (key == null) return;
         MediaController controller = new MediaController(context, session.getSessionToken());
-        switch (key) {
-            case "play":
-                controller.getTransportControls().play();
-                break;
-            case "pause":
-                controller.getTransportControls().pause();
-                break;
-            case "next":
-                controller.getTransportControls().skipToNext();
-                break;
-            case "prev":
-                controller.getTransportControls().skipToPrevious();
-                break;
-            default:
-                break;
+        try {
+            switch (key) {
+                case "play":
+                    controller.getTransportControls().play();
+                    break;
+                case "pause":
+                    controller.getTransportControls().pause();
+                    break;
+                case "next":
+                    controller.getTransportControls().skipToNext();
+                    break;
+                case "prev":
+                    controller.getTransportControls().skipToPrevious();
+                    break;
+                default:
+                    break;
+            }
+        } finally {
+            // 不释放会累积持有 binder 代理并注册进 session 的 controller
+            controller.release();
         }
     }
 }

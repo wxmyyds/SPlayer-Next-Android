@@ -186,7 +186,6 @@
     "plus": "+{n}s",
     "warningBLessThanA": "B must be later than A; loop disabled"
   },
-  "uiZoom": {},
   "nav": {
     "home": "Home",
     "library": "Library",
@@ -741,9 +740,6 @@
       "lyricAMLLOptimize": "Lyric Optimization",
       "lyricSpring": "Spring Animation",
       "lyricLayout": "Layout & Opacity",
-      "desktopLyric": "Desktop Lyric",
-      "dynamicIsland": "Dynamic Island Lyric",
-      "taskbarLyric": "Taskbar Lyric",
       "theme": "Theme",
       "appearanceStyle": "Appearance Style",
       "layout": "Layout",
@@ -1379,10 +1375,7 @@
         "lyricChinese": "Chinese lyrics",
         "lyricJapanese": "Japanese lyrics",
         "lyricKorean": "Korean lyrics",
-        "lyricLatin": "English / Latin-script lyrics",
-        "desktopLyric": "desktop lyric",
-        "dynamicIsland": "dynamic island lyric",
-        "taskbarLyric": "taskbar lyric"
+        "lyricLatin": "English / Latin-script lyrics"
       }
     },
     "systemMediaControls": {
@@ -1457,14 +1450,6 @@
         "cookieInvalid": "Invalid Cookie, please check and retry"
       }
     },
-    "rememberWindowState": {
-      "label": "Remember Window State",
-      "description": "Restore window size, position and maximized state on next launch"
-    },
-    "borderlessWindow": {
-      "label": "Enable Borderless Window",
-      "description": "Disable to use the system native window frame and title bar"
-    },
     "autoCheckUpdate": {
       "label": "Auto Check for Updates",
       "description": "Check for new versions in the background on launch and periodically"
@@ -1484,14 +1469,6 @@
     "showPerformanceMonitor": {
       "label": "Performance Monitor",
       "description": "Floating widget showing FPS / frame time / memory. Click to switch"
-    },
-    "taskbarProgress": {
-      "label": "Taskbar Progress",
-      "description": "Show playback progress on the taskbar icon"
-    },
-    "taskbarThumbnailCover": {
-      "label": "Taskbar Cover Preview",
-      "description": "Use the album cover as the window preview when hovering the taskbar; disable to show the system's live window"
     },
     "networkProxyProtocol": {
       "label": "Network Proxy",
@@ -1525,10 +1502,6 @@
       "description": "Re-login is required after switching",
       "standard": "Standard",
       "concept": "Concept"
-    },
-    "orpheusProtocol": {
-      "label": "Wake this app via the Orpheus protocol",
-      "description": "This protocol is normally used by the web player to launch the official client; enabling it may prevent the official client from being launched"
     },
     "streamingEnabled": {
       "label": "Enable streaming",
@@ -1613,22 +1586,9 @@
       "injected": "Configured",
       "injectSuccess": "Configured successfully"
     },
-    "closeAction": {
-      "label": "Close Button Action",
-      "description": "What to do when the title bar close button is clicked",
-      "quit": "Quit application",
-      "hide": "Minimize to tray"
-    },
     "rememberCloseChoice": {
       "label": "Remember Close Choice",
       "description": "When off, asks every time the close button is clicked"
-    },
-    "closeDialog": {
-      "title": "Close Window",
-      "description": "Choose what to do this time",
-      "remember": "Remember my choice, don't ask again",
-      "quit": "Quit application",
-      "hide": "Minimize to tray"
     },
     "storageManager": {
       "label": "Data Management",

@@ -67,6 +67,8 @@ public class MediaSessionPlugin extends Plugin {
     private boolean lastNotifiedPlaying = false;
     private Bitmap lastNotifiedArt;
     private String lastNotifiedStats = "";
+    /** 上次速率：锁屏卡片按真实速率外推进度；纯进度推送不带 speed 时沿用 */
+    private float lastSpeed = 1.0f;
 
 
     @Override
@@ -163,6 +165,9 @@ public class MediaSessionPlugin extends Plugin {
         boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
         long positionMs = readLong(call, "positionMs", 0);
         long durationMs = readLong(call, "durationMs", 0);
+        // 缺省沿用上次速率（playingChanged 才带 speed）
+        float speed = call.has("speed") ? (float) call.getDouble("speed") : lastSpeed;
+        lastSpeed = Math.max(0.5f, Math.min(2.0f, speed));
         String artworkUrl = call.getString("artworkUrl", null);
         Activity activity = getActivity();
         if (activity == null) {
@@ -265,7 +270,7 @@ public class MediaSessionPlugin extends Plugin {
                             .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
                             .build());
         }
-        publishState(playing, positionMs, durationMs, lastArt);
+        publishState(playing, positionMs, durationMs, lastArt, speed);
         if (artworkUrl != null && !artworkUrl.isEmpty()) {
             pendingArtUrl = artworkUrl;
             loadArtworkAsync(artworkUrl, title, artist, album, playing, positionMs, durationMs);
@@ -273,7 +278,7 @@ public class MediaSessionPlugin extends Plugin {
     }
 
     private void publishState(
-            boolean playing, long positionMs, long durationMs, Bitmap art) {
+            boolean playing, long positionMs, long durationMs, Bitmap art, float speed) {
         int state =
                 playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED;
         long actions =
@@ -285,7 +290,7 @@ public class MediaSessionPlugin extends Plugin {
         PlaybackState.Builder builder =
                 new PlaybackState.Builder()
                         .setActions(actions)
-                        .setState(state, Math.max(0, positionMs), 1.0f);
+                        .setState(state, Math.max(0, positionMs), Math.max(0.5f, Math.min(2.0f, speed)));
         sSession.setPlaybackState(builder.build());
         // 系统媒体卡片进度由 PlaybackState 实时推算，纯进度推送不重建通知；
         // 200ms 级 notify 会被系统节流，表现为通知栏控件“一会有一会没”
@@ -375,7 +380,7 @@ public class MediaSessionPlugin extends Plugin {
                                         meta.putBitmap(MediaMetadata.METADATA_KEY_ART, art);
                                         sSession.setMetadata(meta.build());
                                         lastArt = art;
-                                        publishState(playing, positionMs, durationMs, art);
+                                        publishState(playing, positionMs, durationMs, art, lastSpeed);
                                     });
                 });
     }

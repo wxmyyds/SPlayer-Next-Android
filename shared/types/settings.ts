@@ -481,7 +481,6 @@ export interface SystemConfig {
     /** 网络代理配置 */
     networkProxy: NetworkProxySettings;
     /** 注册为 Orpheus 协议处理程序，抢占网页端「用客户端打开」 */
-    registerOrpheusProtocol: boolean;
   };
   /** 窗口几何状态（运行时自动记录，非用户主动配置） */
   windowStates: WindowStates;

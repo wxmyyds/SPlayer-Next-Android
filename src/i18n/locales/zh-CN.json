@@ -186,7 +186,6 @@
     "plus": "+{n}s",
     "warningBLessThanA": "B 点必须晚于 A 点，循环未启用"
   },
-  "uiZoom": {},
   "nav": {
     "home": "首页",
     "library": "音乐库",
@@ -741,9 +740,6 @@
       "lyricAMLLOptimize": "歌词优化",
       "lyricSpring": "弹簧动画",
       "lyricLayout": "布局与透明度",
-      "desktopLyric": "桌面歌词",
-      "dynamicIsland": "灵动岛歌词",
-      "taskbarLyric": "任务栏歌词",
       "theme": "主题与颜色",
       "appearanceStyle": "外观风格",
       "layout": "布局",
@@ -1379,10 +1375,7 @@
         "lyricChinese": "中文歌词",
         "lyricJapanese": "日语歌词",
         "lyricKorean": "韩语歌词",
-        "lyricLatin": "英语 / 拉丁文字歌词",
-        "desktopLyric": "桌面歌词",
-        "dynamicIsland": "灵动岛歌词",
-        "taskbarLyric": "任务栏歌词"
+        "lyricLatin": "英语 / 拉丁文字歌词"
       }
     },
     "systemMediaControls": {
@@ -1457,14 +1450,6 @@
         "cookieInvalid": "Cookie 无效，请检查后重试"
       }
     },
-    "rememberWindowState": {
-      "label": "记忆窗口状态",
-      "description": "下次启动时恢复窗口的大小、位置和最大化状态"
-    },
-    "borderlessWindow": {
-      "label": "开启无边框窗口",
-      "description": "关闭后使用系统原生窗口边框和标题栏"
-    },
     "autoCheckUpdate": {
       "label": "自动检查更新",
       "description": "启动后及定时在后台检查新版本"
@@ -1484,14 +1469,6 @@
     "showPerformanceMonitor": {
       "label": "性能监视器",
       "description": "悬浮显示 FPS / 帧时间 / 内存占用，点击切换指标"
-    },
-    "taskbarProgress": {
-      "label": "任务栏播放进度",
-      "description": "在任务栏图标上显示当前播放进度"
-    },
-    "taskbarThumbnailCover": {
-      "label": "任务栏封面预览",
-      "description": "悬停任务栏时以专辑封面作为窗口预览，关闭则显示系统默认的实时窗口"
     },
     "networkProxyProtocol": {
       "label": "网络代理",
@@ -1525,10 +1502,6 @@
       "description": "切换后需重新扫码登录",
       "standard": "标准版",
       "concept": "概念版"
-    },
-    "orpheusProtocol": {
-      "label": "通过 Orpheus 协议唤起本应用",
-      "description": "该协议通常用于官方网页端唤起官方客户端，启用后可能导致官方客户端无法被唤起"
     },
     "streamingEnabled": {
       "label": "启用流媒体",
@@ -1613,22 +1586,9 @@
       "injected": "已配置",
       "injectSuccess": "配置成功"
     },
-    "closeAction": {
-      "label": "关闭按钮行为",
-      "description": "点击标题栏关闭按钮时执行的操作",
-      "quit": "退出应用",
-      "hide": "最小化到托盘"
-    },
     "rememberCloseChoice": {
       "label": "记忆关闭选择",
       "description": "关闭此项后，每次点击关闭都会弹窗询问"
-    },
-    "closeDialog": {
-      "title": "关闭窗口",
-      "description": "选择本次关闭要执行的操作",
-      "remember": "记住我的选择，不再询问",
-      "quit": "退出应用",
-      "hide": "最小化到托盘"
     },
     "storageManager": {
       "label": "数据管理",

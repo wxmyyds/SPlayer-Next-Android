@@ -32,6 +32,8 @@ interface MediaBridgePlugin {
     playing?: boolean;
     positionMs?: number;
     durationMs?: number;
+    /** 播放速率：锁屏媒体卡片按它外推进度（缺省按 1x） */
+    speed?: number;
     stopped?: boolean;
   }) => Promise<void>;
 }
@@ -220,12 +222,14 @@ const publishState = (
   state: "playing" | "paused" | "none",
   positionMs?: number,
   durationMs?: number,
+  speed?: number,
 ): void => {
   try {
     void MediaBridge.updateState({
       playing: state === "playing",
       positionMs,
       durationMs,
+      speed,
       stopped: state === "none" || undefined,
     }).catch(() => {});
   } catch {
@@ -321,7 +325,12 @@ const wireEngine = (): void => {
         enginePlaying = !!data.data?.playing;
         if (enginePlaying || data.data?.playWhenReady) ensureStallWatchdog();
         else stopStallWatchdog();
-        publishState(enginePlaying ? "playing" : "paused", lastPositionMs, lastDurationMs);
+        publishState(
+          enginePlaying ? "playing" : "paused",
+          lastPositionMs,
+          lastDurationMs,
+          typeof data.data?.speed === "number" ? data.data.speed : undefined,
+        );
         break;
       }
     }
@@ -360,7 +369,9 @@ export const nativeAudioPlayer: PlayerApi = {
       wireEngine();
       publishMetadata(options?.meta);
       enginePlaying = !!options?.autoPlay;
-      ensureStallWatchdog();
+      // 暂停加载无 position 推进，武装后必误报；播放开始时由 playingChanged 重新武装
+      if (options?.autoPlay) ensureStallWatchdog();
+      else stopStallWatchdog();
       lastPositionMs = 0;
       const result = await AudioEngine.load({
         source,
@@ -387,6 +398,7 @@ export const nativeAudioPlayer: PlayerApi = {
       });
     } catch (err) {
       enginePlaying = false;
+      stopStallWatchdog();
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
