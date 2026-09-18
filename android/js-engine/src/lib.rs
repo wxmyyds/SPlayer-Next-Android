@@ -227,7 +227,7 @@ fn jget_str<'a>(obj: &'a serde_json::Value, key: &str) -> Result<&'a str, String
 
 /// crypto.subtle 原语：sha256 / hmac-sha256 / aes-cbc / aes-gcm / x25519
 fn native_subtle(req_json: String) -> Result<String, rquickjs::Error> {
-    let out = subtle_dispatch(&req_json).map_err(native_err)?;
+    let out = subtle_dispatch(&req_json).map_err(|e| native_err(&e))?;
     serde_json::to_string(&out).map_err(|e| native_err(&e.to_string()))
 }
 
@@ -290,8 +290,8 @@ fn subtle_dispatch(req_json: &str) -> Result<serde_json::Value, String> {
         }
         "aes-gcm-encrypt" | "aes-gcm-decrypt" => {
             use aes_gcm::aead::{Aead, KeyInit, Payload};
+            // WebCrypto 亦不支持 AES-192-GCM：仅 128/256
             type Aes128GcmAlg = aes_gcm::Aes128Gcm;
-            type Aes192GcmAlg = aes_gcm::Aes192Gcm;
             type Aes256GcmAlg = aes_gcm::Aes256Gcm;
             let key = jget_b64(&req, "key")?;
             let iv = jget_b64(&req, "iv")?;
@@ -310,10 +310,7 @@ fn subtle_dispatch(req_json: &str) -> Result<serde_json::Value, String> {
                     .map_err(|e| e.to_string())?
                     .encrypt(iv.as_slice().into(), payload)
                     .map_err(|e| e.to_string())?,
-                (true, 24) => Aes192GcmAlg::new_from_slice(&key)
-                    .map_err(|e| e.to_string())?
-                    .encrypt(iv.as_slice().into(), payload)
-                    .map_err(|e| e.to_string())?,
+
                 (true, 32) => Aes256GcmAlg::new_from_slice(&key)
                     .map_err(|e| e.to_string())?
                     .encrypt(iv.as_slice().into(), payload)
@@ -322,10 +319,7 @@ fn subtle_dispatch(req_json: &str) -> Result<serde_json::Value, String> {
                     .map_err(|e| e.to_string())?
                     .decrypt(iv.as_slice().into(), payload)
                     .map_err(|e| e.to_string())?,
-                (false, 24) => Aes192GcmAlg::new_from_slice(&key)
-                    .map_err(|e| e.to_string())?
-                    .decrypt(iv.as_slice().into(), payload)
-                    .map_err(|e| e.to_string())?,
+
                 (false, 32) => Aes256GcmAlg::new_from_slice(&key)
                     .map_err(|e| e.to_string())?
                     .decrypt(iv.as_slice().into(), payload)
