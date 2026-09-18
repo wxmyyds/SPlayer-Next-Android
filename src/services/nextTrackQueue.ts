@@ -2,7 +2,6 @@ import { isAndroid } from "@/utils/platform";
 import { useStatusStore } from "@/stores/status";
 import * as autoClose from "@/services/autoClose";
 import { getNeteaseCookies } from "@android/vendor/netease";
-import { UA_MAP } from "@android/vendor/netease/core/config";
 import { cookieObjToString } from "@android/vendor/netease/core/cookie";
 import { processCookieObject } from "@android/vendor/netease/core/request";
 import { NETEASE_LEVEL } from "@/apis/song/netease";
@@ -49,9 +48,8 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
     return;
   }
 
-  // 与 request.ts eapi 分支同源：补全设备指纹默认值（deviceId/osver/channel/appver），
-  // 保证原生自解与 JS 侧请求的 cookie 指纹一致；空串用 || 回退默认值。
-  // 第二参传 "eapi"：参与服务端 NMTID 下发的缓存复用（老版第二参是 uri，已废弃）
+  // 登录态经 cookie 透传给引擎（引擎的会话存储与 WebView 隔离，独立注册匿名会话）。
+  // 与 request.ts eapi 分支同源：补全设备指纹默认值，第二参传 "eapi" 参与 NMTID 缓存复用
   const cookies = processCookieObject(getNeteaseCookies(), "eapi");
   const header = {
     osver: cookies.osver || "",
@@ -71,12 +69,7 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
   window.api.player
     .setNextQueue?.({
       items,
-      resolve: {
-        path: "/api/song/enhance/player/url/v1",
-        header,
-        cookie: cookieObjToString(header),
-        userAgent: UA_MAP.api.iphone,
-      },
+      resolve: { cookie: cookieObjToString(header) },
     })
     .catch((err) => console.error("[nextQueue] setNextQueue failed:", err));
 };

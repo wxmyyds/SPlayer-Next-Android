@@ -20,6 +20,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.IOException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -500,22 +501,26 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     /**
-     * 经内嵌引擎解析（vendor 同源代码）：提取 url 字段
+     * 经内嵌引擎解析（vendor 同源代码）：提取 url 字段。唯一解析路径，
+     * 失败抛出（含引擎不可用），由调用方 catch 走 resolveFails 重试语义
      * @param ctx - JS 推入的解析上下文（取 cookie）
      * @param songId - 歌曲 id
      * @param level - 音质 level
-     * @return 播放地址，引擎不可用/解析失败返回 null（调用方回落）
+     * @return 播放地址
+     * @throws IOException 引擎不可用/解析失败/无 url
      */
-    private static String resolveViaEngine(JSONObject ctx, String songId, String level) {
-        try {
-            String cookie = ctx.optString("cookie", "");
-            String result = JsEngineResolver.resolve(cookie, songId, level);
-            if (result == null) return null;
-            return new org.json.JSONObject(result).optString("url", null);
-        } catch (Throwable t) {
-            Log.w(TAG, "engine resolve failed", t);
-            return null;
+    private static String resolveViaEngine(JSONObject ctx, String songId, String level)
+            throws IOException {
+        String cookie = ctx.optString("cookie", "");
+        String result = JsEngineResolver.resolve(cookie, songId, level);
+        if (result == null) {
+            throw new IOException("engine resolve unavailable or failed");
         }
+        String url = new org.json.JSONObject(result).optString("url", null);
+        if (url == null) {
+            throw new IOException("engine resolve missing url");
+        }
+        return url;
     }
 
     /**
@@ -539,13 +544,9 @@ public class AudioEnginePlugin extends Plugin {
         RESOLVE_POOL.execute(
                 () -> {
                     try {
-                        // 引擎优先：vendor 同源代码在 rquickjs 里跑（WebView 冻结不受影响），
-                        // 失败回落手写 Java eapi 解析器
-                        String resolved = resolveViaEngine(ctx, songId, level);
-                        if (resolved == null) {
-                            resolved = NeteaseEapiResolver.resolve(ctx, songId, level);
-                        }
-                        final String url = resolved;
+                        // 引擎单链路：vendor 同源代码在 rquickjs 里跑（WebView 冻结不受影响）；
+                        // 失败抛出，走既有 resolveFails 重试 → 回落 JS 链语义
+                        final String url = resolveViaEngine(ctx, songId, level);
                         mainHandler.post(
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表

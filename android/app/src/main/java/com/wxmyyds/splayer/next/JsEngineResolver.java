@@ -13,7 +13,7 @@ import java.util.concurrent.TimeoutException;
  * 引擎 JS 解析器：rquickjs 跑 vendor 的 callNetease（与 WebView 内解析同一段代码）
  *
  * 引擎懒加载（首次解析时创建运行时并 eval bundle），单线程串行（FGS 内
- * ENDED 自解一次一首）；失败返回 null 由调用方回落 NeteaseEapiResolver。
+ * ENDED 自解一次一首）；失败返回 null，由调用方走 resolveFails 重试语义。
  */
 public final class JsEngineResolver {
     private static final String TAG = "JsEngine";

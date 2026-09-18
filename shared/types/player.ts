@@ -323,10 +323,7 @@ export interface PlayerApi {
       durationMs: number;
     }[];
     resolve: {
-      path: string;
-      header: Record<string, string>;
       cookie: string;
-      userAgent: string;
     };
   }) => Promise<IpcResponse>;
   /** Android：清除原生登记的下一首资源（队列变化/预载作废时） */

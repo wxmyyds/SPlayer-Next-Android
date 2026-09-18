@@ -128,10 +128,7 @@ interface AudioEnginePlugin {
       durationMs: number;
     }[];
     resolve: {
-      path: string;
-      header: Record<string, string>;
       cookie: string;
-      userAgent: string;
     };
   }): Promise<void>;
   clearNextResource(): Promise<void>;
