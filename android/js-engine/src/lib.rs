@@ -10,7 +10,7 @@ use base64::Engine;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
-use rquickjs::{Context, Function, Runtime, Value};
+use rquickjs::{Context, Func, Function, Runtime, Value};
 use std::collections::BinaryHeap;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -85,9 +85,9 @@ impl TimerScheduler {
         let heap = self.heap.lock().unwrap();
         let next = heap.peek().map(|t| t.fire_at);
         let wait_until = next.map_or(overall_deadline, |t| t.min(overall_deadline));
-        let now = Instant::now();
-        if wait_until > now {
-            let _ = self.signal.wait_timeout_until(heap, wait_until, |_| true);
+        let timeout = wait_until.saturating_duration_since(Instant::now());
+        if !timeout.is_zero() {
+            let _ = self.signal.wait_timeout(heap, timeout);
         }
     }
 }
@@ -121,17 +121,15 @@ fn call_java_str(method: &str, sig: &str, args: &[&str]) -> Option<String> {
     }
     let vm = unsafe { jni::JavaVM::from_raw(vm_ptr as *mut _).ok()? };
     let mut env = vm.attach_current_thread().ok()?;
-    let class = env
-        .find_class("com/wxmyyds/splayer/next/JsEngineBridge")
-        .ok()?;
-    let mut jargs: Vec<JValue> = Vec::with_capacity(args.len());
+    let Ok(class) = env.find_class("com/wxmyyds/splayer/next/JsEngineBridge") else {
+        return None;
+    };
+    let mut jstrings: Vec<JString> = Vec::with_capacity(args.len());
     for a in args {
-        let js = env.new_string(*a).ok()?;
-        jargs.push(JValue::Object(&js));
+        jstrings.push(env.new_string(*a).ok()?);
     }
-    let result = env
-        .call_static_method(&class, method, sig, &jargs)
-        .ok()?;
+    let jargs: Vec<JValue> = jstrings.iter().map(|j| JValue::Object(j)).collect();
+    let result = env.call_static_method(&class, method, sig, &jargs).ok()?;
     let obj: JObject = result.l().ok()?;
     let jstr = JString::from(obj);
     let s: String = env.get_string(&jstr).ok()?.into();
@@ -145,17 +143,19 @@ fn call_java_void(method: &str, sig: &str, args: &[&str]) {
         return;
     }
     let vm = unsafe { jni::JavaVM::from_raw(vm_ptr as *mut _).ok() };
-    let Some(mut env) = vm.and_then(|vm| vm.attach_current_thread().ok()) else {
+    let Some(vm) = vm else { return };
+    let Ok(mut env) = vm.attach_current_thread() else {
         return;
     };
     let Ok(class) = env.find_class("com/wxmyyds/splayer/next/JsEngineBridge") else {
         return;
     };
-    let mut jargs: Vec<JValue> = Vec::with_capacity(args.len());
+    let mut jstrings: Vec<JString> = Vec::with_capacity(args.len());
     for a in args {
         let Ok(js) = env.new_string(*a) else { return };
-        jargs.push(JValue::Object(&js));
+        jstrings.push(js);
     }
+    let jargs: Vec<JValue> = jstrings.iter().map(|j| JValue::Object(j)).collect();
     let _ = env.call_static_method(&class, method, sig, &jargs);
 }
 
@@ -201,10 +201,10 @@ fn random_b64(n: usize) -> Option<String> {
 /// inflate 解压（base64 入出）
 fn inflate(b64_data: &str, format: &str) -> Result<String, String> {
     let data = B64.decode(b64_data).map_err(|e| e.to_string())?;
-    let mut decoder = match format {
-        "gzip" => flate2::read::GzDecoder::new(&data[..]),
-        "deflate" => flate2::read::ZlibDecoder::new(&data[..]),
-        "deflate-raw" => flate2::read::DeflateDecoder::new(&data[..]),
+    let mut decoder: Box<dyn std::io::Read> = match format {
+        "gzip" => Box::new(flate2::read::GzDecoder::new(&data[..])),
+        "deflate" => Box::new(flate2::read::ZlibDecoder::new(&data[..])),
+        "deflate-raw" => Box::new(flate2::read::DeflateDecoder::new(&data[..])),
         other => return Err(format!("unsupported format: {other}")),
     };
     let mut out = Vec::new();
@@ -229,7 +229,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeRandom",
-                Function::from(move |n: f64| -> Result<String, rquickjs::Error> {
+                Func::from(move |n: f64| -> Result<String, rquickjs::Error> {
                     random_b64(n.clamp(0.0, 65536.0) as usize)
                         .ok_or_else(|| native_err("getrandom failed"))
                 }),
@@ -240,13 +240,13 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeStoreGet",
-                Function::from(move |key: String| -> Option<String> { store_get(&key) }),
+                Func::from(move |key: String| -> Option<String> { store_get(&key) }),
             )
             .map_err(|e| e.to_string())?;
         ctx.globals()
             .set(
                 "__nativeStoreSet",
-                Function::from(move |key: String, value: String| {
+                Func::from(move |key: String, value: String| {
                     store_set(&key, &value);
                 }),
             )
@@ -254,7 +254,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeStoreKeys",
-                Function::from(|| -> String { store_keys().unwrap_or_else(|| "[]".into()) }),
+                Func::from(|| -> String { store_keys().unwrap_or_else(|| "[]".into()) }),
             )
             .map_err(|e| e.to_string())?;
 
@@ -262,7 +262,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeLog",
-                Function::from(move |level: String, message: String| {
+                Func::from(move |level: String, message: String| {
                     log(&level, &message);
                 }),
             )
@@ -273,7 +273,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeSetTimeout",
-                Function::from(move |id: i64, ms: i64| {
+                Func::from(move |id: i64, ms: i64| {
                     timers_timer.push(id, ms.clamp(0, 60_000) as u64);
                 }),
             )
@@ -283,7 +283,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeInflate",
-                Function::from(
+                Func::from(
                     |data: String, format: String| -> Result<String, rquickjs::Error> {
                         inflate(&data, &format).map_err(|e| native_err(&e))
                     },
@@ -295,7 +295,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeHttp",
-                Function::from(|req_json: String| -> Result<String, rquickjs::Error> {
+                Func::from(|req_json: String| -> Result<String, rquickjs::Error> {
                     call_java_str(
                         "httpFromEngine",
                         "(Ljava/lang/String;)Ljava/lang/String;",
@@ -311,7 +311,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
         ctx.globals()
             .set(
                 "__nativeHttpCancel",
-                Function::from(move |request_id: String| {
+                Func::from(move |request_id: String| {
                     cancel.lock().unwrap().insert(request_id);
                 }),
             )
@@ -325,7 +325,7 @@ fn build_engine(state: &mut EngineState, cancel: CancelSet) -> Result<(), String
 /// 泵 pending job 直到无任务
 fn pump_jobs(runtime: &Runtime) {
     let mut guard = 0;
-    while runtime.is_pending() && guard < 10_000 {
+    while runtime.is_job_pending() && guard < 10_000 {
         runtime.execute_pending_job();
         guard += 1;
     }
@@ -358,7 +358,7 @@ fn pump_until_result(state: &EngineState, overall_deadline: Instant) -> Result<S
         for id in state.timers.take_due() {
             let fire: Function = ctx.globals().get("__timerFire").map_err(|e| e.to_string())?;
             let fired: () = fire.call((id,)).map_err(|e| e.to_string())?;
-            fired;
+            let _ = fired;
         }
         pump_jobs(&state.runtime);
         if let Some(r) = take_result(&ctx) {
@@ -443,24 +443,23 @@ pub extern "system" fn Java_com_wxmyyds_splayer_next_JsEngine_nativeCall(
 
     let kick: Result<(), String> = state.context.with(|ctx| {
         ctx.globals()
-            .set("__engineResult", Value::new_undefined(ctx.clone()))?;
-        let call: Function = ctx.globals().get("__engineCall")?;
+            .set("__engineResult", Value::new_undefined(ctx.clone()))
+            .map_err(|e| e.to_string())?;
+        let call: Function = ctx.globals().get("__engineCall").map_err(|e| e.to_string())?;
         let fired: () = call.call((args,)).map_err(|e| e.to_string())?;
-        fired;
+        let _ = fired;
         Ok(())
     });
     if let Err(e) = kick {
-        return to_jstring(
-            env,
-            &format!("{{\"ok\":false,\"error\":{}}}", serde_json::to_string(&e).unwrap_or_else(|_| "\"engine kick failed\"".into())),
-        );
+        let msg = serde_json::to_string(&e).unwrap_or_else(|_| "\"engine kick failed\"".into());
+        return to_jstring(env, &format!("{{\"ok\":false,\"error\":{msg}}}"));
     }
     match pump_until_result(state, deadline) {
         Ok(s) => to_jstring(env, &s),
-        Err(e) => to_jstring(
-            env,
-            &format!("{{\"ok\":false,\"error\":{}}}", serde_json::to_string(&e).unwrap_or_else(|_| "\"engine pump failed\"".into())),
-        ),
+        Err(e) => {
+            let msg = serde_json::to_string(&e).unwrap_or_else(|_| "\"engine pump failed\"".into());
+            to_jstring(env, &format!("{{\"ok\":false,\"error\":{msg}}}"))
+        }
     }
 }
 
