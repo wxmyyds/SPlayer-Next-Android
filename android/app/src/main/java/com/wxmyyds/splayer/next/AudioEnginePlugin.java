@@ -516,11 +516,17 @@ public class AudioEnginePlugin extends Plugin {
         if (result == null) {
             throw new IOException("engine resolve unavailable or failed");
         }
-        String url = new org.json.JSONObject(result).optString("url", null);
-        if (url == null) {
-            throw new IOException("engine resolve missing url");
+        try {
+            String url = new org.json.JSONObject(result).optString("url", null);
+            if (url == null) {
+                throw new IOException("engine resolve missing url");
+            }
+            return url;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("engine resolve parse failed", e);
         }
-        return url;
     }
 
     /**
