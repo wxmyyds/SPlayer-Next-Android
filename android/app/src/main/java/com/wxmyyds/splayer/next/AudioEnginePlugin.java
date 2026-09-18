@@ -541,10 +541,11 @@ public class AudioEnginePlugin extends Plugin {
                     try {
                         // 引擎优先：vendor 同源代码在 rquickjs 里跑（WebView 冻结不受影响），
                         // 失败回落手写 Java eapi 解析器
-                        String url = resolveViaEngine(ctx, songId, level);
-                        if (url == null) {
-                            url = NeteaseEapiResolver.resolve(ctx, songId, level);
+                        String resolved = resolveViaEngine(ctx, songId, level);
+                        if (resolved == null) {
+                            resolved = NeteaseEapiResolver.resolve(ctx, songId, level);
                         }
+                        final String url = resolved;
                         mainHandler.post(
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表
