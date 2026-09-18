@@ -24,7 +24,6 @@ export const neteaseLog = makeLogger("netease");
 /** 通用核心日志 */
 export const coreLog = makeLogger("core");
 /** 播放器日志 */
-export const playerLog = makeLogger("player");
 /** 媒体库日志 */
 export const mediaLog = makeLogger("media");
 /** 流媒体日志 */

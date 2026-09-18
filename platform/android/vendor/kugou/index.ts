@@ -64,10 +64,6 @@ const cacheSet = (key: string, value: unknown, ttl = DEFAULT_TTL): void => {
   cache.set(key, { value, expireAt: Date.now() + ttl });
 };
 
-export const clearKugouCache = (): void => {
-  cache.clear();
-};
-
 const isEmptyResult = (value: unknown): boolean => {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;

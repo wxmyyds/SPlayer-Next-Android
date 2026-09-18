@@ -22,7 +22,6 @@ import { getDeviceVolume, setDeviceVolume } from "@/services/deviceVolume";
 import { resolveTrackSource, type ResolvedTrackSource } from "@/services/audioSource";
 import {
   consumePreloadedTrack,
-  disposeNextTrackPreload,
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
 } from "@/services/nextTrackPreloader";
@@ -1136,50 +1135,6 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
 };
 
 /**
- * 将本地音频文件路径转为轻量 Track 对象
- * @param filePath - 本地音频绝对路径
- */
-export const createLocalTrack = (filePath: string): Track => {
-  const fileName = filePath.split(/[/\\]/).pop() || filePath;
-  const title = fileName.replace(/\.[^/.]+$/, "");
-  return {
-    id: `local:${filePath}`,
-    title,
-    artists: [],
-    source: "local",
-    path: filePath,
-    duration: 0,
-  };
-};
-
-/**
- * 直接播放一个本地音频文件
- * @param filePath - 本地音频绝对路径
- */
-export const playFile = async (filePath: string): Promise<void> => {
-  const item = createLocalTrack(filePath);
-  await playNow(item, {
-    originId: "local-file",
-    originType: "track",
-    originName: "本地文件",
-  });
-};
-
-/**
- * 批量播放多个本地音频文件
- * @param filePaths - 本地音频绝对路径列表
- */
-export const playFiles = async (filePaths: string[]): Promise<void> => {
-  if (filePaths.length === 0) return;
-  const tracks = filePaths.map(createLocalTrack);
-  await playFrom(tracks, 0, {
-    originId: "local-files",
-    originType: "track",
-    originName: "本地文件",
-  });
-};
-
-/**
  * 移动队列中的歌曲位置，自动调整 playIndex
  * @param fromIndex - 原位置
  * @param toIndex - 目标位置
@@ -1341,13 +1296,4 @@ export const restoreLastTrack = async (): Promise<void> => {
   }
   // 恢复结束后再执行挂起的播放：此时 isRestoringLastTrack 已复位，play() 不再被守卫吞掉
   if (resumePendingPlay) await play();
-};
-
-/** 清理事件订阅 */
-export const disposePlayer = (): void => {
-  disposeNextTrackPreload();
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
 };

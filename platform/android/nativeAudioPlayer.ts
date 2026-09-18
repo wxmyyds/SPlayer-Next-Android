@@ -13,7 +13,6 @@
 
 import type {
   AudioDevice,
-  FftData,
   IpcResponse,
   LoadOptions,
   PlayerApi,
@@ -34,7 +33,6 @@ interface MediaBridgePlugin {
     durationMs?: number;
     stopped?: boolean;
   }) => Promise<void>;
-  setPauseOnDeviceSwitch: (options: { enabled: boolean }) => Promise<void>;
 }
 
 /** 系统栏沉浸插件（SystemUiPlugin）：隐藏状态栏/导航小白条 */
@@ -58,7 +56,6 @@ export const SystemUi = registerPlugin<SystemUiBridgePlugin>("SystemUi", {
 /** 非原生环境回退：空实现（开发/测试用） */
 class MediaBridgeWeb extends WebPlugin implements MediaBridgePlugin {
   async updateState(): Promise<void> {}
-  async setPauseOnDeviceSwitch(): Promise<void> {}
 }
 
 const MediaBridge = registerPlugin<MediaBridgePlugin>("MediaBridge", {
@@ -89,7 +86,6 @@ interface AudioEnginePlugin {
   setEqualizerBands(options: { bands: number[] }): Promise<void>;
   setPreampGain(options: { gainDb: number }): Promise<void>;
   setFftEnabled(options: { enabled: boolean }): Promise<void>;
-  getFftData(): Promise<FftData>;
   getOutputDevices(): Promise<{ devices: AudioDevice[] }>;
   setOutputDevice(options: { deviceId: string }): Promise<void>;
   getStatus(): Promise<PlayerStatus>;
@@ -231,10 +227,6 @@ const publishState = (
 /** 将原生事件映射为桌面 PlayerEvent */
 const mapNativeEvent = (payload: { type: string; data?: any }): PlayerEvent | null => {
   switch (payload.type) {
-    case "play":
-      return { type: "play" };
-    case "pause":
-      return { type: "pause" };
     case "ended":
       return { type: "ended" };
     case "autoAdvanced":
@@ -295,16 +287,6 @@ const wireEngine = (): void => {
   void AudioEngine.addListener("event", (payload) => {
     const data = payload as { type: string; data?: any };
     switch (data.type) {
-      case "play":
-        enginePlaying = true;
-        ensureStallWatchdog();
-        publishState("playing", lastPositionMs, lastDurationMs);
-        break;
-      case "pause":
-        enginePlaying = false;
-        stopStallWatchdog();
-        publishState("paused", lastPositionMs, lastDurationMs);
-        break;
       case "ended":
         enginePlaying = false;
         stopStallWatchdog();
@@ -352,6 +334,16 @@ const wireEngine = (): void => {
   });
 };
 
+/** 纯转发：原生调用成功返回 ok，异常统一转 IpcResponse 失败（无本地状态时用） */
+const forward = async (call: () => Promise<unknown>): Promise<IpcResponse<void>> => {
+  try {
+    await call();
+    return ok();
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+};
+
 /** 原生音频引擎：实现 PlayerApi */
 export const nativeAudioPlayer: PlayerApi = {
   load: async (source: string, options?: LoadOptions) => {
@@ -389,14 +381,7 @@ export const nativeAudioPlayer: PlayerApi = {
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
-  play: async () => {
-    try {
-      await AudioEngine.play();
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
+  play: () => forward(() => AudioEngine.play()),
   pause: async () => {
     try {
       await AudioEngine.pause();
@@ -435,54 +420,13 @@ export const nativeAudioPlayer: PlayerApi = {
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
-  setVolume: async (volume: number) => {
-    try {
-      await AudioEngine.setVolume({ volume });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setPauseOnDeviceSwitch: async (enabled: boolean) => {
-    try {
-      await AudioEngine.setPauseOnDeviceSwitch({ enabled });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setNextResources: async (options) => {
-    try {
-      await AudioEngine.setNextResources(options);
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setNextQueue: async (options) => {
-    try {
-      await AudioEngine.setNextQueue(options);
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  clearNextResource: async () => {
-    try {
-      await AudioEngine.clearNextResource();
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setRepeatMode: async (options) => {
-    try {
-      await AudioEngine.setRepeatMode(options);
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
+  setVolume: (volume: number) => forward(() => AudioEngine.setVolume({ volume })),
+  setPauseOnDeviceSwitch: (enabled: boolean) =>
+    forward(() => AudioEngine.setPauseOnDeviceSwitch({ enabled })),
+  setNextResources: (options) => forward(() => AudioEngine.setNextResources(options)),
+  setNextQueue: (options) => forward(() => AudioEngine.setNextQueue(options)),
+  clearNextResource: () => forward(() => AudioEngine.clearNextResource()),
+  setRepeatMode: (options) => forward(() => AudioEngine.setRepeatMode(options)),
   getVolume: async () => {
     try {
       const status = await AudioEngine.getStatus();
@@ -499,90 +443,23 @@ export const nativeAudioPlayer: PlayerApi = {
       return fail(err instanceof Error ? err.message : String(err));
     }
   },
-  setFftEnabled: async (enabled: boolean) => {
-    try {
-      await AudioEngine.setFftEnabled({ enabled });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  getFftData: async () => {
-    try {
-      const data = await AudioEngine.getFftData();
-      return ok(data);
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setFadeDuration: async (ms: number) => {
-    try {
-      await AudioEngine.setFadeDuration({ duration: ms });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
+  setFftEnabled: (enabled: boolean) => forward(() => AudioEngine.setFftEnabled({ enabled })),
+  setFadeDuration: (ms: number) => forward(() => AudioEngine.setFadeDuration({ duration: ms })),
   getFadeDuration: async () => ok(200),
   getCoverRaw: async () => ok(null),
   readLyricFile: async () => fail("unsupported"),
   reinit: async () => ok(),
-  setNormalizationEnabled: async (_enabled: boolean) => {
-    try {
-      // LoudnessEnhancer 由原生插件管理
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setEqualizerEnabled: async (enabled: boolean) => {
-    try {
-      await AudioEngine.setEqualizerEnabled({ enabled });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setEqualizerBands: async (gainsDb: number[]) => {
-    try {
-      await AudioEngine.setEqualizerBands({ bands: gainsDb });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setPreampGain: async (preampDb: number) => {
-    try {
-      await AudioEngine.setPreampGain({ gainDb: preampDb });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setSpeed: async (speed: number) => {
-    try {
-      await AudioEngine.setSpeed({ speed });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setPitch: async (semitones: number) => {
-    try {
-      await AudioEngine.setPitch({ semitones });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
-  setPitchSync: async (sync: boolean) => {
-    try {
-      await AudioEngine.setPitchSync({ enabled: sync });
-      return ok();
-    } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  },
+  // 响度归一化无独立实现（均衡器统一处理）
+  setNormalizationEnabled: async () => ok(),
+  setEqualizerEnabled: (enabled: boolean) =>
+    forward(() => AudioEngine.setEqualizerEnabled({ enabled })),
+  setEqualizerBands: (gainsDb: number[]) =>
+    forward(() => AudioEngine.setEqualizerBands({ bands: gainsDb })),
+  setPreampGain: (preampDb: number) =>
+    forward(() => AudioEngine.setPreampGain({ gainDb: preampDb })),
+  setSpeed: (speed: number) => forward(() => AudioEngine.setSpeed({ speed })),
+  setPitch: (semitones: number) => forward(() => AudioEngine.setPitch({ semitones })),
+  setPitchSync: (sync: boolean) => forward(() => AudioEngine.setPitchSync({ enabled: sync })),
   getOutputDevices: async () => {
     try {
       const result = await AudioEngine.getOutputDevices();

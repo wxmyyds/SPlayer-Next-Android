@@ -6,12 +6,7 @@
  * - 主进程读取作为 settings.json 的 hotkeys 字段默认值
  */
 
-import type {
-  HotkeyActionId,
-  HotkeyActionMeta,
-  HotkeyBindingsMap,
-  HotkeyConfig,
-} from "../types/hotkey";
+import type { HotkeyActionMeta, HotkeyBindingsMap, HotkeyConfig } from "../types/hotkey";
 
 /**
  * 全部动作的元数据
@@ -152,7 +147,3 @@ export const defaultHotkeyConfig: HotkeyConfig = {
   globalEnabled: true,
   bindings: defaultHotkeyBindings,
 };
-
-/** 通过 id 拿 meta */
-export const getActionMeta = (id: HotkeyActionId): HotkeyActionMeta | undefined =>
-  HOTKEY_ACTIONS.find((m) => m.id === id);

@@ -238,9 +238,6 @@ export const qmRequest = async <T = unknown>(
   throw lastErr;
 };
 
-/** 调试用：取当前 session 快照 */
-export const getQMSession = (): Readonly<SessionCache> => session;
-
 /** LoginServer.Login 刷新后的凭据字段 */
 interface RefreshCredentialData {
   musickey?: string;

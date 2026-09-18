@@ -207,11 +207,6 @@ interface AndroidSystemApi {
   ) => Promise<{ success: boolean; path?: string; error?: string }>;
   relaunch: () => Promise<void>;
   testNetworkProxy: () => Promise<boolean>;
-  onProtocolUrl: (callback: (url: string) => void) => () => void;
-  consumePendingProtocolUrl: () => Promise<string | null>;
-  onOpenFiles: (callback: (files: string[]) => void) => () => void;
-  consumePendingAudioFiles: () => Promise<string[]>;
-  getPathForFile: (file: File) => string;
   /** Android：全屏沉浸（隐藏状态栏/导航小白条，滑动临时呼出） */
   setImmersive: (enabled: boolean) => Promise<void>;
   /** Android：系统栏图标明暗（true = 深色图标，浅色背景用） */
@@ -250,11 +245,6 @@ const system: AndroidSystemApi = {
   }),
   relaunch: async () => {},
   testNetworkProxy: async () => false,
-  onProtocolUrl: noopUnsubscribe,
-  consumePendingProtocolUrl: async () => null,
-  onOpenFiles: noopUnsubscribe,
-  consumePendingAudioFiles: async () => [],
-  getPathForFile: (file: File) => file.name,
   setImmersive: (enabled: boolean) => SystemUi.setImmersive({ enabled }),
   setLightBars: (light: boolean) => SystemUi.setLightBars({ light }),
   openUrl: async (url: string) => {
@@ -524,7 +514,6 @@ interface AndroidCacheApi {
   song: {
     lookup: (cacheKey: string) => Promise<string | null>;
     fetch: (cacheKey: string, source: TrackSource, streamUrl: string) => Promise<string | null>;
-    cancel: (cacheKey: string) => Promise<void>;
   };
 }
 
@@ -538,7 +527,6 @@ const cache: AndroidCacheApi = {
   song: {
     lookup: async (_cacheKey: string) => null,
     fetch: async (_cacheKey: string, _source: TrackSource, _streamUrl: string) => null,
-    cancel: async (_cacheKey: string) => {},
   },
 };
 

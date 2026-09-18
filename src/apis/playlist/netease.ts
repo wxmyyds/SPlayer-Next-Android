@@ -133,11 +133,3 @@ export const removeFromPlaylist = async (playlistId: string, trackIds: string[])
 export const subscribePlaylist = async (id: string, subscribe: boolean): Promise<void> => {
   ensureOk(await neteaseApi.playlist_subscribe({ id, t: subscribe ? 1 : 2 }));
 };
-
-/**
- * 重排自建歌单顺序
- * @param ids 期望顺序的歌单 id 数组
- */
-export const reorderPlaylists = async (ids: string[]): Promise<void> => {
-  ensureOk(await neteaseApi.playlist_order_update({ ids: JSON.stringify(ids) }));
-};

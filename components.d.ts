@@ -307,7 +307,6 @@ declare module 'vue' {
     TooltipRoot: typeof import('reka-ui')['TooltipRoot']
     TooltipTrigger: typeof import('reka-ui')['TooltipTrigger']
     TrackInfo: typeof import('./src/components/player/TrackInfo.vue')['default']
-    UiZoomDialog: typeof import('./src/components/modals/UiZoomDialog.vue')['default']
     UpdateDialog: typeof import('./src/components/modals/UpdateDialog.vue')['default']
   }
 }

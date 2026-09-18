@@ -4,11 +4,9 @@ import { defaultHotkeyConfig } from "./hotkeys";
 
 /**
  * 灵动岛基准高度（缩放比例 = 1 时的物理像素，等于"主行高度")
- * 主行高度 = DYNAMIC_ISLAND_BASE_HEIGHT * scale
  * 双行模式下窗口最终高度 = 主行高度 + 副行高度
  * 主进程按渲染端上报的最终高度 setBounds
  */
-export const DYNAMIC_ISLAND_BASE_HEIGHT = 40;
 
 /** 默认配置 */
 export const defaultSystemConfig: SystemConfig = {
@@ -164,8 +162,6 @@ export const defaultSystemConfig: SystemConfig = {
       host: "127.0.0.1",
       port: 7890,
     },
-    neteaseScrobbleEnabled: false,
-    neteaseScrobbleMode: "ncbl",
     registerOrpheusProtocol: false,
   },
   windowStates: {

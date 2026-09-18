@@ -6,7 +6,6 @@
     "downloading": "下载中",
     "installNow": "立即重启安装",
     "goDownload": "前往下载页",
-    "goStore": "前往商店更新",
     "upToDate": "已是最新版本",
     "readyToast": "更新已就绪，可重启安装",
     "failed": "更新失败，请稍后重试"
@@ -21,10 +20,22 @@
       "subtitle": "一个现代化的桌面音乐播放器，完成几步设置即可开始享用",
       "start": "开始设置",
       "features": {
-        "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
-        "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
-        "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
-        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词，桌面歌词、灵动岛、任务栏歌词" }
+        "local": {
+          "title": "本地音乐库",
+          "desc": "扫描本地目录，自动整理音乐库"
+        },
+        "quality": {
+          "title": "无损音质",
+          "desc": "原生音频引擎，支持多种无损格式"
+        },
+        "streaming": {
+          "title": "流媒体服务器",
+          "desc": "Subsonic / Jellyfin / Emby 等"
+        },
+        "lyrics": {
+          "title": "丰富歌词体验",
+          "desc": "AMLL 逐字歌词，桌面歌词、灵动岛、任务栏歌词"
+        }
       }
     },
     "agreement": {
@@ -96,7 +107,6 @@
     "enabled": "已启用",
     "loadMore": "加载更多",
     "active": "已启用",
-    "saveAndRelaunch": "保存并重启",
     "reset": "重置",
     "retry": "重试",
     "prev": "上一页",
@@ -176,11 +186,7 @@
     "plus": "+{n}s",
     "warningBLessThanA": "B 点必须晚于 A 点，循环未启用"
   },
-  "uiZoom": {
-    "title": "界面缩放",
-    "range": "可调节范围：50% - 200%",
-    "reset": "恢复默认"
-  },
+  "uiZoom": {},
   "nav": {
     "home": "首页",
     "library": "音乐库",
@@ -193,8 +199,6 @@
     "stats": "统计",
     "tabHistory": "历史",
     "tabFavorites": "收藏",
-    "reload": "热重载",
-    "devtools": "开发者工具",
     "globalSettings": "全局设置",
     "searchPlaceholder": "搜索歌曲、歌手或专辑",
     "searchEmpty": "输入关键词开始搜索",
@@ -227,11 +231,9 @@
     "start": "开始识别",
     "sourceLabel": "音频来源",
     "hint": {
-      "system": "我们会采集系统中的一小段声音进行识别",
       "microphone": "靠近声源并保持环境安静，识别效果会更好"
     },
     "source": {
-      "system": "系统声音",
       "microphone": "麦克风"
     },
     "phase": {
@@ -243,8 +245,6 @@
     "retry": "再试一次",
     "cancel": "取消",
     "play": "播放",
-    "unavailable": "当前设备不支持听歌识曲",
-    "searching": "搜索此歌曲",
     "error": {
       "unsupported": "当前平台不支持本机采集",
       "no-device": "未找到可用的音频设备",
@@ -361,8 +361,6 @@
     "qrTipScanned": "扫描成功，请在 APP 中确认登录",
     "qrTipExpired": "二维码已过期，正在重试",
     "qrTipDone": "登录成功",
-    "qrTipUnknown": "状态异常，请重试",
-    "qrRefresh": "刷新二维码",
     "autoFetch": "自动获取",
     "autoFetchTitle": "使用前告知",
     "autoFetchTip": "该功能无法保证账号绝对安全，请自行判断是否使用。打开窗口后如出现白屏或无法点击，请关闭并重试",
@@ -469,8 +467,7 @@
       "already": "已处于私人 FM",
       "failed": "私人 FM 开启失败，请稍后重试",
       "modeSettings": "私人 FM 模式选择",
-      "modeTooltip": "FM 模式与场景",
-      "modeSettingsTip": "选择喜好的推荐模式与场景"
+      "modeTooltip": "FM 模式与场景"
     },
     "lyricOffset": {
       "title": "歌词偏移",
@@ -579,8 +576,6 @@
     "title": "播放列表",
     "empty": "播放列表为空",
     "unknownArtist": "未知艺术家",
-    "clearList": "清空列表",
-    "locateCurrent": "当前播放",
     "clearConfirmTitle": "清空播放列表",
     "clearConfirmContent": "确认清空全部播放列表吗？此操作不可撤销！"
   },
@@ -738,7 +733,6 @@
       "language": "语言",
       "playControl": "播放控制",
       "audioSource": "播放音源",
-      "scrobble": "听歌打卡",
       "lyricContent": "歌词内容",
       "lyricTTML": "TTML 歌词",
       "lyricExclude": "歌词排除",
@@ -792,7 +786,6 @@
       "commit": "提交",
       "date": "日期"
     },
-    "storeVersion": "Store",
     "language": {
       "label": "界面语言",
       "description": "切换应用的显示语言"
@@ -1006,7 +999,6 @@
       "description": "管理应用内与全局快捷键",
       "globalEnabled": "开启全局快捷键",
       "globalEnabledHint": "应用未聚焦时也可触发，可能与系统或其他应用冲突",
-      "colAction": "动作",
       "colInApp": "应用内",
       "colGlobal": "全局",
       "unbound": "未绑定",
@@ -1057,8 +1049,6 @@
     "confirm": {
       "highResourceTitle": "高占用功能",
       "highResourceContent": "开启后可能明显增加内存与 CPU 占用，低配设备上或出现卡顿。确定开启吗？",
-      "restartRequiredTitle": "需要重启应用",
-      "restartRequiredContent": "此设置需要重启应用后生效。确定保存并立即重启吗？",
       "testChannelTitle": "切换到测试通道",
       "testChannelContent": "Beta 与 Alpha 通道会提前收到测试版本，其中 Alpha 版本可能非常不稳定。确定切换吗？",
       "kugouLoginVersionTitle": "切换 KG 登录版本",
@@ -1233,215 +1223,6 @@
     "inactiveAlpha": {
       "label": "非激活行透明度",
       "description": "非当前行的基础透明度"
-    },
-    "desktopLyricEnabled": {
-      "label": "开启桌面歌词",
-      "description": "在桌面显示一个独立的歌词悬浮窗口"
-    },
-    "desktopLyricFontSize": {
-      "label": "字号",
-      "description": "桌面歌词的文字大小（像素）"
-    },
-    "desktopLyricFontWeight": {
-      "label": "字重",
-      "description": "桌面歌词的文字粗细"
-    },
-    "desktopLyricShowTranslation": {
-      "label": "显示翻译",
-      "description": "在桌面歌词中显示翻译文本"
-    },
-    "desktopLyricDoubleLine": {
-      "label": "双行显示",
-      "description": "同时显示当前行与下一行"
-    },
-    "desktopLyricAlign": {
-      "label": "对齐方式",
-      "description": "歌词文本的水平对齐",
-      "left": "居左",
-      "center": "居中",
-      "right": "居右",
-      "justify": "两端对齐"
-    },
-    "desktopLyricWordByWord": {
-      "label": "逐字高亮",
-      "description": "按单词进度逐字渲染高亮"
-    },
-    "desktopLyricAutoGenerateWordByWord": {
-      "label": "自动生成逐字效果",
-      "description": "关闭后仅真正的逐字歌词生效"
-    },
-    "desktopLyricPlayedColor": {
-      "label": "已播放颜色",
-      "description": "已播放的歌词文字颜色"
-    },
-    "desktopLyricUnplayedColor": {
-      "label": "未播放颜色",
-      "description": "未播放的歌词文字颜色"
-    },
-    "desktopLyricStrokeColor": {
-      "label": "描边颜色",
-      "description": "歌词文字的描边颜色，透明则视为关闭描边"
-    },
-    "desktopLyricBackgroundMask": {
-      "label": "文本背景遮罩",
-      "description": "为每行歌词文字加半透明背景色块，提升弱对比下的可读性"
-    },
-    "desktopLyricBackgroundMaskColor": {
-      "label": "遮罩颜色",
-      "description": "文本背景遮罩的颜色与透明度"
-    },
-    "desktopLyricAlwaysShowSongInfo": {
-      "label": "常驻显示歌曲信息",
-      "description": "始终显示歌曲名与艺术家，关闭后仅悬停时显示"
-    },
-    "desktopLyricAnimation": {
-      "label": "切换动画",
-      "description": "歌词行切换时的滑入 / 滑出过渡动画"
-    },
-    "desktopLyricLimitBounds": {
-      "label": "限制在屏幕内",
-      "description": "拖拽时把窗口边界限制在当前屏幕的工作区范围内"
-    },
-    "desktopLyricAlwaysOnTop": {
-      "label": "窗口置顶",
-      "description": "桌面歌词窗口始终保持在最前"
-    },
-    "desktopLyricLocked": {
-      "label": "锁定窗口",
-      "description": "锁定后鼠标点击将穿透到下层窗口，无法拖动"
-    },
-    "desktopLyricUseCSSDrag": {
-      "label": "使用 CSS 拖拽",
-      "description": "使用 CSS -webkit-app-region 拖拽，在 Wayland 环境建议启用"
-    },
-    "dynamicIslandEnabled": {
-      "label": "开启灵动岛",
-      "description": "在屏幕顶部显示一个简洁的悬浮歌词窗口，可拖离至任意位置"
-    },
-    "dynamicIslandScale": {
-      "label": "缩放比例",
-      "description": "窗口高度与字号同步缩放，100% 为默认大小"
-    },
-    "dynamicIslandFontWeight": {
-      "label": "字重",
-      "description": "灵动岛歌词的文字粗细"
-    },
-    "dynamicIslandWordByWord": {
-      "label": "逐字高亮",
-      "description": "按单词进度逐字渲染高亮"
-    },
-    "dynamicIslandTransition": {
-      "label": "切换动画",
-      "description": "选择灵动岛宽度与歌词行的切换方式",
-      "bounce": "灵动回弹",
-      "smooth": "平滑过渡"
-    },
-    "dynamicIslandDoubleLine": {
-      "label": "总是显示双行",
-      "description": "即使没有翻译可用也保持双行布局"
-    },
-    "dynamicIslandShowTranslation": {
-      "label": "显示翻译",
-      "description": "有翻译的句子在副行显示翻译"
-    },
-    "dynamicIslandPlayedColor": {
-      "label": "已播放颜色",
-      "description": "当前已唱到部分的文字颜色"
-    },
-    "dynamicIslandUnplayedColor": {
-      "label": "未播放颜色",
-      "description": "尚未唱到部分及艺术家名的文字颜色"
-    },
-    "dynamicIslandBackgroundColor": {
-      "label": "背景颜色",
-      "description": "窗口背板的颜色与透明度"
-    },
-    "dynamicIslandAlwaysOnTop": {
-      "label": "窗口置顶",
-      "description": "灵动岛窗口始终保持在最前"
-    },
-    "dynamicIslandNotchFusion": {
-      "label": "刘海融合",
-      "description": "在 MacBook 刘海屏上让灵动岛从物理刘海向下扩展"
-    },
-    "dynamicIslandSnapCentered": {
-      "label": "吸附时居中",
-      "description": "关闭后吸附到顶部时保留拖动到的水平位置"
-    },
-    "dynamicIslandNonOcclusive": {
-      "label": "非遮挡模式",
-      "description": "鼠标穿透窗口，悬停时隐藏内容"
-    },
-    "dynamicIslandUseCSSDrag": {
-      "label": "使用 CSS 拖拽",
-      "description": "使用 CSS -webkit-app-region 拖拽，在 Wayland 环境建议启用"
-    },
-    "taskbarLyricEnabled": {
-      "label": "开启任务栏歌词",
-      "description": "将歌词嵌入 Windows 任务栏中显示"
-    },
-    "taskbarLyricPosition": {
-      "label": "显示位置",
-      "description": "歌词在任务栏中的位置，自动模式下根据任务栏对齐方式选择",
-      "auto": "自动",
-      "left": "左侧",
-      "right": "右侧"
-    },
-    "taskbarLyricAutoMaxWidth": {
-      "label": "自动宽度",
-      "description": "自动使用任务栏可用区域作为最大宽度；关闭后手动设置最大宽度"
-    },
-    "taskbarLyricAutoAdjustOccupiedSpace": {
-      "label": "按内容收缩窗口",
-      "description": "在自动宽度范围内，根据当前主行和悬浮控件缩小实际占用空间"
-    },
-    "taskbarLyricMaxWidth": {
-      "label": "最大宽度",
-      "description": "超出可用空间时仍以可用空间为准，避免挤占"
-    },
-    "taskbarLyricLeftMargin": {
-      "label": "左边距",
-      "description": "歌词与可用空间左侧的间距，用于避开任务栏上的其他组件"
-    },
-    "taskbarLyricRightMargin": {
-      "label": "右边距",
-      "description": "歌词与可用空间右侧的间距，用于避开任务栏上的其他组件"
-    },
-    "taskbarLyricColorMode": {
-      "label": "配色模式",
-      "description": "任务栏歌词的文字与背景配色",
-      "taskbar": "跟随任务栏",
-      "taskbarInverse": "跟随任务栏（反向）",
-      "light": "浅色",
-      "dark": "深色"
-    },
-    "taskbarLyricShowBackground": {
-      "label": "显示背景",
-      "description": "获焦时显示半透明背景，增强歌词与任务栏的区分"
-    },
-    "taskbarLyricFontSize": {
-      "label": "字号",
-      "description": "任务栏歌词的文字大小（像素）"
-    },
-    "taskbarLyricFontWeight": {
-      "label": "字重",
-      "description": "任务栏歌词的文字粗细"
-    },
-    "taskbarLyricShowCover": {
-      "label": "显示封面",
-      "description": "在歌词旁显示当前曲目的封面缩略图"
-    },
-    "taskbarLyricDoubleLine": {
-      "label": "双行显示",
-      "description": "同时显示当前歌词与翻译或下一行"
-    },
-    "taskbarLyricShowTranslation": {
-      "label": "显示翻译",
-      "description": "双行模式下优先显示翻译，无翻译时回退到下一行"
-    },
-    "taskbarLyricWordByWord": {
-      "label": "逐字高亮",
-      "description": "按单词进度逐字渲染高亮"
     },
     "playerBgType": {
       "label": "播放器背景",
@@ -1662,7 +1443,6 @@
       "loginQr": "扫码登录",
       "loginQrQQ": "QQ 扫码登录",
       "loginQrWX": "微信扫码登录",
-      "qrTitle": "扫码登录",
       "manualCookie": "Cookie 登录",
       "logout": "退出登录",
       "logoutTitle": "退出 {name} 登录",
@@ -1745,16 +1525,6 @@
       "description": "切换后需重新扫码登录",
       "standard": "标准版",
       "concept": "概念版"
-    },
-    "neteaseScrobbleEnabled": {
-      "label": "启用听歌打卡",
-      "description": "播放达到一定时长后，自动向 NCM 上报听歌记录"
-    },
-    "neteaseScrobbleMode": {
-      "label": "NCM 听歌打卡方式",
-      "description": "选择自动同步 NCM 听歌记录时使用的上报接口",
-      "legacy": "原版日志接口",
-      "ncbl": "NCBL 加密接口"
     },
     "orpheusProtocol": {
       "label": "通过 Orpheus 协议唤起本应用",
@@ -1969,9 +1739,18 @@
         "homepage": "主页"
       },
       "grant": {
-        "network": { "label": "联网", "desc": "插件可发起网络请求" },
-        "control": { "label": "控制", "desc": "插件可控制播放器" },
-        "ui": { "label": "界面", "desc": "插件可扩展或修改应用界面" }
+        "network": {
+          "label": "联网",
+          "desc": "插件可发起网络请求"
+        },
+        "control": {
+          "label": "控制",
+          "desc": "插件可控制播放器"
+        },
+        "ui": {
+          "label": "界面",
+          "desc": "插件可扩展或修改应用界面"
+        }
       }
     },
     "pluginManager": {
@@ -2237,12 +2016,7 @@
     "NETEASE_VIP_REQUIRED": "该歌曲需要会员或单独购买",
     "NETEASE_TRIAL_DISABLED": "该歌曲仅提供试听，请在设置中允许试听播放",
     "NETEASE_UNAVAILABLE": "该歌曲暂无可用音源",
-    "SCAN_NO_DIRS": "未配置扫描目录",
-    "SCAN_DIR_EXISTS": "该目录已存在",
-    "SCAN_DIR_NOT_FOUND": "目录不存在",
     "SCAN_DIR_NOT_SELECTED": "未选择目录",
-    "TAG_READ_FAILED": "读取标签失败",
-    "TAG_WRITE_FAILED": "写入标签失败",
     "MAX_CONSECUTIVE_FAILURES": "连续播放失败次数过多",
     "UNKNOWN": "操作失败"
   },

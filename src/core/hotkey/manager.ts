@@ -47,8 +47,6 @@ const recompile = (): void => {
 };
 
 let installed = false;
-let offGlobalTrigger: (() => void) | null = null;
-let stopWatchBindings: (() => void) | null = null;
 
 /** 全局 keydown 处理 */
 const onKeyDown = (event: KeyboardEvent): void => {
@@ -71,19 +69,7 @@ export const installHotkeyManager = (): void => {
   installed = true;
   buildRegistry();
   recompile();
-  stopWatchBindings = watch(() => useHotkeyStore().bindings, recompile, { deep: true });
+  watch(() => useHotkeyStore().bindings, recompile, { deep: true });
   window.addEventListener("keydown", onKeyDown, { capture: true });
-  offGlobalTrigger = window.api.hotkey.onTrigger((id) => dispatch(id));
-};
-
-/** 卸载（仅测试 / HMR 用） */
-export const uninstallHotkeyManager = (): void => {
-  if (!installed) return;
-  installed = false;
-  window.removeEventListener("keydown", onKeyDown, { capture: true });
-  offGlobalTrigger?.();
-  offGlobalTrigger = null;
-  stopWatchBindings?.();
-  stopWatchBindings = null;
-  compiled = [];
+  window.api.hotkey.onTrigger((id) => dispatch(id));
 };

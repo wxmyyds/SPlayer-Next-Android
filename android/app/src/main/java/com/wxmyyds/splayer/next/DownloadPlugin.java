@@ -33,7 +33,6 @@ import okio.BufferedSource;
 @CapacitorPlugin(name = "DownloadSaver")
 public class DownloadPlugin extends Plugin {
 
-    private static final String TAG = "DownloadSaver";
     private static final String MUSIC_DIR = "SPlayer";
     /** 进度推送步长：每 512KB 或完成时各推一次 */
     private static final long PROGRESS_STEP_BYTES = 512 * 1024;

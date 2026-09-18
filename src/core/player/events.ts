@@ -3,7 +3,6 @@ import { useMediaStore } from "@/stores/media";
 import * as queue from "@/stores/queue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
-import { useFavorite } from "@/composables/useFavorite";
 import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import { scheduleNextTrackPreload } from "@/services/nextTrackPreloader";
@@ -12,23 +11,17 @@ import * as cacheScheduler from "@/services/cacheScheduler";
 import { setDeviceVolume } from "@/services/deviceVolume";
 import * as playStats from "./stats";
 import {
-  applySavedVolumeForActiveDevice,
   getActiveDeviceId,
   hasReachedSeekTarget,
-  insertManyToQueue,
   isSeeking,
   markSeek,
   nextTrack,
   onQueueEnded,
   pause,
   play,
-  playNow,
   prevTrack,
   recoverFromSourceFailure,
-  refreshDevices,
   seek,
-  setRepeatMode,
-  setShuffleMode,
   syncFromNativeAdvance,
 } from "./index";
 
@@ -154,9 +147,6 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
     case "play":
       await play();
       break;
-    case "playTrack":
-      await playNow(event.data.track);
-      break;
     case "pause":
       await pause();
       break;
@@ -166,29 +156,5 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
     case "prev":
       await prevTrack();
       break;
-    case "setShuffle":
-      setShuffleMode(event.data.mode);
-      break;
-    case "setRepeat":
-      setRepeatMode(event.data.mode);
-      break;
-    case "addToQueue":
-      insertManyToQueue(event.data.tracks, event.data.position);
-      break;
-    case "toggleLike":
-      await useFavorite().toggle(useMediaStore().track);
-      break;
-    case "deviceChanged": {
-      const prevActiveId = getActiveDeviceId();
-      await refreshDevices();
-      const settings = useSettingsStore();
-      if (settings.player.outputDevice === null && settings.player.rememberDeviceVolume) {
-        const nextActiveId = getActiveDeviceId();
-        if (nextActiveId && nextActiveId !== prevActiveId) {
-          await applySavedVolumeForActiveDevice();
-        }
-      }
-      break;
-    }
   }
 };

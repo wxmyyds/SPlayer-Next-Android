@@ -44,11 +44,3 @@ export const getNextTrackCandidates = (ctx: CandidateContext, count: number): Ca
   }
   return results;
 };
-
-/**
- * 计算下一首预载候选 Track
- * @param ctx - 计算上下文
- * @returns 候选 Track 及位置，不存在则返回 null
- */
-export const getNextTrackCandidate = (ctx: CandidateContext): CandidateResult | null =>
-  getNextTrackCandidates(ctx, 1)[0] ?? null;

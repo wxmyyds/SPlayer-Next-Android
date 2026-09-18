@@ -8,11 +8,8 @@ import {
   aesExpandKey,
   concatBytes,
   hexDecode,
-  hexEncode,
   md5Bytes,
-  md5Hex,
   pkcs1Encrypt,
-  randomBytes,
   rawRsaEncrypt,
   utf8,
 } from "../vendor/shim/webcrypto";
@@ -297,16 +294,4 @@ export const rsaEncryptPkcs1 = (data: Uint8Array, publicKey: string): Uint8Array
 export const rsaEncryptNoPadding = (data: Uint8Array, publicKey: string): Uint8Array =>
   hexDecode(rawRsaEncrypt(data, publicKey, true));
 
-export const pluginCrypto = {
-  md5: (data: string | Uint8Array) => md5Hex(toBytes(data)),
-  sha1: (data: string | Uint8Array) => hexEncode(sha1Bytes(toBytes(data))),
-  sha256: (data: string | Uint8Array) => hexEncode(sha256Bytes(toBytes(data))),
-  hmac: (algorithm: string, key: string | Uint8Array, data: string | Uint8Array) =>
-    hexEncode(hmacBytes(algorithm.toLowerCase() as "md5" | "sha1" | "sha256", key, data)),
-  randomBytes,
-  aesEncrypt: aesEncryptNode,
-  aesDecrypt: aesDecryptNode,
-  rsaEncrypt: rsaEncryptPkcs1,
-};
-
-export { hexDecode, hexEncode, md5Bytes, randomBytes, toBytes, sha1Bytes, sha256Bytes };
+export { md5Bytes, toBytes, sha1Bytes, sha256Bytes };

@@ -93,5 +93,3 @@ export const createStreamingApi = () => ({
   ): Promise<string | null> =>
     withStreamingAdapter(serverId, (config, adapter) => adapter.getLyrics(config, trackId, hint)),
 });
-
-export type StreamingApiImpl = ReturnType<typeof createStreamingApi>;

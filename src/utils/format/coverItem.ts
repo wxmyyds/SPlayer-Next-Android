@@ -47,10 +47,3 @@ export const albumsToCoverItems = (albums: Album[]): CoverItem[] => albums.map(a
  */
 export const artistsToCoverItems = (artists: Artist[]): CoverItem[] =>
   artists.map(artistToCoverItem);
-
-/**
- * 批量转换：Playlist[] → CoverItem[]
- * @param playlists - 领域模型 Playlist 列表
- */
-export const playlistsToCoverItems = (playlists: Playlist[]): CoverItem[] =>
-  playlists.map(playlistToCoverItem);

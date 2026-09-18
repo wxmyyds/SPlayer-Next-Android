@@ -32,15 +32,6 @@ export const INSTALL_URL_TIMEOUT = 15_000;
 export const PLUGIN_REGISTRY_URL =
   "https://raw.githubusercontent.com/SPlayer-Dev/plugins/registry/registry.json";
 
-/** 心跳间隔 */
-export const HEARTBEAT_INTERVAL = 10_000;
-
-/** 连续多少次未收到 pong 视为卡死 */
-export const HEARTBEAT_MAX_MISSES = 3;
-
-/** 自动重启次数 */
-export const RESTART_MAX_ATTEMPTS = 3;
-
 /** 错误码 */
 export const PluginErrorCodes = {
   /** 未知错误 */

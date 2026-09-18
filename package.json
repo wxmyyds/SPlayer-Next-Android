@@ -54,12 +54,9 @@
     "@capacitor/android": "^7.6.9",
     "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.9",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "fast-xml-parser": "^5.10.1",
     "lyric-kit": "^0.5.4",
     "opencc-js": "^1.4.2",
-    "pako": "^3.0.1",
-    "zod": "^4.4.3"
+    "pako": "^3.0.1"
   },
   "devDependencies": {
     "@applemusic-like-lyrics/core": "^0.5.2",
@@ -78,7 +75,6 @@
     "@types/pako": "^3.0.0",
     "@types/sortablejs": "^1.15.9",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vue/test-utils": "^2.4.11",
     "@vueuse/core": "^14.4.0",
     "@vueuse/integrations": "^14.4.0",
     "colord": "^2.9.3",

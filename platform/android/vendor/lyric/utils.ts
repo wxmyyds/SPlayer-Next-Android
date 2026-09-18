@@ -6,6 +6,7 @@
  */
 
 import type { Track } from "@shared/types/player";
+import { bothContains, normalizeText as normalize } from "@shared/utils/textMatch";
 
 /** 归一化后的候选项 */
 export interface LyricCandidate<Extra = unknown> {
@@ -16,16 +17,6 @@ export interface LyricCandidate<Extra = unknown> {
   duration?: number;
   extra: Extra;
 }
-
-/** 字符串归一化 */
-export const normalize = (text: string | undefined | null): string => {
-  if (!text) return "";
-  return text.toLowerCase().replace(/[、&;，,/|()·・\s\-_'"`~!?？！.。]+/g, "");
-};
-
-/** 双向 includes 命中 */
-const bothContains = (left: string, right: string): boolean =>
-  left.length > 0 && right.length > 0 && (left.includes(right) || right.includes(left));
 
 /** 拆分候选歌手文本 */
 const splitArtists = (text: string | undefined | null): string[] =>

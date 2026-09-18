@@ -98,18 +98,7 @@ const persistSession = (cookies: Record<string, string>): void => {
   saveSessionCookies("netease", cookies);
 };
 
-/** "k1=v1; k2=v2; ..." 形式序列化 */
-const serialize = (cookies: Record<string, string>): string =>
-  Object.entries(cookies)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("; ");
-
 export const getNeteaseCookies = (): Record<string, string> => ({ ...loadSession() });
-
-export const setNeteaseCookies = (cookies: Record<string, string>): void => {
-  persistSession(cookies);
-  cacheClear();
-};
 
 export const mergeNeteaseCookies = (patch: Record<string, string>): void => {
   persistSession({ ...loadSession(), ...patch });
@@ -228,6 +217,3 @@ export const callNetease = async (
 
   return value;
 };
-
-/** 调试用：当前 cookie 序列化字符串 */
-export const currentCookieString = (): string => serialize(loadSession());

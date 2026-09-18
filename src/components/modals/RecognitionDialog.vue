@@ -163,7 +163,6 @@ const start = (): void => {
               {{ t("recognition.sourceLabel") }}
             </span>
             <SRadioGroup v-model:value="source" size="small" class="flex gap-4">
-              <SRadio v-if="!isAndroid" value="system" :label="t('recognition.source.system')" />
               <SRadio value="microphone" :label="t('recognition.source.microphone')" />
             </SRadioGroup>
           </div>

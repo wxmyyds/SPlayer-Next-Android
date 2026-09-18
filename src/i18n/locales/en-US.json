@@ -6,7 +6,6 @@
     "downloading": "Downloading",
     "installNow": "Restart & Install",
     "goDownload": "Go to Download",
-    "goStore": "Update in Store",
     "upToDate": "You're on the latest version",
     "readyToast": "Update ready — restart to install",
     "failed": "Update failed, please try again later"
@@ -108,7 +107,6 @@
     "enabled": "Enabled",
     "loadMore": "Load More",
     "active": "Active",
-    "saveAndRelaunch": "Save & Relaunch",
     "reset": "Reset",
     "retry": "Retry",
     "prev": "Previous",
@@ -188,11 +186,7 @@
     "plus": "+{n}s",
     "warningBLessThanA": "B must be later than A; loop disabled"
   },
-  "uiZoom": {
-    "title": "Interface Zoom",
-    "range": "Range: 50% - 200%",
-    "reset": "Reset to default"
-  },
+  "uiZoom": {},
   "nav": {
     "home": "Home",
     "library": "Library",
@@ -205,8 +199,6 @@
     "stats": "Stats",
     "tabHistory": "History",
     "tabFavorites": "Favorites",
-    "reload": "Reload",
-    "devtools": "Developer Tools",
     "globalSettings": "Global Settings",
     "searchPlaceholder": "Search songs, artists or albums",
     "searchEmpty": "Start typing to search",
@@ -239,11 +231,9 @@
     "start": "Start Recognition",
     "sourceLabel": "Audio source",
     "hint": {
-      "system": "We will capture a short audio sample from your system to identify the music",
       "microphone": "Move closer to the source and keep the room quiet for better results"
     },
     "source": {
-      "system": "System Audio",
       "microphone": "Microphone"
     },
     "phase": {
@@ -255,8 +245,6 @@
     "retry": "Try Again",
     "cancel": "Cancel",
     "play": "Play",
-    "unavailable": "Music recognition is not supported on this device",
-    "searching": "Search this song",
     "error": {
       "unsupported": "System audio capture is not supported on this platform",
       "no-device": "No audio input device found",
@@ -373,8 +361,6 @@
     "qrTipScanned": "Scanned, please confirm in the app",
     "qrTipExpired": "QR code expired, refreshing",
     "qrTipDone": "Signed in",
-    "qrTipUnknown": "Unknown state, please retry",
-    "qrRefresh": "Refresh QR code",
     "autoFetch": "Auto fetch",
     "autoFetchTitle": "Before you continue",
     "autoFetchTip": "This feature can't guarantee account safety — use it at your own discretion. If the official page goes blank or unresponsive, close it and try again.",
@@ -481,8 +467,7 @@
       "already": "Already in Personal FM",
       "failed": "Failed to start Personal FM, please try again later",
       "modeSettings": "Personal FM Mode",
-      "modeTooltip": "FM Mode & Scene",
-      "modeSettingsTip": "Select preferred recommendation mode and scene"
+      "modeTooltip": "FM Mode & Scene"
     },
     "lyricOffset": {
       "title": "Lyric Offset",
@@ -591,8 +576,6 @@
     "title": "Playlist",
     "empty": "Playlist is empty",
     "unknownArtist": "Unknown Artist",
-    "clearList": "Clear All",
-    "locateCurrent": "Now Playing",
     "clearConfirmTitle": "Clear Playlist",
     "clearConfirmContent": "Are you sure you want to clear the entire playlist? This cannot be undone."
   },
@@ -750,7 +733,6 @@
       "language": "Language",
       "playControl": "Playback Control",
       "audioSource": "Audio Source",
-      "scrobble": "Scrobble",
       "lyricContent": "Lyric Content",
       "lyricTTML": "TTML Lyrics",
       "lyricExclude": "Metadata Stripping",
@@ -804,7 +786,6 @@
       "commit": "Commit",
       "date": "Date"
     },
-    "storeVersion": "Store",
     "language": {
       "label": "Language",
       "description": "Switch the display language"
@@ -1018,7 +999,6 @@
       "description": "Manage in-app and global keyboard shortcuts",
       "globalEnabled": "Enable global shortcuts",
       "globalEnabledHint": "Fire even when the app is not focused. May conflict with the OS or other apps.",
-      "colAction": "Action",
       "colInApp": "In-App",
       "colGlobal": "Global",
       "unbound": "Unbound",
@@ -1069,8 +1049,6 @@
     "confirm": {
       "highResourceTitle": "Resource-Intensive Feature",
       "highResourceContent": "Enabling it may noticeably increase memory and CPU usage, and could cause stuttering on lower-end devices. Enable it anyway?",
-      "restartRequiredTitle": "Restart Required",
-      "restartRequiredContent": "This setting requires an app restart. Save and relaunch now?",
       "testChannelTitle": "Switch to a Test Channel",
       "testChannelContent": "Beta and Alpha channels receive test releases early. Alpha releases may be highly unstable. Switch anyway?",
       "kugouLoginVersionTitle": "Switch KG Login Version",
@@ -1245,215 +1223,6 @@
     "inactiveAlpha": {
       "label": "Inactive Opacity",
       "description": "Base opacity for non-active lines"
-    },
-    "desktopLyricEnabled": {
-      "label": "Enable Desktop Lyric",
-      "description": "Show a floating lyric window on desktop"
-    },
-    "desktopLyricFontSize": {
-      "label": "Font Size",
-      "description": "Desktop lyric text size (px)"
-    },
-    "desktopLyricFontWeight": {
-      "label": "Font Weight",
-      "description": "Desktop lyric text weight"
-    },
-    "desktopLyricShowTranslation": {
-      "label": "Show Translation",
-      "description": "Display translated lyrics on desktop lyric"
-    },
-    "desktopLyricDoubleLine": {
-      "label": "Double Line",
-      "description": "Show current and next line together"
-    },
-    "desktopLyricAlign": {
-      "label": "Alignment",
-      "description": "Horizontal alignment of lyric text",
-      "left": "Left",
-      "center": "Center",
-      "right": "Right",
-      "justify": "Justify"
-    },
-    "desktopLyricWordByWord": {
-      "label": "Word by Word",
-      "description": "Render highlight progress per word"
-    },
-    "desktopLyricAutoGenerateWordByWord": {
-      "label": "Auto-generate Word Effect",
-      "description": "When off, only real per-word lyrics apply"
-    },
-    "desktopLyricPlayedColor": {
-      "label": "Played Color",
-      "description": "Color of played lyric text"
-    },
-    "desktopLyricUnplayedColor": {
-      "label": "Unplayed Color",
-      "description": "Color of unplayed lyric text"
-    },
-    "desktopLyricStrokeColor": {
-      "label": "Stroke Color",
-      "description": "Outline color of lyric text; transparent means stroke is off"
-    },
-    "desktopLyricBackgroundMask": {
-      "label": "Text Background Mask",
-      "description": "Add a translucent background block behind each lyric line for readability"
-    },
-    "desktopLyricBackgroundMaskColor": {
-      "label": "Mask Color",
-      "description": "Color and opacity of the text background mask"
-    },
-    "desktopLyricAlwaysShowSongInfo": {
-      "label": "Always Show Song Info",
-      "description": "Always show track title and artist; otherwise show only on hover"
-    },
-    "desktopLyricAnimation": {
-      "label": "Line Transition",
-      "description": "Enable slide-in / slide-out animation when lyric line switches"
-    },
-    "desktopLyricLimitBounds": {
-      "label": "Confine to Screen",
-      "description": "Clamp window position within the current display's work area while dragging"
-    },
-    "desktopLyricAlwaysOnTop": {
-      "label": "Always On Top",
-      "description": "Keep desktop lyric window above others"
-    },
-    "desktopLyricLocked": {
-      "label": "Lock Window",
-      "description": "Make window click-through and non-draggable"
-    },
-    "desktopLyricUseCSSDrag": {
-      "label": "Enable CSS Drag",
-      "description": "Enable CSS-based drag, recommended for Wayland environments"
-    },
-    "dynamicIslandEnabled": {
-      "label": "Enable Dynamic Island",
-      "description": "Show a compact floating lyric window at the top of the screen; drag it anywhere"
-    },
-    "dynamicIslandScale": {
-      "label": "Scale",
-      "description": "Scale window height and font size together; 100% is the default size"
-    },
-    "dynamicIslandFontWeight": {
-      "label": "Font Weight",
-      "description": "Lyric text weight in the Dynamic Island"
-    },
-    "dynamicIslandWordByWord": {
-      "label": "Word Highlight",
-      "description": "Render progressive word-by-word highlight"
-    },
-    "dynamicIslandTransition": {
-      "label": "Transition",
-      "description": "Choose how the island width and lyric lines transition",
-      "bounce": "Dynamic Bounce",
-      "smooth": "Smooth Transition"
-    },
-    "dynamicIslandDoubleLine": {
-      "label": "Always Two Lines",
-      "description": "Keep two-line layout even when no translation is available"
-    },
-    "dynamicIslandShowTranslation": {
-      "label": "Show Translation",
-      "description": "Show translation as the secondary line when available"
-    },
-    "dynamicIslandPlayedColor": {
-      "label": "Played Color",
-      "description": "Color of already-sung lyric text"
-    },
-    "dynamicIslandUnplayedColor": {
-      "label": "Unplayed Color",
-      "description": "Color of upcoming lyric text and artist name"
-    },
-    "dynamicIslandBackgroundColor": {
-      "label": "Background Color",
-      "description": "Background color and opacity of the island"
-    },
-    "dynamicIslandAlwaysOnTop": {
-      "label": "Always On Top",
-      "description": "Keep the Dynamic Island window above others"
-    },
-    "dynamicIslandNotchFusion": {
-      "label": "Notch Fusion",
-      "description": "Expand the island from the physical MacBook notch"
-    },
-    "dynamicIslandSnapCentered": {
-      "label": "Center When Snapped",
-      "description": "When off, snapping to the top keeps the dragged horizontal position"
-    },
-    "dynamicIslandNonOcclusive": {
-      "label": "Non-Occlusive Mode",
-      "description": "Click-through window; hide on hover"
-    },
-    "dynamicIslandUseCSSDrag": {
-      "label": "Enable CSS Drag",
-      "description": "Enable CSS-based drag, recommended for Wayland environments"
-    },
-    "taskbarLyricEnabled": {
-      "label": "Enable Taskbar Lyric",
-      "description": "Embed lyrics into the Windows taskbar"
-    },
-    "taskbarLyricPosition": {
-      "label": "Position",
-      "description": "Lyric position in the taskbar. Auto mode picks based on taskbar alignment",
-      "auto": "Auto",
-      "left": "Left",
-      "right": "Right"
-    },
-    "taskbarLyricAutoMaxWidth": {
-      "label": "Auto Width",
-      "description": "Use the available taskbar area as the maximum width; disable to set it manually"
-    },
-    "taskbarLyricAutoAdjustOccupiedSpace": {
-      "label": "Shrink Window to Content",
-      "description": "Within the automatic width, shrink the actual window to the primary lyric and hover controls"
-    },
-    "taskbarLyricMaxWidth": {
-      "label": "Max Width",
-      "description": "Capped by available space to avoid squeezing"
-    },
-    "taskbarLyricLeftMargin": {
-      "label": "Left Margin",
-      "description": "Gap between the lyric and the left edge of available space, to avoid other taskbar widgets"
-    },
-    "taskbarLyricRightMargin": {
-      "label": "Right Margin",
-      "description": "Gap between the lyric and the right edge of available space, to avoid other taskbar widgets"
-    },
-    "taskbarLyricColorMode": {
-      "label": "Color Mode",
-      "description": "Text and background color scheme of the taskbar lyric",
-      "taskbar": "Follow Taskbar",
-      "taskbarInverse": "Follow Taskbar (Inverted)",
-      "light": "Light",
-      "dark": "Dark"
-    },
-    "taskbarLyricShowBackground": {
-      "label": "Show Background",
-      "description": "Show a translucent background while focused"
-    },
-    "taskbarLyricFontSize": {
-      "label": "Font Size",
-      "description": "Taskbar lyric text size (px)"
-    },
-    "taskbarLyricFontWeight": {
-      "label": "Font Weight",
-      "description": "Taskbar lyric text weight"
-    },
-    "taskbarLyricShowCover": {
-      "label": "Show Cover",
-      "description": "Show the current track's cover thumbnail beside the lyric"
-    },
-    "taskbarLyricDoubleLine": {
-      "label": "Double Line",
-      "description": "Show current lyric together with translation or next line"
-    },
-    "taskbarLyricShowTranslation": {
-      "label": "Show Translation",
-      "description": "In double-line mode, prefer translation; fall back to the next line when unavailable"
-    },
-    "taskbarLyricWordByWord": {
-      "label": "Word by Word",
-      "description": "Render highlight progress per word"
     },
     "playerBgType": {
       "label": "Player Background",
@@ -1674,7 +1443,6 @@
       "loginQr": "QR Login",
       "loginQrQQ": "QQ QR Login",
       "loginQrWX": "WeChat QR Login",
-      "qrTitle": "Scan to Log In",
       "manualCookie": "Cookie Login",
       "logout": "Log Out",
       "logoutTitle": "Log Out from {name}",
@@ -1757,16 +1525,6 @@
       "description": "Re-login is required after switching",
       "standard": "Standard",
       "concept": "Concept"
-    },
-    "neteaseScrobbleEnabled": {
-      "label": "Enable scrobble",
-      "description": "Automatically report listening records to NCM after a track has played long enough"
-    },
-    "neteaseScrobbleMode": {
-      "label": "NCM scrobble method",
-      "description": "Choose which reporting interface is used for automatic NCM listening records",
-      "legacy": "Legacy log API",
-      "ncbl": "NCBL encrypted API"
     },
     "orpheusProtocol": {
       "label": "Wake this app via the Orpheus protocol",
@@ -1981,9 +1739,18 @@
         "homepage": "Homepage"
       },
       "grant": {
-        "network": { "label": "Network", "desc": "Can make network requests" },
-        "control": { "label": "Control", "desc": "Can control the player" },
-        "ui": { "label": "Interface", "desc": "Can extend or modify the app interface" }
+        "network": {
+          "label": "Network",
+          "desc": "Can make network requests"
+        },
+        "control": {
+          "label": "Control",
+          "desc": "Can control the player"
+        },
+        "ui": {
+          "label": "Interface",
+          "desc": "Can extend or modify the app interface"
+        }
       }
     },
     "pluginManager": {
@@ -2249,12 +2016,7 @@
     "NETEASE_VIP_REQUIRED": "This track requires a membership or separate purchase",
     "NETEASE_TRIAL_DISABLED": "Only a trial is available; enable trial playback in settings",
     "NETEASE_UNAVAILABLE": "No source is currently available for this track",
-    "SCAN_NO_DIRS": "No scan directories configured",
-    "SCAN_DIR_EXISTS": "Directory already exists",
-    "SCAN_DIR_NOT_FOUND": "Directory not found",
     "SCAN_DIR_NOT_SELECTED": "No directory selected",
-    "TAG_READ_FAILED": "Failed to read tags",
-    "TAG_WRITE_FAILED": "Failed to write tags",
     "MAX_CONSECUTIVE_FAILURES": "Too many consecutive playback failures",
     "UNKNOWN": "Operation failed"
   },

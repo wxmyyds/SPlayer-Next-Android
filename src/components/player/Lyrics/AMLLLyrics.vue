@@ -459,11 +459,4 @@ defineExpose({
   border: none !important;
   outline: none !important;
 }
-
-@media (max-width: 990px) {
-  :deep(.lp-line.lp-credit) {
-    padding-left: var(--lyric-line-padding-x, 1em) !important;
-    padding-right: var(--lyric-line-padding-x, 1em) !important;
-  }
-}
 </style>

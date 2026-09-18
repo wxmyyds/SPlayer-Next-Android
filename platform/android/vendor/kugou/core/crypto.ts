@@ -16,7 +16,7 @@ import {
   utf8,
   utf8Decode,
 } from "../../shim/webcrypto";
-import { getKgAppid, getKgClientver, isKugouConceptMode } from "./config";
+import { getKgAppid, isKugouConceptMode } from "./config";
 
 /** KG Android 签名盐值（标准版） */
 const ANDROID_SIGN_SALT = "OIlwieks28dk2k092lksi2UIkp";
@@ -149,22 +149,6 @@ export const signatureWebParams = (params: Record<string, unknown>): string => {
     .sort()
     .join("");
   return cryptoMd5(`${WEB_SIGN_SALT}${paramsString}${WEB_SIGN_SALT}`);
-};
-
-/**
- * 参数密钥签名（signParamsKey）
- * 算法：MD5(appid + salt + clientver + data)
- * @param data 签名数据（时间戳或 hash）
- * @param appid 应用 ID
- * @param clientver 客户端版本号
- * @returns 32位签名字符串
- */
-export const signParamsKey = (
-  data: string | number,
-  appid = getKgAppid(),
-  clientver = getKgClientver(),
-): string => {
-  return cryptoMd5(`${appid}${currentSalts().androidSign}${clientver}${data}`);
 };
 
 /**

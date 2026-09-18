@@ -64,7 +64,7 @@ interface PendingCall {
   cancelled: boolean;
 }
 
-export interface RuntimeRecord {
+interface RuntimeRecord {
   pluginId: string;
   grants: PluginGrant[];
   handlers: Map<PluginAction, (request: unknown) => Promise<unknown>>;
@@ -388,8 +388,6 @@ export const unloadPlugin = (pluginId: string): void => {
   records.delete(pluginId);
 };
 
-export const getRuntime = (pluginId: string): RuntimeRecord | undefined => records.get(pluginId);
-
 export const callAction = <T>(
   pluginId: string,
   action: PluginAction,
@@ -438,11 +436,6 @@ export const callAction = <T>(
   });
 };
 
-export const cancelAction = (pluginId: string, requestId: string): void => {
-  const pending = records.get(pluginId)?.pending.get(requestId);
-  if (pending) pending.cancelled = true;
-};
-
 export const deliverPlaybackEvent = (
   pluginId: string,
   event: PlaybackEventKind,
@@ -475,5 +468,3 @@ export const deliverSettingsUpdate = (
     }
   }
 };
-
-export const listRuntimes = (): RuntimeRecord[] => Array.from(records.values());

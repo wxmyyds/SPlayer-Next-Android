@@ -38,9 +38,7 @@ const ANDROID_HIDDEN_ITEMS = new Set([
   "sidebarCollapsed",
   "sidebarPlaylistCover",
   "sidebarCustomize",
-  "showStatsInSidebar",
-  // 常规：协议唤起与自更新为桌面能力，性能监视器为桌面调试悬浮卡片
-  "orpheusProtocol",
+  // 常规：自更新为桌面能力，性能监视器为桌面调试悬浮卡片
   "updateChannel",
   "autoCheckUpdate",
   "checkUpdate",

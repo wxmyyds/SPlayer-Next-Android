@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useMediaStore } from "@/stores/media";
+import { isAndroid } from "@/utils/platform";
 import { useThemeStore } from "@/stores/theme";
 import { useCopyText } from "@/composables/useCopyText";
 import { toast } from "@/composables/useToast";
@@ -217,6 +218,7 @@ const handleExport = async (): Promise<void> => {
         {{ t("player.copyLyric.invert") }}
       </SButton>
       <SButton
+        v-if="!isAndroid"
         variant="secondary"
         :loading="exporting"
         :disabled="!selectedLines.length"

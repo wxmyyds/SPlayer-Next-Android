@@ -1,17 +1,3 @@
-/** 允许上传的音频扩展名 */
-export const AUDIO_EXTENSIONS: string[] = [
-  "mp3",
-  "flac",
-  "wav",
-  "m4a",
-  "aac",
-  "ogg",
-  "opus",
-  "wma",
-  "ape",
-  "aiff",
-];
-
 /** 选中待上传的本地歌曲 */
 export interface PickedSong {
   /** 绝对路径 */

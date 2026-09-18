@@ -330,21 +330,6 @@ export const setSetting = async (id: string, key: string, value: unknown): Promi
   emitStatus(runtime);
 };
 
-export const pickForAction = async (
-  action: keyof import("@shared/types/plugin").ActionIO,
-  source?: string,
-): Promise<RuntimeState | undefined> => {
-  await ensureInitialized();
-  for (const runtime of runtimes.values()) {
-    if (!runtime.enabled || runtime.status.state !== "ready") continue;
-    const sources = runtime.status.sources;
-    for (const [key, capability] of Object.entries(sources)) {
-      if ((!source || key === source) && capability.actions.includes(action)) return runtime;
-    }
-  }
-  return undefined;
-};
-
 export const hasEnabledControlPlugin = (): boolean =>
   Array.from(runtimes.values()).some(
     (runtime) => runtime.enabled && runtime.controls && runtime.status.state === "ready",

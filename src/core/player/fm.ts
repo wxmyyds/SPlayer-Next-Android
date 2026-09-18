@@ -17,9 +17,6 @@ let fetchingPromise: Promise<void> | null = null;
 /** 当前 FM 曲目；池空返回 null */
 export const current = (): Track | null => pool[0] ?? null;
 
-/** 池是否非空 */
-export const hasTracks = (): boolean => pool.length > 0;
-
 /** 拉一批新曲目追加到池末 */
 const fetchMore = (): Promise<void> => {
   if (fetchingPromise) return fetchingPromise;

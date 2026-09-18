@@ -7,7 +7,8 @@
 
 import type { LyricMatchResult } from "@shared/types/lyrics";
 import type { Track } from "@shared/types/player";
-import { normalize, normalizeTrackArtists } from "./utils";
+import { normalizeTrackArtists } from "./utils";
+import { normalizeText as normalize } from "@shared/utils/textMatch";
 
 /** 时长按 5s 桶归一（与上游一致） */
 const DURATION_BUCKET_MS = 5000;

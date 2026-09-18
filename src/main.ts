@@ -9,9 +9,8 @@ import i18n from "./i18n";
 import { useThemeStore } from "./stores/theme";
 import { useSettingsStore } from "./stores/settings";
 import { useHotkeyStore } from "./stores/hotkey";
-import { initPlayer, playFiles, restoreLastTrack } from "./core/player";
+import { initPlayer, restoreLastTrack } from "./core/player";
 import { installAndroidBackButton } from "./services/androidBackButton";
-import { handleOrpheus } from "./services/orpheus";
 import { installHotkeyManager } from "./core/hotkey/manager";
 import { vRipple } from "./directives/ripple";
 import { installAndroidBridge } from "@android/bridge";
@@ -68,18 +67,10 @@ const removeSplash = (): void => {
  * 启动播放服务并分发冷启动任务
  */
 const bootstrapPlayback = async (): Promise<void> => {
+  // 下载分类设置在 Android 隐藏（无关闭入口），置位使已实现的下载链路可达
+  await useSettingsStore().setSystem("download.enabled", true);
   await initPlayer();
-
-  const pendingAudioFiles = await window.api.system.consumePendingAudioFiles();
-  const pendingOrpheusUrl = await window.api.system.consumePendingProtocolUrl();
-
-  if (pendingAudioFiles && pendingAudioFiles.length > 0) {
-    await playFiles(pendingAudioFiles);
-  } else if (pendingOrpheusUrl) {
-    await handleOrpheus(pendingOrpheusUrl);
-  } else {
-    await restoreLastTrack();
-  }
+  await restoreLastTrack();
 };
 
 // 初始化程序

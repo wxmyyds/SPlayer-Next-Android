@@ -7,6 +7,7 @@
  */
 
 import type { Track } from "@shared/types/player";
+import { bothContains, normalizeText as normalize } from "@shared/utils/textMatch";
 
 /** 排序上下文：表单当前值 + 本地文件时长 */
 export interface TagMatchContext {
@@ -24,16 +25,6 @@ export interface RankedTagCandidate {
   /** 与本地文件时长差超 20s，基本可断定不是同一版本 */
   durationFar: boolean;
 }
-
-/** 字符串归一化（与歌词匹配同规则） */
-const normalize = (text: string | undefined | null): string => {
-  if (!text) return "";
-  return text.toLowerCase().replace(/[、&;，,/|()·・\s\-_'"`~!?？！.。]+/g, "");
-};
-
-/** 双向 includes 命中 */
-const bothContains = (left: string, right: string): boolean =>
-  left.length > 0 && right.length > 0 && (left.includes(right) || right.includes(left));
 
 /** 时长差判定（ms） */
 const durationDiff = (leftMs?: number, rightMs?: number): number | null => {

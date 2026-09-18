@@ -58,10 +58,6 @@ const cacheSet = (key: string, value: unknown, ttl = DEFAULT_TTL): void => {
   cache.set(key, { value, expireAt: Date.now() + ttl });
 };
 
-export const clearQQMusicCache = (): void => {
-  cache.clear();
-};
-
 /**
  * 调用任意 QM API
  * @param name  见 modules/index.ts 中的 key（search / song_info / lyric / match / hot_search / leaderboard / song_list / user_detail / song_url）

@@ -6,14 +6,11 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -71,18 +68,6 @@ public class MediaSessionPlugin extends Plugin {
     private Bitmap lastNotifiedArt;
     private String lastNotifiedStats = "";
 
-    private final BroadcastReceiver noisyReceiver =
-            new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    if (!pauseOnNoisy) return;
-                    // 拔耳机/断蓝牙：暂停，重连后不自动续播
-                    emitMediaKey("pause", -1);
-                }
-            };
-    private boolean noisyRegistered;
-    /** 拔出设备是否暂停（settings.player.pauseOnDeviceSwitch 同步而来，默认开） */
-    private boolean pauseOnNoisy = true;
 
     @Override
     public void load() {
@@ -188,7 +173,6 @@ public class MediaSessionPlugin extends Plugin {
                 .runOnUiThread(
                         () -> {
                             if (stopped) {
-                                unregisterNoisyReceiver();
                                 sSession.setActive(false);
                                 lastArt = null;
                                 pendingArtUrl = null;
@@ -203,11 +187,7 @@ public class MediaSessionPlugin extends Plugin {
                             sSession.setActive(true);
                             ensureChannel();
 
-                            // 焦点礼让交由 WebView 内部媒体栈处理（原生再申请会与其互斥，元素被瞬时暂停）；
-                            // 这里只管拔耳机监听生命周期：播放期注册，暂停/停止注销
-                            if (playing) registerNoisyReceiver();
-                            else unregisterNoisyReceiver();
-
+                            // 焦点礼让交由 WebView 内部媒体栈处理（原生再申请会与其互斥，元素被瞬时暂停）
                             applyMetadataUpdate(title, artist, album, playing, positionMs, durationMs, artworkUrl);
                             call.resolve();
                         });
@@ -447,40 +427,6 @@ public class MediaSessionPlugin extends Plugin {
         data.put("action", action);
         data.put("position", position);
         sInstance.notifyListeners("mediaKey", data);
-    }
-
-    private void registerNoisyReceiver() {
-        if (noisyRegistered) return;
-        try {
-            // 挂 applicationContext：播放中退出页面时避免 Activity 泄漏接收器
-            Context appContext = getContext().getApplicationContext();
-            IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-            if (Build.VERSION.SDK_INT >= 33) {
-                appContext.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                appContext.registerReceiver(noisyReceiver, filter);
-            }
-            noisyRegistered = true;
-        } catch (Exception ignored) {
-            // 部分 ROM 对 NOT_EXPORTED 校验过严会抛异常；监听失败只影响拔耳机暂停，绝不波及播放
-        }
-    }
-
-    private void unregisterNoisyReceiver() {
-        if (!noisyRegistered) return;
-        noisyRegistered = false;
-        try {
-            getContext().getApplicationContext().unregisterReceiver(noisyReceiver);
-        } catch (IllegalArgumentException ignored) {
-            // 已被系统注销
-        }
-    }
-
-    /** 同步"拔出设备暂停"设置（settings.player.pauseOnDeviceSwitch） */
-    @PluginMethod
-    public void setPauseOnDeviceSwitch(PluginCall call) {
-        pauseOnNoisy = Boolean.TRUE.equals(call.getBoolean("enabled", true));
-        call.resolve();
     }
 
     private static long readLong(PluginCall call, String key, long fallback) {

@@ -1,10 +1,7 @@
 package com.wxmyyds.splayer.next;
 
 import android.content.Context;
-import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
-import android.media.audiofx.LoudnessEnhancer;
-import android.media.audiofx.Virtualizer;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -64,13 +61,9 @@ public class AudioEnginePlugin extends Plugin {
 
     // Audio effects
     private Equalizer equalizer;
-    private BassBoost bassBoost;
-    private Virtualizer virtualizer;
-    private LoudnessEnhancer loudnessEnhancer;
     private boolean effectsAttached = false;
     private boolean equalizerEnabled = false;
     private float[] equalizerBands = null;
-    private boolean normalizationEnabled = false;
 
     // Visualizer
     private android.media.audiofx.Visualizer visualizer;
@@ -189,7 +182,6 @@ public class AudioEnginePlugin extends Plugin {
     private float volume = 1.0f;
     private float speed = 1.0f;
     private boolean pitchSync = true;
-    private int fadeMs = 200;
 
     @Override
     public void load() {
@@ -694,7 +686,7 @@ public class AudioEnginePlugin extends Plugin {
 
     @PluginMethod
     public void setFadeDuration(PluginCall call) {
-        fadeMs = (int) optLong(call, "duration", 200L);
+        // 淡入淡出由播放引擎渐变处理，无独立实现
         call.resolve();
     }
 
@@ -749,23 +741,6 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     @PluginMethod
-    public void setNormalizationEnabled(PluginCall call) {
-        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
-        mainHandler.post(() -> {
-            normalizationEnabled = enabled;
-            if (loudnessEnhancer != null) {
-                loudnessEnhancer.setEnabled(enabled);
-                if (enabled) {
-                    try {
-                        loudnessEnhancer.setTargetGain(0);
-                    } catch (Exception ignored) {}
-                }
-            }
-            call.resolve();
-        });
-    }
-
-    @PluginMethod
     public void setFftEnabled(PluginCall call) {
         fftEnabled = call.getBoolean("enabled", false);
         mainHandler.post(() -> {
@@ -776,14 +751,6 @@ public class AudioEnginePlugin extends Plugin {
             }
             call.resolve();
         });
-    }
-
-    @PluginMethod
-    public void getFftData(PluginCall call) {
-        JSObject ret = new JSObject();
-        ret.put("ldata", new JSONArray());
-        ret.put("rdata", new JSONArray());
-        call.resolve(ret);
     }
 
     @PluginMethod
@@ -837,27 +804,10 @@ public class AudioEnginePlugin extends Plugin {
         try {
             equalizer = new Equalizer(0, audioSessionId);
         } catch (Exception ignored) {}
-        try {
-            bassBoost = new BassBoost(0, audioSessionId);
-            bassBoost.setEnabled(false);
-        } catch (Exception ignored) {}
-        try {
-            virtualizer = new Virtualizer(0, audioSessionId);
-            virtualizer.setEnabled(false);
-        } catch (Exception ignored) {}
-        try {
-            loudnessEnhancer = new LoudnessEnhancer(audioSessionId);
-        } catch (Exception ignored) {}
-        // 回灌启动时缓存的均衡器/响度归一化状态（启动时 equalizer 还是 null，JS 下发被静默丢弃）
+        // 回灌启动时缓存的均衡器状态（启动时 equalizer 还是 null，JS 下发被静默丢弃）
         if (equalizer != null) {
             applyEqualizerBands();
             equalizer.setEnabled(equalizerEnabled);
-        }
-        if (loudnessEnhancer != null) {
-            loudnessEnhancer.setEnabled(normalizationEnabled);
-            if (normalizationEnabled) {
-                try { loudnessEnhancer.setTargetGain(0); } catch (Exception ignored) {}
-            }
         }
     }
 
@@ -865,9 +815,6 @@ public class AudioEnginePlugin extends Plugin {
         if (!effectsAttached) return;
         effectsAttached = false;
         if (equalizer != null) { equalizer.release(); equalizer = null; }
-        if (bassBoost != null) { bassBoost.release(); bassBoost = null; }
-        if (virtualizer != null) { virtualizer.release(); virtualizer = null; }
-        if (loudnessEnhancer != null) { loudnessEnhancer.release(); loudnessEnhancer = null; }
         releaseVisualizer();
     }
 
@@ -983,7 +930,4 @@ public class AudioEnginePlugin extends Plugin {
         call.resolve();
     }
 
-    static AudioEnginePlugin getInstance() {
-        return sInstance;
-    }
 }

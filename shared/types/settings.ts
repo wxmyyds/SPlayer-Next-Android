@@ -423,9 +423,6 @@ export interface AppUpdateSettings {
   channel: UpdateChannel;
 }
 
-/** NCM 听歌打卡上报方式 */
-export type NeteaseScrobbleMode = "legacy" | "ncbl";
-
 /** KG 登录版本 */
 export type KugouLoginVersion = "standard" | "concept";
 
@@ -483,10 +480,6 @@ export interface SystemConfig {
     kugouLoginVersion: KugouLoginVersion;
     /** 网络代理配置 */
     networkProxy: NetworkProxySettings;
-    /** 听歌打卡开关 */
-    neteaseScrobbleEnabled: boolean;
-    /** 听歌打卡上报方式 */
-    neteaseScrobbleMode: NeteaseScrobbleMode;
     /** 注册为 Orpheus 协议处理程序，抢占网页端「用客户端打开」 */
     registerOrpheusProtocol: boolean;
   };
