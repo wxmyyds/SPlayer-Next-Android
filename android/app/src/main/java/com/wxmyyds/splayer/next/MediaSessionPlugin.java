@@ -166,7 +166,7 @@ public class MediaSessionPlugin extends Plugin {
         long positionMs = readLong(call, "positionMs", 0);
         long durationMs = readLong(call, "durationMs", 0);
         // 缺省沿用上次速率（playingChanged 才带 speed）
-        float speed = call.has("speed") ? (float) call.getDouble("speed") : lastSpeed;
+        float speed = (float) call.getData().optDouble("speed", lastSpeed);
         lastSpeed = Math.max(0.5f, Math.min(2.0f, speed));
         String artworkUrl = call.getString("artworkUrl", null);
         Activity activity = getActivity();
