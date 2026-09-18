@@ -1,0 +1,21 @@
+[package]
+name = "js-engine"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "js_engine"
+crate-type = ["cdylib"]
+
+[dependencies]
+rquickjs = "0.9"
+jni = "0.21"
+flate2 = "1"
+base64 = "0.22"
+getrandom = "0.2"
+serde_json = "1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

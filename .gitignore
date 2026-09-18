@@ -25,3 +25,7 @@ package-lock.json
 # Code signing certificates
 *.pfx
 *.p12
+
+# rquickjs 引擎产物（cargo-ndk 生成）
+android/app/src/main/jniLibs/
+android/app/src/main/assets/engine/

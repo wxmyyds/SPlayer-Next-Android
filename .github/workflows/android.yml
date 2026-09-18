@@ -78,6 +78,14 @@ jobs:
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
+      - name: Setup Rust (rquickjs 引擎)
+        # ubuntu-latest 镜像自带 NDK（ANDROID_NDK_HOME 已指向），cargo-ndk 负责链接器
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          cargo install cargo-ndk
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 

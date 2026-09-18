@@ -500,6 +500,25 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     /**
+     * 经内嵌引擎解析（vendor 同源代码）：提取 url 字段
+     * @param ctx - JS 推入的解析上下文（取 cookie）
+     * @param songId - 歌曲 id
+     * @param level - 音质 level
+     * @return 播放地址，引擎不可用/解析失败返回 null（调用方回落）
+     */
+    private static String resolveViaEngine(JSONObject ctx, String songId, String level) {
+        try {
+            String cookie = ctx.optString("cookie", "");
+            String result = JsEngineResolver.resolve(cookie, songId, level);
+            if (result == null) return null;
+            return new org.json.JSONObject(result).optString("url", null);
+        } catch (Throwable t) {
+            Log.w(TAG, "engine resolve failed", t);
+            return null;
+        }
+    }
+
+    /**
      * 播放列表无下一项且队列非空时，从队列头自解一首挂入（IO 线程解析，主线程挂载）
      * @param fromEnded - 是否由 ENDED 状态触发（解析全败时发 ended 回落 JS 链）
      * @returns 是否已启动在途解析（调用方据此刻定 ENDED 是否真正结束）
@@ -520,7 +539,12 @@ public class AudioEnginePlugin extends Plugin {
         RESOLVE_POOL.execute(
                 () -> {
                     try {
-                        String url = NeteaseEapiResolver.resolve(ctx, songId, level);
+                        // 引擎优先：vendor 同源代码在 rquickjs 里跑（WebView 冻结不受影响），
+                        // 失败回落手写 Java eapi 解析器
+                        String url = resolveViaEngine(ctx, songId, level);
+                        if (url == null) {
+                            url = NeteaseEapiResolver.resolve(ctx, songId, level);
+                        }
                         mainHandler.post(
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表

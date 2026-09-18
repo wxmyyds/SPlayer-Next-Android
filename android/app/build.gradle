@@ -1,5 +1,41 @@
 apply plugin: 'com.android.application'
 
+// rquickjs 引擎（android/js-engine）：cargo-ndk 构建多 ABI .so 到 jniLibs。
+// cargo/NDK 缺失时跳过（引擎初始化自会失败并回落 Java eapi 解析器，不影响构建）
+def hasTool(String cmd) {
+    try {
+        def out = new ByteArrayOutputStream()
+        exec { commandLine 'which', cmd; standardOutput = out; ignoreExitValue = true }
+        return out.toString().trim() != ''
+    } catch (Exception ignored) { return false }
+}
+def engineAbis = ['arm64-v8a', 'armeabi-v7a', 'x86_64']
+tasks.register('buildJsEngine') {
+    doLast {
+        def cargoOk = hasTool('cargo') && hasTool('cargo-ndk')
+        if (!cargoOk) {
+            println '[js-engine] cargo/cargo-ndk 不可用，跳过原生构建（运行时回落 Java 解析器）'
+            return
+        }
+        def outDir = layout.buildDirectory.dir('jsEngine').get().asFile
+        engineAbis.each { target ->
+            exec {
+                workingDir '../js-engine'
+                commandLine 'cargo', 'ndk', '--platform', '23', '-t', target.abi, '-o',
+                        '../app/src/main/jniLibs', '--', 'build', '--release'
+                environment 'ANDROID_NDK_HOME', android.ndkDirectory
+                environment 'CARGO_TARGET_DIR', outDir
+            }
+        }
+    }
+}
+// 引擎 bundle（esbuild）：assets/engine/bundle.js
+tasks.register('buildEngineBundle', Exec) {
+    workingDir rootProject.projectDir.getParent()
+    commandLine 'pnpm', 'build:engine'
+}
+preBuild.dependsOn buildJsEngine, buildEngineBundle
+
 android {
     namespace "com.wxmyyds.splayer.next"
     compileSdk rootProject.ext.compileSdkVersion
