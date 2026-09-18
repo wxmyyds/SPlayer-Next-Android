@@ -21,7 +21,7 @@ tasks.register('buildJsEngine') {
         engineAbis.each { target ->
             exec {
                 workingDir '../js-engine'
-                commandLine 'cargo', 'ndk', '--platform', '23', '-t', target.abi, '-o',
+                commandLine 'cargo', 'ndk', '--platform', '23', '-t', target, '-o',
                         '../app/src/main/jniLibs', '--', 'build', '--release'
                 environment 'ANDROID_NDK_HOME', android.ndkDirectory
                 environment 'CARGO_TARGET_DIR', outDir
