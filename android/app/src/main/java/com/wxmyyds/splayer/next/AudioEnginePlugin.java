@@ -20,7 +20,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.io.IOException;
 import org.json.JSONArray;
@@ -95,7 +95,13 @@ public class AudioEnginePlugin extends Plugin {
      * 当前曲播放时 ExoPlayer 自动预缓冲下一首字节，ENDED 瞬间零网络零 WebView 依赖直接过渡。
      * AUTO 过渡后用媒体 ID 反查元数据刷新通知栏并回传 JS 同步。
      */
-    private final Map<String, JSObject> pendingMeta = new HashMap<>();
+    private final Map<String, JSObject> pendingMeta = Collections.synchronizedMap(
+            new LinkedHashMap<String, JSObject>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, JSObject> eldest) {
+                    return size() > 32;
+                }
+            });
     /** 原生自治切歌队列（SFA PlaybackQueue 等价）：JS 推入的元数据条目，ENDED/预填时原生逐条自解 URL */
     private final java.util.ArrayDeque<JSObject> pendingQueue = new java.util.ArrayDeque<>();
     /** eapi 解析上下文（path/header/cookie/userAgent），随队列一起由 JS 下发 */
@@ -396,6 +402,7 @@ public class AudioEnginePlugin extends Plugin {
             resolveGeneration++;
             pendingMeta.clear();
             pendingQueue.clear();
+            lastTransitionMediaId = null;
             player.setMediaItem(mediaItem);
             player.prepare();
             if (autoPlay) player.play();
@@ -432,7 +439,8 @@ public class AudioEnginePlugin extends Plugin {
             if (current >= 0 && player.getMediaItemCount() > current + 1) {
                 player.removeMediaItems(current + 1, player.getMediaItemCount());
             }
-            pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
+            // 旧曲 meta 保留在 LRU 里：原生播放列表只增不减，锁屏 prev 可切回旧曲，
+            // 需要其 meta 才能回传 autoAdvanced 同步；容量由声明处 LRU 上限约束
             int appended = 0;
             String firstAppendedId = null;
             for (int i = 0; i < items.length(); i++) {
@@ -480,9 +488,7 @@ public class AudioEnginePlugin extends Plugin {
                     player.removeMediaItems(current + 1, player.getMediaItemCount());
                 }
                 androidx.media3.common.MediaItem cur = player.getCurrentMediaItem();
-                if (cur != null) {
-                    pendingMeta.keySet().retainAll(Collections.singletonList(cur.mediaId));
-                } else {
+                if (cur == null) {
                     pendingMeta.clear();
                 }
             }
@@ -777,6 +783,7 @@ public class AudioEnginePlugin extends Plugin {
             pendingQueue.clear();
             resolveCtx = null;
             pendingMeta.clear();
+            lastTransitionMediaId = null;
             player.stop();
             player.clearMediaItems();
             call.resolve();

@@ -510,6 +510,9 @@ export const pause = async (): Promise<void> => {
 /** 停止播放并重置进度 */
 export const stop = async (): Promise<void> => {
   const status = useStatusStore();
+  // 作废在途 load/loadTrack：停止/清空后迟到的解析结果不得再下发原生开播
+  trackToken++;
+  loadToken++;
   status.trackLoading = false;
   const result = await window.api.player.stop();
   if (result.success) {
@@ -894,6 +897,9 @@ export const prevTrack = async (): Promise<void> => {
 /** 队列播放结束，通知主进程停止并更新状态 */
 export const onQueueEnded = async (): Promise<void> => {
   const status = useStatusStore();
+  // 同 stop：队列结束后作废在途加载，防止迟到解析复活播放
+  trackToken++;
+  loadToken++;
   status.trackLoading = false;
   playback.setPlaying(false);
   playback.reset();
