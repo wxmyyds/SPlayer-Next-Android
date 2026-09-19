@@ -6,6 +6,7 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { useDataStore } from "@/stores/data";
 import { useUserStore } from "@/stores/user";
+import { useCollapsingHeader } from "@/composables/useCollapsingHeader";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
 import { isAndroid } from "@/utils/platform";
@@ -84,6 +85,11 @@ const dayOptions = computed<SSelectOption[]>(() =>
 
 const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
 
+// 悬浮页头跟手收起（与歌单/专辑页共用同一几何）
+const { headerRef, headerStyle, headerPad, handleListScroll, reset } = useCollapsingHeader();
+// 切换查看的日期后列表重挂（Transition :key），滚动归零但不再发 scroll 事件
+watch(selectedKey, reset);
+
 /** 更多操作菜单 */
 const moreMenuItems = computed<DropdownMenuItem[]>(() => [
   { key: "refresh", label: t("daily.refresh"), icon: markRaw(IconLucideRefreshCw) },
@@ -117,9 +123,14 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
-    <!-- 顶栏 -->
-    <div class="shrink-0 pt-2 pb-3" :class="isAndroid ? 'px-3' : 'px-5'">
+  <div class="relative flex h-full flex-col">
+    <!-- 顶栏：悬浮层随滚动连续上滑收起（同歌单/专辑页） -->
+    <div
+      ref="headerRef"
+      class="absolute inset-x-0 top-0 z-10 bg-surface pt-2 pb-3"
+      :class="isAndroid ? 'px-3' : 'px-5'"
+      :style="headerStyle"
+    >
       <div class="flex items-center" :class="isAndroid ? 'gap-3' : 'gap-5'">
         <!-- 日历磁贴 -->
         <div
@@ -157,20 +168,11 @@ watch(
               {{ t("common.totalSongs", { count: selectedDay.tracks.length }) }}
             </span>
           </div>
-          <!-- 副标语 -->
-          <p class="text-sm text-on-surface-variant/70">
-            {{
-              selectedDay && !selectedDay.isToday
-                ? formatDate(selectedDay.date, { year: "numeric", month: "long", day: "numeric" })
-                : t("daily.tagline")
-            }}
-          </p>
-          <!-- 操作行 -->
-          <div
-            class="mt-1 flex items-center justify-between"
-            :class="isAndroid ? 'flex-wrap gap-2' : 'gap-3'"
-          >
-            <div class="flex items-center" :class="isAndroid ? 'gap-2' : 'gap-2'">
+          <!-- 副标语：日期信息单一来源交给日期选择按钮，避免一屏两处重复 -->
+          <p class="text-sm text-on-surface-variant/70">{{ t("daily.tagline") }}</p>
+          <!-- 操作行：单行锁定，窄屏不再折行 -->
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
               <SButton
                 type="primary"
                 variant="secondary"
@@ -217,7 +219,12 @@ watch(
     <!-- 列表 -->
     <Transition name="fade" mode="out-in" :duration="150">
       <!-- 未登录 -->
-      <div v-if="!user.isLoggedIn" key="login" class="flex flex-1 items-center justify-center">
+      <div
+        v-if="!user.isLoggedIn"
+        key="login"
+        class="flex flex-1 items-center justify-center"
+        :style="{ paddingTop: `${headerPad}px` }"
+      >
         <div class="text-center text-on-surface-variant/50">
           <IconLucideCalendarDays class="mx-auto mb-3 size-12 opacity-30" />
           <div class="text-sm">{{ t("daily.needLogin") }}</div>
@@ -229,17 +236,33 @@ watch(
         :key="selectedDay.key"
         class="min-h-0 flex-1"
       >
-        <SongList ref="songListRef" :items="selectedDay.tracks" source="netease" />
+        <SongList
+          ref="songListRef"
+          :items="selectedDay.tracks"
+          source="netease"
+          :padding-top="headerPad"
+          @scroll="handleListScroll"
+        />
       </div>
       <!-- 加载中 -->
-      <div v-else-if="loading" key="loading" class="flex flex-1 items-center justify-center">
+      <div
+        v-else-if="loading"
+        key="loading"
+        class="flex flex-1 items-center justify-center"
+        :style="{ paddingTop: `${headerPad}px` }"
+      >
         <div class="text-center text-on-surface-variant/60">
           <SLoading class="mx-auto mb-4 block text-4xl text-primary/70" />
           <div class="text-sm">{{ t("common.loading") }}</div>
         </div>
       </div>
       <!-- 空 -->
-      <div v-else key="empty" class="flex flex-1 items-center justify-center">
+      <div
+        v-else
+        key="empty"
+        class="flex flex-1 items-center justify-center"
+        :style="{ paddingTop: `${headerPad}px` }"
+      >
         <div class="text-center text-on-surface-variant/50">
           <IconLucideCalendarDays class="mx-auto mb-3 size-12 opacity-30" />
           <div class="text-sm">{{ t("daily.empty") }}</div>

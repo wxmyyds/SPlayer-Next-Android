@@ -6,6 +6,7 @@ import { loadCollection as loadCollectionService } from "@/services/collection";
 import { getCollectionShareUrl } from "@/utils/format/shareUrl";
 import { openExternal } from "@/utils/url";
 import { useCopyText } from "@/composables/useCopyText";
+import { useCollapsingHeader } from "@/composables/useCollapsingHeader";
 import { useCollectionSubscribe } from "@/composables/collection/useCollectionSubscribe";
 import { usePlaylistManage } from "@/composables/collection/usePlaylistManage";
 import SongList from "@/components/list/SongList.vue";
@@ -41,33 +42,14 @@ const error = ref("");
 /** 取消当次加载 */
 let loadAbort: AbortController | null = null;
 
-/** 头部悬浮层收起：随列表滚动连续映射（跟手），纯 transform 无布局挤压 */
-const headerRef = ref<HTMLElement | null>(null);
-const { height: headerHeight } = useElementSize(headerRef);
-const listScrollTop = ref(0);
-// 行程必须等于头高：头部按自身高度百分比位移，列表按 px 滚动，
-// 两者速度只在行程==头高时一致，否则头部底边与首行脱节开缝
-const collapseProgress = computed(() =>
-  Math.min(1, Math.max(0, listScrollTop.value / Math.max(1, headerHeight.value))),
-);
-const headerStyle = computed(() => ({
-  transform: `translateY(${collapseProgress.value * -100}%)`,
-  opacity: `${1 - collapseProgress.value}`,
-  pointerEvents: collapseProgress.value >= 1 ? ("none" as const) : ("auto" as const),
-}));
-/** 列表内容顶部让位 = 头部高度 + 呼吸间距 */
-const headerPad = computed(() => Math.ceil(headerHeight.value) + 8);
+// 悬浮页头跟手收起（与每日推荐页共用同一几何）
+const { headerRef, headerStyle, headerPad, handleListScroll, reset } = useCollapsingHeader();
 /** 简介弹窗 */
 const descriptionOpen = ref(false);
 
-/** 列表滚动 → 头部收起进度 */
-const handleListScroll = (event: Event) => {
-  listScrollTop.value = (event.target as HTMLElement).scrollTop;
-};
-
 /** 加载数据 */
 const loadCollection = async (): Promise<void> => {
-  listScrollTop.value = 0;
+  reset();
   loadAbort?.abort();
   const myAbort = new AbortController();
   loadAbort = myAbort;
