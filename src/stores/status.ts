@@ -12,6 +12,7 @@ import type { PersonalFmOptions } from "@/types/netease";
 export type { RepeatMode, ShuffleMode } from "@shared/types/player";
 export type { SortField, SortOrder } from "@/types/list";
 import * as queue from "./queue";
+import { isAndroid } from "@/utils/platform";
 
 export const useStatusStore = defineStore(
   "status",
@@ -169,6 +170,8 @@ export const useStatusStore = defineStore(
         "fmOptions",
         "volume",
         "position",
+        // Android：变速/变调跨启动恢复（FGS 复用 player 或进程重建后重放）；桌面不持久化
+        ...(isAndroid ? ["speed", "pitchSync"] : []),
         "searchPlatform",
         "myPlaylistSource",
         "likedPageTab",

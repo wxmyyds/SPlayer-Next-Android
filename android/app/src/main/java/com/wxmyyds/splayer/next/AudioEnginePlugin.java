@@ -70,12 +70,12 @@ public class AudioEnginePlugin extends Plugin {
     // Audio effects
     private Equalizer equalizer;
     private boolean effectsAttached = false;
-    private boolean equalizerEnabled = false;
+    private volatile boolean equalizerEnabled = false;
     private float[] equalizerBands = null;
 
     // Visualizer
     private android.media.audiofx.Visualizer visualizer;
-    private boolean fftEnabled = false;
+    private volatile boolean fftEnabled = false;
 
     // State
     private volatile boolean isPlaying = false;
@@ -193,9 +193,9 @@ public class AudioEnginePlugin extends Plugin {
         return self == null ? "" : self.queueStatsCache;
     }
 
-    private float volume = 1.0f;
-    private float speed = 1.0f;
-    private boolean pitchSync = true;
+    private volatile float volume = 1.0f;
+    private volatile float speed = 1.0f;
+    private volatile boolean pitchSync = true;
 
     @Override
     public void load() {
@@ -218,6 +218,9 @@ public class AudioEnginePlugin extends Plugin {
             // destroy 已释放音效闩锁，复用路径无 STATE_READY 事件重试，主动重挂，
             // 否则重建后 EQ/频谱沉默到下一曲 load
             initAudioEffects();
+            // 复用 FGS 存活的 player：实例字段已重置，从真实参数恢复 speed，
+            // 否则快照事件按 1.0 上报，UI 与实际变速背离
+            speed = player.getPlaybackParameters().speed;
             return;
         }
         AudioAttributes attrs = new AudioAttributes.Builder()
@@ -388,6 +391,10 @@ public class AudioEnginePlugin extends Plugin {
 
         Log.i(TAG, "load autoPlay=" + autoPlay);
         String trackId = call.getString("trackId", "");
+        String title = call.getString("title", "");
+        String artist = call.getString("artist", "");
+        String album = call.getString("album", "");
+        String artwork = call.getString("artwork", "");
         // mediaId 必须是 trackId（而非 URI）：AUTO 过渡后按它反查元数据，
         // 也让预载挂载能识别“当前曲即待挂曲目”的竞态
         MediaItem mediaItem = trackId.isEmpty()
@@ -406,6 +413,20 @@ public class AudioEnginePlugin extends Plugin {
             player.setMediaItem(mediaItem);
             player.prepare();
             if (autoPlay) player.play();
+            // 登记当前曲 meta：锁屏 PREV 回跳 load 挂载的曲时，过渡事件靠它回传同步
+            if (!trackId.isEmpty()) {
+                long dur = player.getDuration();
+                JSObject meta = new JSObject();
+                meta.put("trackId", trackId);
+                meta.put("playIndex", -1);
+                meta.put("source", source);
+                meta.put("title", title);
+                meta.put("artist", artist);
+                meta.put("album", album);
+                meta.put("artwork", artwork);
+                meta.put("durationMs", dur > 0 ? (double) dur : 0);
+                pendingMeta.put(trackId, meta);
+            }
             JSObject ret = new JSObject();
             ret.put("duration", player.getDuration() > 0 ? player.getDuration() : 0);
             call.resolve(ret);
@@ -443,14 +464,16 @@ public class AudioEnginePlugin extends Plugin {
             // 需要其 meta 才能回传 autoAdvanced 同步；容量由声明处 LRU 上限约束
             int appended = 0;
             String firstAppendedId = null;
+            // 相邻同曲去重：挂载 [.., A, A] 会让 AUTO 过渡撞同曲判定被吞（mediaId 相同）
+            String prevId = cur.mediaId;
             for (int i = 0; i < items.length(); i++) {
                 JSONObject raw = items.optJSONObject(i);
                 if (raw == null) continue;
                 String trackId = raw.optString("trackId", "");
                 String source = raw.optString("source", "");
                 if (trackId.isEmpty() || source.isEmpty()) continue;
-                // 预载与 ended 链竞态：该曲已被 JS 链自行 load 为当前曲，再挂会切到“自己”
-                if (trackId.equals(cur.mediaId)) continue;
+                // 预载与 ended 链竞态：该曲已被 JS 链自行 load 为当前曲（或与上一条相邻重复），再挂会错位
+                if (trackId.equals(prevId)) continue;
                 JSObject meta = new JSObject();
                 meta.put("trackId", trackId);
                 meta.put("playIndex", raw.optInt("playIndex", -1));
@@ -462,6 +485,7 @@ public class AudioEnginePlugin extends Plugin {
                 meta.put("durationMs", raw.optDouble("durationMs", 0));
                 pendingMeta.put(trackId, meta);
                 player.addMediaItem(new MediaItem.Builder().setMediaId(trackId).setUri(source).build());
+                prevId = trackId;
                 if (firstAppendedId == null) firstAppendedId = trackId;
                 appended++;
             }
@@ -786,6 +810,8 @@ public class AudioEnginePlugin extends Plugin {
             lastTransitionMediaId = null;
             player.stop();
             player.clearMediaItems();
+            // 熄灭 playWhenReady：否则停止后节拍器按 15s 周期空发补窗请求
+            player.setPlayWhenReady(false);
             call.resolve();
         });
     }

@@ -1205,6 +1205,10 @@ export const initPlayer = async (): Promise<void> => {
   if ((status.repeatMode as string) === "off") status.repeatMode = "list";
   // 恢复上次的音量和播放模式到主进程
   await window.api.player.setVolume(status.volume);
+  // 重放变速/变调：FGS 续播复用原生 player 时参数仍在而插件字段已重置，
+  // 或进程重建后原生回默认值而持久化状态有值；桌面两端均为默认值，重放为无害幂等
+  await window.api.player.setSpeed(status.speed);
+  await window.api.player.setPitchSync(status.pitchSync);
   syncPlayMode();
   // 应用渐入渐出配置
   const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;

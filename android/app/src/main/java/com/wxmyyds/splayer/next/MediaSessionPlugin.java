@@ -68,7 +68,7 @@ public class MediaSessionPlugin extends Plugin {
     private Bitmap lastNotifiedArt;
     private String lastNotifiedStats = "";
     /** 上次速率：锁屏卡片按真实速率外推进度；纯进度推送不带 speed 时沿用 */
-    private static float lastSpeed = 1.0f;
+    private static volatile float lastSpeed = 1.0f;
 
 
     @Override
@@ -406,7 +406,12 @@ public class MediaSessionPlugin extends Plugin {
                                         meta.putBitmap(MediaMetadata.METADATA_KEY_ART, art);
                                         sSession.setMetadata(meta.build());
                                         lastArt = art;
-                                        publishState(playing, positionMs, durationMs, art, lastSpeed);
+                                        // 回放以会话当前播放态为准：封面迟到时不得闪回 PAUSED@0
+                                        PlaybackState ps = sSession.getController().getPlaybackState();
+                                        boolean nowPlaying =
+                                                ps != null && ps.getState() == PlaybackState.STATE_PLAYING;
+                                        long nowPos = ps != null ? Math.max(0, ps.getPosition()) : positionMs;
+                                        publishState(nowPlaying, nowPos, durationMs, art, lastSpeed);
                                     });
                 });
     }
