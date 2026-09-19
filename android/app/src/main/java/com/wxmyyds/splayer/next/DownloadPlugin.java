@@ -48,6 +48,8 @@ public class DownloadPlugin extends Plugin {
     /** 单条音频传输执行器：同一时刻一条（顺序下载由 JS 队列保证） */
     private final ExecutorService pool = Executors.newSingleThreadExecutor();
     private final Map<String, okhttp3.Call> activeCalls = new ConcurrentHashMap<>();
+    /** 已排队未启动的下载被 cancel 时登记于此，任务开头消费（activeCalls 里还查不到） */
+    private final Set<String> canceledTaskIds = ConcurrentHashMap.newKeySet();
 
     /** 音频扩展名 → MIME（落库分组用） */
     private static String audioMime(String ext) {
@@ -108,7 +110,8 @@ public class DownloadPlugin extends Plugin {
         Context ctx = getContext();
         try {
             pool.execute(() -> {
-                if (Build.VERSION.SDK_INT >= 29) {
+                try {
+                    if (Build.VERSION.SDK_INT >= 29) {
                     String base = Environment.getExternalStorageDirectory().getAbsolutePath()
                             + "/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/";
                     if (!path.startsWith(base)) {
@@ -382,6 +385,7 @@ public class DownloadPlugin extends Plugin {
     @PluginMethod
     public void cancel(PluginCall call) {
         String taskId = call.getString("taskId", "");
+        canceledTaskIds.add(taskId);
         okhttp3.Call httpCall = activeCalls.remove(taskId);
         if (httpCall != null) httpCall.cancel();
         call.resolve();
