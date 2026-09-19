@@ -135,6 +135,8 @@ export const load = async (
   const token = ++loadToken;
   // 快照发起时的当前曲：慢解析期间用户已乐观切到下一曲时，迟到结果不得合并进新曲
   const expectedTrackId = useMediaStore().track?.id ?? null;
+  // 快照 trackToken：loadTrack/reload 抢占后，本 load 的 finally 不得清掉新曲的 trackLoading
+  const myTrackToken = trackToken;
   // 切歌即清空 AB 循环（per-song 状态）
   abLoop.reset();
   // 清除上一次 seek 残留
@@ -187,7 +189,7 @@ export const load = async (
     if (result.error && !options.suppressErrorToast) handleError(result.error);
     return { ok: false, error: result.error };
   } finally {
-    if (token === loadToken) status.trackLoading = false;
+    if (token === loadToken && myTrackToken === trackToken) status.trackLoading = false;
   }
 };
 
@@ -556,18 +558,21 @@ export const seek = async (posMs: number): Promise<void> => {
   // 歌曲加载中 seek 无意义：引擎此刻没有可 seek 的解码线程，
   // 且 seekTarget 残留会让加载完成后的 position 推送被持续丢弃
   if (status.trackLoading) return;
+  // 越界目标（错配歌词时间/异常锁屏 seek）会让 seekTarget 永不放行、暂停态进度冻结
+  const target =
+    status.duration > 0 ? Math.max(0, Math.min(posMs, status.duration)) : Math.max(0, posMs);
   // 先冻结插值，再写入位置
   playback.setSeeking(true);
-  status.position = posMs;
-  playback.setCurrentTime(posMs);
+  status.position = target;
+  playback.setCurrentTime(target);
 
   // 设置 seek 目标，屏蔽旧 position 推送
-  seekTarget = posMs;
+  seekTarget = target;
 
-  const result = await window.api.player.seek(posMs);
+  const result = await window.api.player.seek(target);
   if (result.success) {
-    status.position = posMs;
-    playback.setCurrentTime(posMs);
+    status.position = target;
+    playback.setCurrentTime(target);
   } else {
     // seek 失败：解除冻结、清空 seekTarget，否则所有 position 事件被永久丢弃
     seekTarget = null;
