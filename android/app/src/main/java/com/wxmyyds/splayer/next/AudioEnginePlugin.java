@@ -78,9 +78,9 @@ public class AudioEnginePlugin extends Plugin {
     private boolean fftEnabled = false;
 
     // State
-    private boolean isPlaying = false;
-    private long currentPosition = 0;
-    private long currentDuration = 0;
+    private volatile boolean isPlaying = false;
+    private volatile long currentPosition = 0;
+    private volatile long currentDuration = 0;
 
     /** 曲目结束后保护切歌决策链的短时锁（ENDED 后 WAKE_MODE_LOCAL 已释放， */
     // JS 决策 + load 新曲的间隙 CPU 掉睡会卡住切歌；新曲开播即交还，超时兜底）
@@ -194,7 +194,10 @@ public class AudioEnginePlugin extends Plugin {
     @Override
     public void load() {
         sInstance = this;
-        mainHandler = new Handler(Looper.getMainLooper());
+        // 进程内只建一次：两代 Handler 虽同在主 Looper，但 removeCallbacks 只作用于
+        // 各自 target 的消息，重建时旧 destroy 摘不到旧 Handler 队列里的旧 ticker，
+        // 重赋会每次重建泄漏一个不死节拍器
+        if (mainHandler == null) mainHandler = new Handler(Looper.getMainLooper());
         initPlayer();
     }
 
@@ -206,6 +209,9 @@ public class AudioEnginePlugin extends Plugin {
             playerListener = createPlayerListener();
             player.addListener(playerListener);
             startPositionUpdates();
+            // destroy 已释放音效闩锁，复用路径无 STATE_READY 事件重试，主动重挂，
+            // 否则重建后 EQ/频谱沉默到下一曲 load
+            initAudioEffects();
             return;
         }
         AudioAttributes attrs = new AudioAttributes.Builder()
@@ -1067,8 +1073,8 @@ public class AudioEnginePlugin extends Plugin {
 
     @Override
     public void handleOnDestroy() {
-        // 生命周期回调在主线程执行；先撤掉在途主线程任务再释放，
-        // 否则先置空后，仍在队列的 load/play Runnable 会在主线程 NPE
+        // 生命周期回调在主线程执行；在途解析完成回调经 gen 守卫丢弃，
+        // 播控/属性 post 只触 static player，destroy 后到达无害
         resolveGeneration++;
         pendingQueue.clear();
         resolveCtx = null;
@@ -1078,8 +1084,12 @@ public class AudioEnginePlugin extends Plugin {
         releaseAudioEffects();
         releaseVisualizer();
         releaseSwitchWakeLock();
-        // 静态实例持有插件→Activity 上下文，不清会泄漏到下次 load；静态消费方均已判空
-        sInstance = null;
+        // 静态实例持有插件→Activity 上下文，不清会泄漏到下次 load；静态消费方均已判空。
+        // sInstance==this 守卫：Activity 重建时新 onCreate 先于旧 onDestroy，
+        // 此时 sInstance 已指向新实例，不能清
+        if (sInstance == this) {
+            sInstance = null;
+        }
         super.handleOnDestroy();
     }
 
@@ -1116,7 +1126,8 @@ public class AudioEnginePlugin extends Plugin {
     /** JS 切歌决策中续借唤醒窗口（锁屏下下一首解析走网络，30 秒可能不够） */
     @PluginMethod
     public void extendSwitchWindow(PluginCall call) {
-        acquireSwitchWakeLock();
+        // acquireSwitchWakeLock 非线程安全（PowerManager 字段双线程创建会永久泄漏锁），收敛主线程
+        mainHandler.post(this::acquireSwitchWakeLock);
         call.resolve();
     }
 

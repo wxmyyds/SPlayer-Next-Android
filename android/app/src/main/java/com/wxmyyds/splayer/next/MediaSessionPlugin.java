@@ -116,6 +116,15 @@ public class MediaSessionPlugin extends Plugin {
         }
     }
 
+    @Override
+    protected void handleOnDestroy() {
+        // 不清 sSession（static，跨实例复用）；只清实例引用与封面加载线程，
+        // 否则每次 Activity 重建泄漏一个实例 + 一条非 daemon 线程
+        sInstance = null;
+        artLoader.shutdownNow();
+        super.handleOnDestroy();
+    }
+
     /** 推送播放态到系统（曲目切换/播控/进度节流调用，200ms 级） */
     @PluginMethod
     public void updateState(PluginCall call) {
