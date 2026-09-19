@@ -4,9 +4,15 @@ package com.wxmyyds.splayer.next;
  * rquickjs 引擎的 JNI 边界（实现在 android/js-engine/src/lib.rs）
  *
  * 生命周期：nativeCreate → nativeEval(bundle) → 多次 nativeCall → nativeDestroy。
- * nativeCall 串行（调用方单线程执行器保证）；Rust 侧泵 20s 截止。
+ * nativeCall 串行（调用方单线程执行器保证）；Rust 侧泵 24s 截止。
  */
 final class JsEngine {
+    static {
+        // CI 经 cargo-ndk 把 libjs_engine.so 打进 jniLibs；Android 不会自动加载 JNI 库，
+        // 不显式加载则首次 nativeCreate 抛 UnsatisfiedLinkError 且被降级逻辑静默吞掉
+        System.loadLibrary("js_engine");
+    }
+
     private JsEngine() {}
 
     /**

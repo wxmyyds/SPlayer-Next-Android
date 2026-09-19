@@ -330,7 +330,7 @@ export interface PlayerApi {
     resolve: {
       cookie: string;
       allowTrialPlay?: boolean;
-      configs?: Record<string, string>;
+      configs?: Record<string, unknown>;
       sessions?: {
         kugou?: Record<string, string>;
         qqmusic?: Record<string, string>;

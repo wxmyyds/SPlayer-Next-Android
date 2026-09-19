@@ -220,12 +220,15 @@ class DecompressionStreamImpl {
     for (let i = 0; i < bytes.length; i += 0x8000) {
       bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     }
-    const inflated = __nativeInflate(btoa(bin), this.format).then((b64) => {
-      const raw = atob(b64);
-      const out = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-      return out;
-    });
+    // __nativeInflate 是同步注入函数，须经 resolved promise 承接（同 capacitor-stub）
+    const inflated = Promise.resolve()
+      .then(() => __nativeInflate(btoa(bin), this.format))
+      .then((b64) => {
+        const raw = atob(b64);
+        const out = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+        return out;
+      });
     return { __engineInflated: inflated };
   }
 }

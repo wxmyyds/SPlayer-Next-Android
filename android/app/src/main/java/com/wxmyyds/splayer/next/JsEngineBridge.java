@@ -38,6 +38,9 @@ public class JsEngineBridge {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
+            // 总时长兆底：vendor 的 AbortSignal.timeout(8s) 打不断阻塞中的同步 __nativeHttp，
+            // 病态 DNS/慢服务端可无限期挂死引擎单线程，须有硬上界（< Java 侧 25s 等待）
+            .callTimeout(24, TimeUnit.SECONDS)
             .build();
 
     /** redirect=manual 专用：返回跳转响应本身（QQ 登录取 Location/p_skey） */
@@ -76,9 +79,12 @@ public class JsEngineBridge {
 
             Request.Builder builder = new Request.Builder().url(url);
             java.util.Iterator<String> keys = headers.keys();
+            String contentType = null;
             while (keys.hasNext()) {
                 String key = keys.next();
-                builder.header(key, headers.getString(key));
+                String value = headers.getString(key);
+                if ("Content-Type".equalsIgnoreCase(key)) contentType = value;
+                builder.header(key, value);
             }
             // 与 NativeHttpPlugin 对齐：关闭透明解压，原始字节交 JS（假 gzip 风控）
             builder.header("Accept-Encoding", "identity");
@@ -93,8 +99,12 @@ public class JsEngineBridge {
             }
             RequestBody requestBody = null;
             if (!method.equals("GET") && !method.equals("HEAD")) {
+                // 请求体 MediaType 必须与调用方声明的 Content-Type 一致（网易 form、kugou/qq json）：
+                // OkHttp BridgeInterceptor 会用 body.contentType() 覆盖 header，
+                // 硬编码 octet-stream 会让服务端无法解析 body（对齐 NativeHttpPlugin）
+                String mediaTypeStr = contentType != null ? contentType : "application/octet-stream";
                 requestBody = (bodyBytes != null)
-                    ? RequestBody.create(bodyBytes, MediaType.parse("application/octet-stream"))
+                    ? RequestBody.create(bodyBytes, MediaType.parse(mediaTypeStr))
                     : RequestBody.create(new byte[0], null);
             }
             OkHttpClient httpClient = "manual".equalsIgnoreCase(redirect) ? NO_REDIRECT_CLIENT : CLIENT;
@@ -104,6 +114,7 @@ public class JsEngineBridge {
                 Response resp = call.execute();
                 long bodyLen = resp.body() != null ? resp.body().contentLength() : 0;
                 if (bodyLen > MAX_ENGINE_BODY) {
+                    resp.close();
                     throw new IOException("response too large: " + bodyLen);
                 }
                 byte[] bytes = resp.body().bytes();

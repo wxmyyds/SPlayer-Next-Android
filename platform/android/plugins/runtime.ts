@@ -357,6 +357,7 @@ export const loadPlugin = (spec: PluginLoadSpec, callbacks: RuntimeCallbacks): R
   try {
     const names = [
       "splayer",
+      "lx",
       "Buffer",
       "setTimeout",
       "setInterval",

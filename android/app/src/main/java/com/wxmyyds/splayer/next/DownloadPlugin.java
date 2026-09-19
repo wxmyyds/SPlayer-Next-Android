@@ -173,6 +173,9 @@ public class DownloadPlugin extends Plugin {
                 Uri contentUri = null;
                 File legacyFile = null;
                 File legacyFinal = null;
+                // 成功路径消费条目后置位：此后 finalize 阶段失败时 remove 也会 == null，
+                // catch 需靠该标记区分“cancel 消费”与“成功路径消费后失败”
+                boolean consumed = false;
                 try {
                     // cancel 先于任务启动到达（activeCalls 里还没有）：静默收场
                     if (canceledTaskIds.remove(taskId)) {
@@ -218,6 +221,8 @@ public class DownloadPlugin extends Plugin {
                     call.resolve();
                     return;
                 }
+                // 本任务已消费条目（见 consumed 声明处注释）
+                consumed = true;
                 String path;
                 if (contentUri != null) {
                     ContentValues values = new ContentValues();
@@ -259,7 +264,15 @@ public class DownloadPlugin extends Plugin {
                 // 那样会误删之前已完成的同名下载
                 cleanup(ctx, contentUri, legacyFile);
                 if (activeCalls.remove(taskId) == null) {
-                    // cancel 已消费过该条目：取消方负责状态，静默收场
+                    if (consumed) {
+                        // 成功路径已消费条目后 finalize 阶段失败（rename/MediaStore update）：
+                        // 必须给终态事件，否则 JS 侧 activeTaskId 不清、下载队列挂死
+                        JSObject ret = new JSObject();
+                        ret.put("taskId", taskId);
+                        ret.put("errorCode", e.getMessage() != null ? e.getMessage() : "unknown");
+                        emitState(ret);
+                    }
+                    // cancel 已消费条目（consumed=false）：取消方负责状态，静默收场
                     call.resolve();
                     return;
                 }

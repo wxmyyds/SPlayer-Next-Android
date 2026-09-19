@@ -159,8 +159,9 @@ const callbacksFor = (runtime: RuntimeState): RuntimeCallbacks => ({
     runtime.loading = false;
     setStatus(runtime, { state: "error", error });
   },
-  onLog: (_level, _args) => {
-    // 插件日志留在 WebView console，避免 Android 发布包写文件
+  onLog: (level, args) => {
+    // 插件日志转发 WebView console（发布包 WebView console 不落盘，无文件日志噪音）
+    console[level]("[plugin]", ...args);
   },
 });
 

@@ -89,7 +89,8 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
         // 引擎存储与 WebView 隔离：kugou 概念版/网易 realIP 等 store 键随队列下发
         configs: {
           "system.kugouLoginVersion": settings.system.system.kugouLoginVersion,
-          "system.neteaseRealIp": String(settings.system.system.neteaseRealIp || ""),
+          // 直传布尔：String(false) 经引擎 store 的 JSON 往返后是 truthy，会把关闭 realIP 的用户错误注入
+          "system.neteaseRealIp": settings.system.system.neteaseRealIp,
         },
         sessions: {
           kugou: getSessionCookies("kugou"),

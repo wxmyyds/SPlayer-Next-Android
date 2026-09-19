@@ -12,10 +12,13 @@ interface PluginImplement {
   [method: string]: (...args: never[]) => Promise<PluginResult>;
 }
 
-/** 原生方法名 → Rust 注入函数的映射 */
-const nativeMethods: Record<string, (argsJson: string) => Promise<string>> = {
+/** 原生方法名 → Rust 注入函数的映射（同步阻塞返回，调用侧经 resolved promise 承接） */
+const nativeMethods: Record<string, (argsJson: string) => string> = {
   request: (argsJson) => __nativeHttp(argsJson),
-  cancel: (argsJson) => __nativeHttpCancel(argsJson),
+  cancel: (argsJson) => {
+    __nativeHttpCancel(argsJson);
+    return "{}";
+  },
 };
 
 /**
@@ -35,15 +38,19 @@ export function registerPlugin<T extends PluginImplement>(
         const transport = nativeMethods[method];
         if (transport) {
           return (options: unknown): Promise<PluginResult> =>
-            transport(JSON.stringify(options) ?? "{}").then((raw) => {
-              const parsed = JSON.parse(raw) as PluginResult & { error?: string };
-              // 原生传输失败（status:0 + error）：转 reject，vendor 的 AbortError
-              // 归一化与重试层依赖 promise 拒绝语义，resolve 会让重试失效
-              if (parsed && typeof parsed === "object" && typeof parsed.error === "string") {
-                throw new Error(parsed.error);
-              }
-              return parsed as PluginResult;
-            });
+            // native 注入的 transport 是同步函数（返回裸字符串或同步 throw），
+            // 必须经 resolved promise 承接，否则 .then 直接 TypeError
+            Promise.resolve()
+              .then(() => transport(JSON.stringify(options) ?? "{}"))
+              .then((raw) => {
+                const parsed = JSON.parse(raw) as PluginResult & { error?: string };
+                // 原生传输失败（status:0 + error）：转 reject，vendor 的 AbortError
+                // 归一化与重试层依赖 promise 拒绝语义，resolve 会让重试失效
+                if (parsed && typeof parsed === "object" && typeof parsed.error === "string") {
+                  throw new Error(parsed.error);
+                }
+                return parsed as PluginResult;
+              });
         }
         // 未知方法：与 Capacitor 行为一致地拒绝
         return (): Promise<PluginResult> =>

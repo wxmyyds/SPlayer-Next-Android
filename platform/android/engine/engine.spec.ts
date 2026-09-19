@@ -106,9 +106,11 @@ describe("编码原语", () => {
 });
 
 describe("解压鸭子类型（gzip 防御路径的形状）", () => {
-  // 真实 inflate 在 Rust 侧；Node 测试环境注入拒绝型 mock 验证形状与错误传播
-  (globalThis as Record<string, unknown>).__nativeInflate = () =>
-    Promise.reject(new Error("mock inflate"));
+  // 真实 inflate 在 Rust 侧，同步注入（返回裸字符串或同步 throw）；mock 与生产签名一致，
+  // 防止 mock 掉 thenable 断裂（曾因 Promise 型 mock 掩盖了同步函数被 .then 消费的 bug）
+  (globalThis as Record<string, unknown>).__nativeInflate = () => {
+    throw new Error("mock inflate");
+  };
 
   it("__nativeInflate mock 已注入", () => {
     expect(typeof (globalThis as Record<string, unknown>).__nativeInflate).toBe("function");

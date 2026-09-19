@@ -23,7 +23,7 @@ export interface ResolveRequest {
   /** 曲目原始质量档 QualityLevel 字符串（kugou 裁剪用） */
   quality?: string;
   /** WebView store 预置键值（引擎存储与 WebView 隔离：概念版/realIP 等） */
-  configs?: Record<string, string>;
+  configs?: Record<string, unknown>;
   /** 音源平台 */
   platform: "netease" | "kugou" | "qqmusic";
   /** 歌曲 id：netease songId / kugou hash / qq mid */

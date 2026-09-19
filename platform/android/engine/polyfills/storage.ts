@@ -16,7 +16,8 @@ const ensureLoaded = (): void => {
     const keys = JSON.parse(keysJson) as string[];
     for (const k of keys) {
       const v = __nativeStoreGet(k);
-      if (v !== null) storeMap.set(k, v);
+      // Java 侧缺失键返回空串（"" 同时是 storeSet 的删除哨兵，不会是合法值），视为不存在
+      if (v !== null && v !== "") storeMap.set(k, v);
     }
   } catch {
     // 原生存储不可用时退化为内存态

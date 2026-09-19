@@ -64,7 +64,7 @@ public class AudioEnginePlugin extends Plugin {
     // 进程级持有：Activity 销毁（划掉任务）不应释放——FGS 仍在保活，释放即后台播放中断、
     // 通知成僵屍；重进 App 时复用同一实例。与 MediaSessionPlugin 的静态 session 同一策略
     private static ExoPlayer player;
-    private Handler mainHandler;
+    private static Handler mainHandler;
 
     // Audio effects
     private Equalizer equalizer;
@@ -116,11 +116,12 @@ public class AudioEnginePlugin extends Plugin {
      * @param play - true 播放，false 暂停
      */
     static void handleNativePlayPause(boolean play) {
-        AudioEnginePlugin self = sInstance;
-        if (self == null || self.mainHandler == null) return;
-        self.mainHandler.post(
+        // player/mainHandler 均为 static：划掉任务（sInstance 已置空）后播控仍须生效，
+        // 否则音乐继续播而锁屏/通知栏按钮全部无响应（僵尸通知）
+        if (mainHandler == null) return;
+        mainHandler.post(
                 () -> {
-                    if (self.player != null) self.player.setPlayWhenReady(play);
+                    if (player != null) player.setPlayWhenReady(play);
                 });
     }
 
@@ -129,13 +130,12 @@ public class AudioEnginePlugin extends Plugin {
      * @param positionMs - 目标位置（毫秒）
      */
     static void handleNativeSeekTo(long positionMs) {
-        AudioEnginePlugin self = sInstance;
-        if (self == null || self.mainHandler == null) return;
-        self.mainHandler.post(
+        if (mainHandler == null) return;
+        mainHandler.post(
                 () -> {
-                    if (self.player != null) {
-                        self.player.seekTo(Math.max(0L, positionMs));
-                        if (self.player.getPlaybackState() == Player.STATE_ENDED) self.player.play();
+                    if (player != null) {
+                        player.seekTo(Math.max(0L, positionMs));
+                        if (player.getPlaybackState() == Player.STATE_ENDED) player.play();
                     }
                 });
     }
@@ -146,27 +146,25 @@ public class AudioEnginePlugin extends Plugin {
      * @param direction - 1 下一首，-1 上一首
      */
     static void handleNativeSkip(int direction) {
-        AudioEnginePlugin self = sInstance;
-        if (self == null || self.mainHandler == null) {
+        if (mainHandler == null) {
             MediaSessionPlugin.emitMediaKey(direction > 0 ? "next" : "prev", -1);
             return;
         }
-        self.mainHandler.post(
+        mainHandler.post(
                 () -> {
                     boolean handled = false;
-                    if (self.player != null) {
+                    if (player != null) {
                         if (direction > 0) {
-                            if (self.player.getCurrentMediaItemIndex()
-                                    < self.player.getMediaItemCount() - 1) {
-                                self.player.seekToNext();
+                            if (player.getCurrentMediaItemIndex() < player.getMediaItemCount() - 1) {
+                                player.seekToNext();
                                 handled = true;
                             }
                         } else {
-                            if (self.player.getCurrentPosition() > 3000) {
-                                self.player.seekTo(0);
+                            if (player.getCurrentPosition() > 3000) {
+                                player.seekTo(0);
                                 handled = true;
-                            } else if (self.player.getCurrentMediaItemIndex() > 0) {
-                                self.player.seekToPreviousMediaItem();
+                            } else if (player.getCurrentMediaItemIndex() > 0) {
+                                player.seekToPreviousMediaItem();
                                 handled = true;
                             }
                         }
@@ -220,9 +218,12 @@ public class AudioEnginePlugin extends Plugin {
                 .build();
         playerListener = createPlayerListener();
         player.addListener(playerListener);
+        // 首次创建路径同样要启动 200ms 节拍器：冷启动无 position 事件会让进度全冻、
+        // JS 停滞看门狗每 ~15s 误发 sourceError 跳曲
+        startPositionUpdates();
     }
 
-    private Player.Listener playerListener;
+    private static Player.Listener playerListener;
 
     private Player.Listener createPlayerListener() {
         return new Player.Listener() {
@@ -554,6 +555,9 @@ public class AudioEnginePlugin extends Plugin {
             if (!mediaId.isEmpty()) req.put("mediaId", mediaId);
             org.json.JSONObject sessions = ctx.optJSONObject("sessions");
             if (sessions != null) req.put("sessions", sessions);
+            // 引擎存储与 WebView 隔离：kugou 概念版/网易 realIP 等配置随队列下发给引擎 store
+            org.json.JSONObject configs = ctx.optJSONObject("configs");
+            if (configs != null) req.put("configs", configs);
             String result = JsEngineResolver.resolve(req.toString());
             if (result == null) {
                 throw new IOException("engine resolve unavailable or failed");
@@ -615,6 +619,14 @@ public class AudioEnginePlugin extends Plugin {
                                 () -> {
                                     // 解析期间用户换了曲/清队列：过代结果直接丢弃，不挂进新播放列表
                                     if (player == null || gen != resolveGeneration) return;
+                                    // 解析在途期间该曲可能已被窗口路径挂上并转正为当前曲：
+                                    // dedup 扫描跳过 curIdx 拦不住这种形态，再挂会连播两次
+                                    MediaItem curItem = player.getCurrentMediaItem();
+                                    if (curItem != null && trackId.equals(curItem.mediaId)) {
+                                        Log.i(TAG, "queueResolve current-is-target trackId=" + trackId);
+                                        maybeResolveNext(false);
+                                        return;
+                                    }
                                     // 队列/窗口双链并发解析同一首：JS 预载窗口（setNextResources）可能
                                     // 已把该曲挂在当前曲之后，再 addMediaItem 会重复挂载 → 同曲连播，
                                     // 且二次过渡被“同曲判定”压制（不发事件不刷通知）。复用既有条目
@@ -657,6 +669,9 @@ public class AudioEnginePlugin extends Plugin {
                         mainHandler.post(
                                 () -> {
                                     resolveFails++;
+                                    // 失败条目回队首：poll 即消费语义下不回队会让瞬时网络错误
+                                    // 永久跳曲；3 连败由 give-up 分支兜住，不会死循环
+                                    if (gen == resolveGeneration) pendingQueue.addFirst(entry);
                                     if (resolveFails < 3) {
                                         // 弱网重试总时长可超单次唤醒锁预算（30s < 3×25s），ENDED 场景续借
                                         if (fromEnded) acquireSwitchWakeLock();
