@@ -66,7 +66,9 @@ public class JsEngineBridge {
                 : new org.json.JSONObject();
             String bodyB64 = req.getString("body", "");
 
-            Request.Builder builder = new Request.Builder().url(url);
+            Request.Builder builder = new Request.Builder().url(url)
+                // redirect=manual 返回跳转响应本身（QQ 登录取 Location/p_skey），与 WebView 版一致
+                .followRedirects(!"manual".equalsIgnoreCase(redirect));
             java.util.Iterator<String> keys = headers.keys();
             while (keys.hasNext()) {
                 String key = keys.next();

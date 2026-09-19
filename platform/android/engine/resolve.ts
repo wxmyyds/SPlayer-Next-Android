@@ -6,12 +6,27 @@
  * kugou / qq 登录态由 JS 队列推送种子（引擎存储与 WebView 隔离）。
  */
 
+import { setDeviceId } from "../vendor/netease/core/device";
 import { callNetease } from "../vendor/netease";
 import { callKugou, mergeKugouSession } from "../vendor/kugou";
 import { callQQMusic, mergeQQMusicCookies } from "../vendor/qqmusic";
+import { getQualityLevel, type QualityLevel } from "../../../src/utils/quality";
+import type { Track } from "@shared/types/player";
+
+/** kugou 音质裁剪（对齐 src/apis/song/kugou.ts 的 clampQuality） */
+const QUALITY_ORDER: QualityLevel[] = ["lq", "sq", "hq", "lossless", "hi-res"];
+const clampQuality = (requested: QualityLevel, track: Track): QualityLevel =>
+  QUALITY_ORDER[
+    Math.min(
+      QUALITY_ORDER.indexOf(requested),
+      QUALITY_ORDER.indexOf(getQualityLevel(track.quality)),
+    )
+  ];
 
 /** 引擎解析请求 */
 export interface ResolveRequest {
+  /** 曲目原始质量档（kugou 裁剪用） */
+  quality?: string;
   /** 音源平台 */
   platform: "netease" | "kugou" | "qqmusic";
   /** 歌曲 id：netease songId / kugou hash / qq mid */
@@ -44,6 +59,11 @@ export interface ResolveResponse {
 
 /** netease 解析（eapi/xeapi 走 vendor 原路径） */
 const resolveNetease = async (req: ResolveRequest): Promise<ResolveResponse> => {
+  // 引擎模块加载时自生成的 deviceId 须对齐 WebView 推送的值（匿名注册/反爬绑定一致）
+  if (req.cookie) {
+    const deviceId = /(?:^|;\s*)deviceId=([^;]+)/.exec(req.cookie)?.[1];
+    if (deviceId) setDeviceId(deviceId);
+  }
   const params: Record<string, unknown> = { id: req.songId, level: req.level };
   if (req.cookie) params.cookie = req.cookie;
   const res = await callNetease("song_url", params);
@@ -59,11 +79,14 @@ const resolveNetease = async (req: ResolveRequest): Promise<ResolveResponse> => 
 /** kugou 解析（hash + audioId + albumId） */
 const resolveKugou = async (req: ResolveRequest): Promise<ResolveResponse> => {
   if (req.sessions?.kugou) mergeKugouSession(req.sessions.kugou);
+  const level = req.quality
+    ? clampQuality(req.level as QualityLevel, { quality: req.quality } as unknown as Track)
+    : req.level;
   const result = (await callKugou("song_url", {
     hash: req.songId,
     audioId: req.extId,
     albumId: req.albumId,
-    level: req.level,
+    level,
   })) as { code?: number; data?: { url?: string } } | undefined;
   if (result?.code !== 200 || !result.data?.url) {
     return { ok: false, error: `no url (code=${result?.code ?? "unknown"})` };

@@ -29,6 +29,7 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
     return;
   }
   const songLevel = useSettingsStore().player.songLevel;
+  // netease 用自身档位词表；kugou/qq 沿用原始 QualityLevel（引擎侧 kugou 按曲目裁剪）
   const level = NETEASE_LEVEL[songLevel];
   // 引擎可解析的音源；遇到不支持的音源在此断开（其后的曲目已不可达，预解析窗口兜底）
   const firstUnsupported = candidates.findIndex(
@@ -42,8 +43,8 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
       trackId: track.id,
       songId: track.id,
       playIndex: index,
-      // netease 音质档位映射；kugou/qq 直接使用原始档位（引擎侧 kugou 有各自裁剪）
-      level,
+      level: track.source === "netease" ? level : songLevel,
+      quality: track.quality,
       extId: track.extId ?? "",
       albumId: (track.album?.id as string | undefined) ?? "",
       mediaId: track.mediaId ?? "",

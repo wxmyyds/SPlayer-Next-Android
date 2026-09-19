@@ -27,6 +27,7 @@ await build({
   alias: {
     "@capacitor/core": resolve(platform, "engine/capacitor-stub.ts"),
     "@android": platform,
+
     "@shared": resolve(root, "shared"),
     "@main/utils/logger": resolve(platform, "vendor/shim/logger.ts"),
     "@main/utils/proxy": resolve(platform, "vendor/shim/proxy.ts"),
