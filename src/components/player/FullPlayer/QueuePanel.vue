@@ -57,6 +57,12 @@ const onDragEnd = () => {
   dragY.value = 0;
   if (close) emit("close");
 };
+
+/** 系统打断（来电等）：回弹，不视为关闭手势 */
+const onDragCancel = () => {
+  dragging.value = false;
+  dragY.value = 0;
+};
 </script>
 
 <template>
@@ -76,7 +82,7 @@ const onDragEnd = () => {
       @touchstart="onDragStart"
       @touchmove="onDragMove"
       @touchend="onDragEnd"
-      @touchcancel="onDragEnd"
+      @touchcancel="onDragCancel"
     >
       <div class="w-10 h-1 rounded-full bg-cover/30" />
     </div>

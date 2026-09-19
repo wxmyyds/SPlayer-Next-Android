@@ -44,11 +44,11 @@ let loadAbort: AbortController | null = null;
 /** 头部悬浮层收起：随列表滚动连续映射（跟手），纯 transform 无布局挤压 */
 const headerRef = ref<HTMLElement | null>(null);
 const { height: headerHeight } = useElementSize(headerRef);
-/** 收起行程（px）：滚动 0→行程 对应进度 0→1 */
-const HEADER_COLLAPSE_AT = 140;
 const listScrollTop = ref(0);
+// 行程必须等于头高：头部按自身高度百分比位移，列表按 px 滚动，
+// 两者速度只在行程==头高时一致，否则头部底边与首行脱节开缝
 const collapseProgress = computed(() =>
-  Math.min(1, Math.max(0, listScrollTop.value / HEADER_COLLAPSE_AT)),
+  Math.min(1, Math.max(0, listScrollTop.value / Math.max(1, headerHeight.value))),
 );
 const headerStyle = computed(() => ({
   transform: `translateY(${collapseProgress.value * -100}%)`,
