@@ -64,7 +64,8 @@ public class AudioEnginePlugin extends Plugin {
     // 进程级持有：Activity 销毁（划掉任务）不应释放——FGS 仍在保活，释放即后台播放中断、
     // 通知成僵屍；重进 App 时复用同一实例。与 MediaSessionPlugin 的静态 session 同一策略
     private static ExoPlayer player;
-    private static Handler mainHandler;
+    // RESOLVE_POOL 完成回调在工作线程读此字段后 post，volatile 保证可见性
+    private static volatile Handler mainHandler;
 
     // Audio effects
     private Equalizer equalizer;
@@ -86,6 +87,8 @@ public class AudioEnginePlugin extends Plugin {
     private android.os.PowerManager.WakeLock switchWakeLock;
     /** 切歌锁自管超时的释放任务（acquire(timeout) 的 releaser 不可取消，无法续借） */
     private Runnable wakeLockReleaser;
+    /** 200ms 位置节拍器：实例字段，destroy 时定向撤除（勿用 mainHandler 全量清空） */
+    private Runnable positionTicker;
     private static final long SWITCH_WAKE_LOCK_TIMEOUT_MS = 30_000L;
     /**
      * 队列化自治切歌（参照 SFA PlaybackQueue）：JS 预解析的下一首以播放列表待播项挂入 ExoPlayer，
@@ -323,36 +326,42 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     private void startPositionUpdates() {
-        mainHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                nudgeTick++;
-                if (player != null) {
-                    int current = player.getCurrentMediaItemIndex();
-                    queueStatsCache =
-                            "q" + pendingQueue.size()
-                                    + " w"
-                                    + Math.max(0, player.getMediaItemCount() - current - 1);
-                }
-                if (player != null && isPlaying) {
-                    currentPosition = player.getCurrentPosition();
-                    currentDuration = player.getDuration();
-                    JSObject data = new JSObject();
-                    data.put("position", currentPosition);
-                    data.put("duration", currentDuration > 0 ? currentDuration : 0);
-                    emitEvent("position", data);
-                }
-                // 窗口耗尽预警（对齐 SFA requestUrls）：待播播放中且无待播项，定期提醒 JS 补窗。
-                // 用 playWhenReady 而非 isPlaying：锁屏 BUFFERING 间隙同样需要补窗
-                if (player != null
-                        && player.getPlayWhenReady()
-                        && nudgeTick % 75 == 0
-                        && player.getCurrentMediaItemIndex() >= player.getMediaItemCount() - 1) {
-                    emitEvent("requestNextUrl", null);
-                }
-                mainHandler.postDelayed(this, 200);
-            }
-        }, 200);
+        // 存实例字段：handleOnDestroy 只撤自己的 ticker；mainHandler 是 static 共享，
+        // 全量清空会误杀 Activity 重建后新实例已排队的任务（新 onCreate 先于旧 onDestroy）
+        positionTicker =
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        nudgeTick++;
+                        if (player != null) {
+                            int current = player.getCurrentMediaItemIndex();
+                            queueStatsCache =
+                                    "q"
+                                            + pendingQueue.size()
+                                            + " w"
+                                            + Math.max(0, player.getMediaItemCount() - current - 1);
+                        }
+                        if (player != null && isPlaying) {
+                            currentPosition = player.getCurrentPosition();
+                            currentDuration = player.getDuration();
+                            JSObject data = new JSObject();
+                            data.put("position", currentPosition);
+                            data.put("duration", currentDuration > 0 ? currentDuration : 0);
+                            emitEvent("position", data);
+                        }
+                        // 窗口耗尽预警（对齐 SFA requestUrls）：待播播放中且无待播项，定期提醒 JS 补窗。
+                        // 用 playWhenReady 而非 isPlaying：锁屏 BUFFERING 间隙同样需要补窗
+                        if (player != null
+                                && player.getPlayWhenReady()
+                                && nudgeTick % 75 == 0
+                                && player.getCurrentMediaItemIndex()
+                                        >= player.getMediaItemCount() - 1) {
+                            emitEvent("requestNextUrl", null);
+                        }
+                        mainHandler.postDelayed(this, 200);
+                    }
+                };
+        mainHandler.postDelayed(positionTicker, 200);
     }
 
     @PluginMethod
@@ -624,7 +633,8 @@ public class AudioEnginePlugin extends Plugin {
                                     MediaItem curItem = player.getCurrentMediaItem();
                                     if (curItem != null && trackId.equals(curItem.mediaId)) {
                                         Log.i(TAG, "queueResolve current-is-target trackId=" + trackId);
-                                        maybeResolveNext(false);
+                                        // 保留 fromEnded：队列耗尽或后续 3 连败时 ENDED 回落链仍要能走通
+                                        maybeResolveNext(fromEnded);
                                         return;
                                     }
                                     // 队列/窗口双链并发解析同一首：JS 预载窗口（setNextResources）可能
@@ -668,10 +678,12 @@ public class AudioEnginePlugin extends Plugin {
                         Log.w(TAG, "queueResolve failed songId=" + songId + " err=" + e.getMessage());
                         mainHandler.post(
                                 () -> {
+                                    // 过代失败不污染新世代计数，也不触发 spurious 预填
+                                    if (gen != resolveGeneration) return;
                                     resolveFails++;
                                     // 失败条目回队首：poll 即消费语义下不回队会让瞬时网络错误
                                     // 永久跳曲；3 连败由 give-up 分支兜住，不会死循环
-                                    if (gen == resolveGeneration) pendingQueue.addFirst(entry);
+                                    pendingQueue.addFirst(entry);
                                     if (resolveFails < 3) {
                                         // 弱网重试总时长可超单次唤醒锁预算（30s < 3×25s），ENDED 场景续借
                                         if (fromEnded) acquireSwitchWakeLock();
@@ -1060,7 +1072,7 @@ public class AudioEnginePlugin extends Plugin {
         resolveGeneration++;
         pendingQueue.clear();
         resolveCtx = null;
-        mainHandler.removeCallbacksAndMessages(null);
+        if (positionTicker != null) mainHandler.removeCallbacks(positionTicker);
         // player 不释放：FGS 保活期间 WebView 死亡不应打断后台播放（见字段声明处注释）；
         // 进程最终被杀时由系统回收。仅清掉指向本插件实例的引用
         releaseAudioEffects();
