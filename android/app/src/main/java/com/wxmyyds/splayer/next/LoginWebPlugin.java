@@ -131,6 +131,13 @@ public class LoginWebPlugin extends Plugin {
             web.destroy();
             finish(null);
         });
+        // open 校验与 show 之间 Activity 可能 finish（back 键与 JS 并发），
+        // BadTokenException 在主线程不接住会直接崩进程
+        android.app.Activity host = getActivity();
+        if (host == null || host.isFinishing() || host.isDestroyed()) {
+            finish(null);
+            return;
+        }
         dialog.show();
 
         handler = new Handler(Looper.getMainLooper());

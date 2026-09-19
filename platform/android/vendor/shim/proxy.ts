@@ -17,6 +17,7 @@ interface NativeHttpPlugin {
     method: string;
     headers: Record<string, string>;
     body?: string;
+    bodyIsBase64?: boolean;
     redirect?: "follow" | "manual";
     requestId?: string;
   }) => Promise<{
@@ -145,8 +146,12 @@ export const fetchWithProxy = async (
 ): Promise<NativeFetchResponse> => {
   const href = typeof url === "string" ? url : url.href;
   let body: string | undefined;
+  let bodyIsBase64 = false;
   if (typeof init?.body === "string") body = init.body;
-  else if (init?.body instanceof Uint8Array) body = bytesToB64(init.body);
+  else if (init?.body instanceof Uint8Array) {
+    body = bytesToB64(init.body);
+    bodyIsBase64 = true;
+  }
   const signal = init?.signal;
   if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
   const requestId = `nh-${++requestSeq}`;
@@ -161,6 +166,7 @@ export const fetchWithProxy = async (
       method: init?.method ?? "GET",
       headers: init?.headers ?? {},
       body,
+      bodyIsBase64,
       redirect: init?.redirect ?? "follow",
       requestId,
     });

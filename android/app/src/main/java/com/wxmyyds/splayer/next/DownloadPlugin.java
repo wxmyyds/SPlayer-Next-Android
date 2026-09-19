@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import com.getcapacitor.JSObject;
+import java.util.Set;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -105,8 +106,8 @@ public class DownloadPlugin extends Plugin {
             return;
         }
         Context ctx = getContext();
-        pool.execute(() -> {
-            try {
+        try {
+            pool.execute(() -> {
                 if (Build.VERSION.SDK_INT >= 29) {
                     String base = Environment.getExternalStorageDirectory().getAbsolutePath()
                             + "/" + Environment.DIRECTORY_MUSIC + "/" + MUSIC_DIR + "/";
@@ -141,6 +142,10 @@ public class DownloadPlugin extends Plugin {
                 call.reject(e.getMessage());
             }
         });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // onDestroy 后到来的调用：拒绝而非让 REE 崩进程
+            call.reject("download pool shut down");
+        }
     }
 
     @PluginMethod
@@ -160,14 +165,20 @@ public class DownloadPlugin extends Plugin {
                 ? ((Number) call.getData().opt("declaredSize")).longValue() : 0L;
         String mime = audioMime(ext);
         Context ctx = getContext();
-        pool.execute(() -> {
-            Uri contentUri = null;
-            File legacyFile = null;
-            File legacyFinal = null;
-            try {
-                Request request = new Request.Builder().url(url).build();
-                okhttp3.Call httpCall = CLIENT.newCall(request);
-                activeCalls.put(taskId, httpCall);
+        try {
+            pool.execute(() -> {
+                Uri contentUri = null;
+                File legacyFile = null;
+                File legacyFinal = null;
+                try {
+                    // cancel 先于任务启动到达（activeCalls 里还没有）：静默收场
+                    if (canceledTaskIds.remove(taskId)) {
+                        call.resolve();
+                        return;
+                    }
+                    Request request = new Request.Builder().url(url).build();
+                    okhttp3.Call httpCall = CLIENT.newCall(request);
+                    activeCalls.put(taskId, httpCall);
                 try (Response response = httpCall.execute()) {
                     if (!response.isSuccessful()) {
                         throw new IOException("HTTP " + response.code());
@@ -244,7 +255,11 @@ public class DownloadPlugin extends Plugin {
                 // 只清理本次产物；注意不能按最终文件名删——失败可能发生在任何产物创建前，
                 // 那样会误删之前已完成的同名下载
                 cleanup(ctx, contentUri, legacyFile);
-                activeCalls.remove(taskId);
+                if (activeCalls.remove(taskId) == null) {
+                    // cancel 已消费过该条目：取消方负责状态，静默收场
+                    call.resolve();
+                    return;
+                }
                 JSObject ret = new JSObject();
                 ret.put("taskId", taskId);
                 ret.put("errorCode", e.getMessage() != null ? e.getMessage() : "unknown");
@@ -252,6 +267,10 @@ public class DownloadPlugin extends Plugin {
                 call.reject(e.getMessage(), e);
             }
         });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // onDestroy 后到来的调用：拒绝而非让 REE 崩进程
+            call.reject("download pool shut down");
+        }
     }
 
     /** 边读边写 + 进度事件 */

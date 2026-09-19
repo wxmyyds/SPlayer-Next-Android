@@ -35,9 +35,15 @@ export function registerPlugin<T extends PluginImplement>(
         const transport = nativeMethods[method];
         if (transport) {
           return (options: unknown): Promise<PluginResult> =>
-            transport(JSON.stringify(options) ?? "{}").then(
-              (raw) => JSON.parse(raw) as PluginResult,
-            );
+            transport(JSON.stringify(options) ?? "{}").then((raw) => {
+              const parsed = JSON.parse(raw) as PluginResult & { error?: string };
+              // 原生传输失败（status:0 + error）：转 reject，vendor 的 AbortError
+              // 归一化与重试层依赖 promise 拒绝语义，resolve 会让重试失效
+              if (parsed && typeof parsed === "object" && typeof parsed.error === "string") {
+                throw new Error(parsed.error);
+              }
+              return parsed as PluginResult;
+            });
         }
         // 未知方法：与 Capacitor 行为一致地拒绝
         return (): Promise<PluginResult> =>

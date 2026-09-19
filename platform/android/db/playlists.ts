@@ -233,12 +233,19 @@ export const removePlaylistTracks = async (id: string, trackIds: string[]): Prom
       [id],
     );
     // CASE 重排 position，按参数上限分块（每行 2 参数）；各块作用于不相交的 track_id 子集
-    const statements = chunkByParams(remaining, 2).map((chunk) => ({
-      sql: `UPDATE playlist_tracks SET position = CASE track_id ${chunk
-        .map(() => "WHEN ? THEN ?")
-        .join(" ")} END WHERE playlist_id = ?`,
-      values: [...chunk.flatMap((item, position) => [item.track_id, position]), id],
-    }));
+    // CASE 重排 position，按参数上限分块（每行 2 参数）；块内下标须加全局偏移，
+    // 否则第二块起 position 重新从 0 计数、重排后顺序错乱
+    let base = 0;
+    const statements = chunkByParams(remaining, 2).map((chunk) => {
+      const values = chunk.flatMap((item, i) => [item.track_id, base + i]);
+      base += chunk.length;
+      return {
+        sql: `UPDATE playlist_tracks SET position = CASE track_id ${chunk
+          .map(() => "WHEN ? THEN ?")
+          .join(" ")} END WHERE playlist_id = ?`,
+        values: [...values, id],
+      };
+    });
     statements.push({
       sql: "UPDATE playlists SET cover = CASE WHEN ? = 0 THEN NULL ELSE cover END, updated_at = ? WHERE id = ?",
       values: [remaining.length, Date.now(), id],

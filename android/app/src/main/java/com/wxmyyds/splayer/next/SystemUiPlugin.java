@@ -64,7 +64,13 @@ public class SystemUiPlugin extends Plugin {
             call.reject("activity unavailable");
             return;
         }
-        activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        try {
+            activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            // 无浏览器设备/ROM 上 startActivity 抛 ANFE，不接住会直接崩进程
+            call.reject("no handler for url");
+            return;
+        }
         call.resolve(new JSObject());
     }
 

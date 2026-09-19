@@ -130,9 +130,12 @@ interface AudioEnginePlugin {
       album: string;
       artwork: string;
       durationMs: number;
+      quality?: string;
     }[];
     resolve: {
       cookie: string;
+      allowTrialPlay?: boolean;
+      configs?: Record<string, string>;
       sessions?: {
         kugou?: Record<string, string>;
         qqmusic?: Record<string, string>;

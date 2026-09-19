@@ -10,23 +10,20 @@ import { setDeviceId } from "../vendor/netease/core/device";
 import { callNetease } from "../vendor/netease";
 import { callKugou, mergeKugouSession } from "../vendor/kugou";
 import { callQQMusic, mergeQQMusicCookies } from "../vendor/qqmusic";
-import { getQualityLevel, type QualityLevel } from "../../../src/utils/quality";
-import type { Track } from "@shared/types/player";
+import { store } from "../vendor/shim/store";
+import type { QualityLevel } from "../../../src/utils/quality";
 
-/** kugou 音质裁剪（对齐 src/apis/song/kugou.ts 的 clampQuality） */
+/** kugou 音质裁剪（对齐 src/apis/song/kugou.ts 的 clampQuality；两侧均为 QualityLevel 字符串） */
 const QUALITY_ORDER: QualityLevel[] = ["lq", "sq", "hq", "lossless", "hi-res"];
-const clampQuality = (requested: QualityLevel, track: Track): QualityLevel =>
-  QUALITY_ORDER[
-    Math.min(
-      QUALITY_ORDER.indexOf(requested),
-      QUALITY_ORDER.indexOf(getQualityLevel(track.quality)),
-    )
-  ];
+const clampQuality = (requested: QualityLevel, available: QualityLevel): QualityLevel =>
+  QUALITY_ORDER[Math.min(QUALITY_ORDER.indexOf(requested), QUALITY_ORDER.indexOf(available))];
 
 /** 引擎解析请求 */
 export interface ResolveRequest {
-  /** 曲目原始质量档（kugou 裁剪用） */
+  /** 曲目原始质量档 QualityLevel 字符串（kugou 裁剪用） */
   quality?: string;
+  /** WebView store 预置键值（引擎存储与 WebView 隔离：概念版/realIP 等） */
+  configs?: Record<string, string>;
   /** 音源平台 */
   platform: "netease" | "kugou" | "qqmusic";
   /** 歌曲 id：netease songId / kugou hash / qq mid */
@@ -80,7 +77,7 @@ const resolveNetease = async (req: ResolveRequest): Promise<ResolveResponse> => 
 const resolveKugou = async (req: ResolveRequest): Promise<ResolveResponse> => {
   if (req.sessions?.kugou) mergeKugouSession(req.sessions.kugou);
   const level = req.quality
-    ? clampQuality(req.level as QualityLevel, { quality: req.quality } as unknown as Track)
+    ? clampQuality(req.level as QualityLevel, req.quality as QualityLevel)
     : req.level;
   const result = (await callKugou("song_url", {
     hash: req.songId,
@@ -122,6 +119,8 @@ export const engineResolve = async (reqJson: string): Promise<string> => {
     return JSON.stringify({ ok: false, error: "bad request json" } satisfies ResolveResponse);
   }
   try {
+    // 引擎存储与 WebView 隔离：推送侧下发的 store 键先预置（概念版/realIP 等）
+    for (const [key, value] of Object.entries(req.configs ?? {})) store.set(key, value);
     let res: ResolveResponse;
     if (req.platform === "kugou") res = await resolveKugou(req);
     else if (req.platform === "qqmusic") res = await resolveQQMusic(req);

@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 // rquickjs 引擎（android/js-engine）：cargo-ndk 构建多 ABI .so 到 jniLibs。
-// cargo/NDK 缺失时跳过（引擎初始化自会失败并回落 Java eapi 解析器，不影响构建）
+// cargo/NDK 缺失时跳过（引擎初始化自会失败，后台解析不可用，不影响构建）
 def hasTool(String cmd) {
     try {
         def out = new ByteArrayOutputStream()
@@ -14,12 +14,12 @@ tasks.register('buildJsEngine') {
     doLast {
         def cargoOk = hasTool('cargo') && hasTool('cargo-ndk')
         if (!cargoOk) {
-            println '[js-engine] cargo/cargo-ndk 不可用，跳过原生构建（运行时回落 Java 解析器）'
+            println "[js-engine] cargo/cargo-ndk 不可用，跳过原生构建（引擎不可用）"
             return
         }
         def ndkDir = System.getenv('ANDROID_NDK_HOME')
         if (ndkDir == null || !new File(ndkDir).exists()) {
-            println "[js-engine] NDK 不可用，跳过原生构建（运行时回落 Java 解析器）"
+            println "[js-engine] NDK 不可用，跳过原生构建（引擎不可用）"
             return
         }
         def outDir = layout.buildDirectory.dir('jsEngine').get().asFile

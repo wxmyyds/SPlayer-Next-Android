@@ -1,32 +1,6 @@
 /**
- * crypto.getRandomValues / localStorage 垫片
+ * localStorage 垫片（引擎内独立于 WebView 的存储区）
  */
-
-/** 安装 crypto.getRandomValues（随机源由 Rust getrandom 提供） */
-export const installCrypto = (): void => {
-  const impl = {
-    /**
-     * 填充密码学安全随机字节
-     * @param array - 目标视图
-     * @returns 目标视图（与规范一致）
-     * @throws QuotaExceededError 超过 65536 字节
-     */
-    getRandomValues(
-      array: Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array,
-    ) {
-      const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
-      if (bytes.length > 65536) {
-        throw new DOMException("getRandomValues quota exceeded", "QuotaExceededError");
-      }
-      const b64 = __nativeRandom(bytes.length);
-      const raw = atob(b64);
-      for (let i = 0; i < bytes.length; i++) bytes[i] = raw.charCodeAt(i);
-      return array;
-    },
-  };
-  const cryptoGlobal = { getRandomValues: impl.getRandomValues, subtle: undefined };
-  Object.defineProperty(globalThis, "crypto", { value: cryptoGlobal, writable: true });
-};
 
 /** localStorage 内存镜像（懒加载，写穿透到原生 SharedPreferences） */
 const storeMap = new Map<string, string>();

@@ -17,12 +17,12 @@ import java.util.concurrent.TimeoutException;
  */
 public final class JsEngineResolver {
     private static final String TAG = "JsEngine";
-    /** nativeCall 的整体超时（Rust 侧 20s 泵截止，这里兜底线程等待） */
+    /** nativeCall 的整体超时（Rust 侧 24s 泵截止，这里兜底线程等待） */
     private static final long CALL_TIMEOUT_MS = 25_000;
 
     private static final Object LOCK = new Object();
     private static long enginePtr;
-    /** 初始化失败后置 true：本次会话不再尝试引擎（仍回落 Java 解析器） */
+    /** 初始化失败后置 true：本次会话不再尝试引擎（队列耗尽自然停止） */
     private static volatile boolean initFailed;
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
@@ -58,12 +58,14 @@ public final class JsEngineResolver {
                 String bundle = readBundle();
                 if (bundle == null) {
                     initFailed = true;
+                    JsEngine.nativeDestroy(ptr);
                     Log.w(TAG, "engine bundle missing");
                     return false;
                 }
                 String err = JsEngine.nativeEval(ptr, bundle);
                 if (err != null && !err.isEmpty()) {
                     initFailed = true;
+                    JsEngine.nativeDestroy(ptr);
                     Log.w(TAG, "engine bundle eval failed: " + err);
                     return false;
                 }
@@ -104,10 +106,10 @@ public final class JsEngineResolver {
         try {
             String result = future.get(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             if (result == null) return null;
+            // 原样透传（含 ok:false）：错误原文由 resolveViaEngine 拼进 IOException，此处只记日志
             org.json.JSONObject parsed = new org.json.JSONObject(result);
             if (!parsed.optBoolean("ok", false) || parsed.optString("url", "").isEmpty()) {
                 Log.w(TAG, "engine resolve failed: " + parsed.optString("error", ""));
-                return null;
             }
             return result;
         } catch (TimeoutException e) {

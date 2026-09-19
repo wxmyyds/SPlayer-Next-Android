@@ -294,23 +294,53 @@ export const loadPlugin = (spec: PluginLoadSpec, callbacks: RuntimeCallbacks): R
   const global: Record<string, unknown> = {};
   const splayer = buildSplayer(record, spec, callbacks);
   const timers = makeTimers(record);
-  installLxShim(
-    global,
-    splayer,
-    record.handlers,
-    callbacks.onSourcesUpdate,
-    callbacks.onUpdateAvailable,
-    {
-      name: spec.manifest.name,
-      description: spec.manifest.description ?? "",
-      version: spec.manifest.version,
-      author: spec.manifest.author ?? "",
-      homepage: spec.manifest.homepage ?? "",
-      rawScript: spec.source,
-    },
-  );
+  // LX 音源的 sources 同步登记到 record（脚本顶层同步 lx.send(inited) 时
+  // 状态还是 loading，registry.onSourcesUpdate 会丢弃；onReady 改从 record 取）
+  const lxSourcesSink = (sources: Record<string, SourceCapability>): void => {
+    record.registeredSources = { ...record.registeredSources, ...sources };
+    callbacks.onSourcesUpdate(record.registeredSources);
+  };
+  installLxShim(global, splayer, record.handlers, lxSourcesSink, callbacks.onUpdateAvailable, {
+    name: spec.manifest.name,
+    description: spec.manifest.description ?? "",
+    version: spec.manifest.version,
+    author: spec.manifest.author ?? "",
+    homepage: spec.manifest.homepage ?? "",
+    rawScript: spec.source,
+  });
   global.splayer = splayer;
   global.Buffer = PluginBuffer;
+  const pluginConsole = (() => {
+    const log =
+      (level: "info" | "debug" | "warn" | "error") =>
+      (...args: unknown[]) =>
+        callbacks.onLog(level, args);
+    const times = new Map<string, number>();
+    return {
+      log: log("info"),
+      info: log("info"),
+      debug: log("debug"),
+      warn: log("warn"),
+      error: log("error"),
+      group: log("info"),
+      groupCollapsed: log("info"),
+      groupEnd: () => {},
+      table: log("info"),
+      dir: log("debug"),
+      trace: log("debug"),
+      time: (label: string = "default") => void times.set(label, Date.now()),
+      timeEnd: (label: string = "default") => {
+        const start = times.get(label);
+        if (start === undefined) return;
+        times.delete(label);
+        log("info")(`${label}: ${Date.now() - start}ms`);
+      },
+      assert: (condition?: unknown, ...data: string[]) => {
+        if (!condition) log("error")("Assertion failed:", ...data);
+      },
+      clear: () => {},
+    };
+  })();
   Object.assign(global, timers, {
     queueMicrotask,
     Promise,
@@ -320,16 +350,10 @@ export const loadPlugin = (spec: PluginLoadSpec, callbacks: RuntimeCallbacks): R
     TextDecoder,
     btoa: (value: string) => btoa(value),
     atob: (value: string) => atob(value),
-    console: {
-      log: (...args: unknown[]) => callbacks.onLog("info", args),
-      info: (...args: unknown[]) => callbacks.onLog("info", args),
-      debug: (...args: unknown[]) => callbacks.onLog("debug", args),
-      warn: (...args: unknown[]) => callbacks.onLog("warn", args),
-      error: (...args: unknown[]) => callbacks.onLog("error", args),
-    },
+    console: pluginConsole,
   });
   global.globalThis = global;
-  global.window = { lx: global.lx };
+  global.window = { lx: global.lx, console: pluginConsole };
   try {
     const names = [
       "splayer",

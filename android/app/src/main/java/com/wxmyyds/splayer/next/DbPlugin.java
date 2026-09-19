@@ -35,6 +35,18 @@ public class DbPlugin extends Plugin {
     private SQLiteDatabase db;
 
     @Override
+    protected void handleOnDestroy() {
+        // 关闭任务入队保证串行（先等完在途操作再关连接）
+        queue.execute(() -> {
+            if (db != null) {
+                db.close();
+                db = null;
+            }
+        });
+        queue.shutdown();
+    }
+
+    @Override
     public void load() {
         queue.execute(
                 () -> {

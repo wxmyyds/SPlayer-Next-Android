@@ -6,6 +6,7 @@ import { cookieObjToString } from "@android/vendor/netease/core/cookie";
 import { getSessionCookies } from "@android/vendor/shim/sessions";
 import { processCookieObject } from "@android/vendor/netease/core/request";
 import { NETEASE_LEVEL } from "@/apis/song/netease";
+import { getQualityLevel } from "@/utils/quality";
 import { useSettingsStore } from "@/stores/settings";
 import type { CandidateResult } from "@/core/player/candidate";
 
@@ -30,7 +31,8 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
   }
   const songLevel = useSettingsStore().player.songLevel;
   // netease 用自身档位词表；kugou/qq 沿用原始 QualityLevel（引擎侧 kugou 按曲目裁剪）
-  const level = NETEASE_LEVEL[songLevel];
+  // ?? 兑跨版本遗留非法值兜底（JSON 序列化丢键会静默落到 optString 默认档）
+  const level = NETEASE_LEVEL[songLevel] ?? "hq";
   // 引擎可解析的音源；遇到不支持的音源在此断开（其后的曲目已不可达，预解析窗口兜底）
   const firstUnsupported = candidates.findIndex(
     ({ track }) =>
@@ -44,7 +46,7 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
       songId: track.id,
       playIndex: index,
       level: track.source === "netease" ? level : songLevel,
-      quality: track.quality,
+      quality: getQualityLevel(track.quality),
       extId: track.extId ?? "",
       albumId: (track.album?.id as string | undefined) ?? "",
       mediaId: track.mediaId ?? "",
@@ -77,11 +79,18 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
     MUSIC_U: cookies.MUSIC_U || "",
     MUSIC_A: cookies.MUSIC_A || "",
   };
+  const settings = useSettingsStore();
   window.api.player
     .setNextQueue?.({
       items,
       resolve: {
         cookie: cookieObjToString(header),
+        allowTrialPlay: settings.player.allowTrialPlay,
+        // 引擎存储与 WebView 隔离：kugou 概念版/网易 realIP 等 store 键随队列下发
+        configs: {
+          "system.kugouLoginVersion": settings.system.system.kugouLoginVersion,
+          "system.neteaseRealIp": String(settings.system.system.neteaseRealIp || ""),
+        },
         sessions: {
           kugou: getSessionCookies("kugou"),
           qqmusic: getSessionCookies("qqmusic"),

@@ -81,6 +81,12 @@ impl TimerScheduler {
         due
     }
 
+    /// 丢弃全部未触发定时器：旧调用在截止处被截断后，其 backoff 定时器残留在堆中，
+    /// 下一次调用的泵会误触发旧续延并把旧结果写进哨兵（静默错歌）
+    fn clear(&self) {
+        self.heap.lock().unwrap().clear();
+    }
+
     /// 等到下一截止或被唤醒（整体截止时间兜底）
     fn wait_until(&self, overall_deadline: Instant) {
         let heap = self.heap.lock().unwrap();
@@ -592,7 +598,11 @@ pub extern "system" fn Java_com_wxmyyds_splayer_next_JsEngine_nativeCall(
     };
     let args: String = args.into();
     let state = unsafe { &mut *(ptr as *mut EngineState) };
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // 覆盖 vendor 最坏重试链（3×8s 超时 + 退避），仍小于 Java 侧 25s 线程等待
+    let deadline = Instant::now() + Duration::from_secs(24);
+
+    // 先清残留定时器再 kick，防止被截断的旧调用续延复活污染本次结果
+    state.timers.clear();
 
     let kick: Result<(), String> = state.context.with(|ctx| {
         ctx.globals()

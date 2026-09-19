@@ -62,29 +62,44 @@ public class NativeHttpPlugin extends Plugin {
         JSObject headersObj = call.getObject("headers", new JSObject());
         String bodyStr = call.getString("body", null);
 
-        Request.Builder builder = new Request.Builder().url(url);
-        java.util.Iterator<String> headerNames = headersObj.keys();
-        String contentType = null;
-        while (headerNames.hasNext()) {
-            String name = headerNames.next();
-            String value = headersObj.getString(name, "");
-            if ("Content-Type".equalsIgnoreCase(name)) contentType = value;
-            builder.header(name, value);
-        }
-        // 网易/QQ 等服务器会返回 Content-Encoding: gzip 但 body 并非真 gzip；
-        // OkHttp 透明解压遇到假 gzip 会抛异常。强制 identity 关闭透明解压，原始字节交 JS 处理。
-        builder.header("Accept-Encoding", "identity");
-        if ("GET".equals(method) || "HEAD".equals(method)) {
-            builder.method(method, null);
-        } else {
-            // 请求体 MediaType 必须与调用方声明的 Content-Type 一致（网易 form、QQ json），
-            // 否则服务端无法解析 body。未声明时才回落 octet-stream。
-            MediaType mediaType = contentType != null ? MediaType.parse(contentType) : null;
-            if (mediaType == null) mediaType = MediaType.parse("application/octet-stream");
-            RequestBody body = bodyStr != null
-                    ? RequestBody.create(bodyStr, mediaType)
-                    : RequestBody.create(new byte[0], null);
-            builder.method(method, body);
+        // 非法 URL/header（如服务端透传的坏地址）在 OkHttp 构造期同步抛 IAE：
+        // 插件方法抛异常会被 Bridge 重新抛进 HandlerThread 直接崩进程，必须拦住转 reject
+        Request.Builder builder;
+        try {
+            builder = new Request.Builder().url(url);
+            java.util.Iterator<String> headerNames = headersObj.keys();
+            String contentType = null;
+            while (headerNames.hasNext()) {
+                String name = headerNames.next();
+                String value = headersObj.getString(name, "");
+                if ("Content-Type".equalsIgnoreCase(name)) contentType = value;
+                builder.header(name, value);
+            }
+            // 网易/QQ 等服务器会返回 Content-Encoding: gzip 但 body 并非真 gzip；
+            // OkHttp 透明解压遇到假 gzip 会抛异常。强制 identity 关闭透明解压，原始字节交 JS 处理。
+            builder.header("Accept-Encoding", "identity");
+            if ("GET".equals(method) || "HEAD".equals(method)) {
+                builder.method(method, null);
+            } else {
+                // 请求体 MediaType 必须与调用方声明的 Content-Type 一致（网易 form、QQ json），
+                // 否则服务端无法解析 body。未声明时才回落 octet-stream。
+                MediaType mediaType = contentType != null ? MediaType.parse(contentType) : null;
+                if (mediaType == null) mediaType = MediaType.parse("application/octet-stream");
+                RequestBody requestBody;
+                if (bodyStr == null) {
+                    requestBody = RequestBody.create(new byte[0], null);
+                } else if (call.getBoolean("bodyIsBase64", false)) {
+                    // 二进制 body 以 base64 过桥（JS 侧标记），须还原原始字节
+                    byte[] raw = Base64.decode(bodyStr, Base64.NO_WRAP);
+                    requestBody = RequestBody.create(raw, mediaType);
+                } else {
+                    requestBody = RequestBody.create(bodyStr, mediaType);
+                }
+                builder.method(method, requestBody);
+            }
+        } catch (IllegalArgumentException e) {
+            call.reject("invalid request: " + e.getMessage());
+            return;
         }
 
         // redirect=manual 时返回跳转响应本身（QQ 登录取 Location/p_skey 用）

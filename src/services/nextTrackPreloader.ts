@@ -328,7 +328,9 @@ export const scheduleNextTrackPreload = (): void => {
         track: tail.track,
         index: tail.index,
       });
-      pushNativeWindow([cachedEntry, ...tailEntries]);
+      // 首候选未定论（cachedResult 空）时不推窗口：窗口 wipe 会清掉原生队列已自解
+      // 挂载的队首曲且补不回来；等首候选有结果后随窗口一起补齐
+      if (cachedResult) pushNativeWindow([cachedEntry, ...tailEntries]);
     })();
   }
 };

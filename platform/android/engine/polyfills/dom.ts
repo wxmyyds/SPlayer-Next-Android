@@ -67,6 +67,20 @@ class AbortSignalImpl {
   static fire(signal: AbortSignalImpl, reason?: unknown): void {
     signal.fire(reason);
   }
+
+  /**
+   * 定时中止信号（vendor 请求层超时统一用 AbortSignal.timeout）
+   * @param ms - 毫秒
+   * @returns 已调度超时的信号
+   */
+  static timeout(ms: number): AbortSignalImpl {
+    const signal = new AbortSignalImpl();
+    setTimeoutImpl(
+      () => AbortSignalImpl.fire(signal, new DOMExceptionImpl("signal timed out", "TimeoutError")),
+      ms,
+    );
+    return signal;
+  }
 }
 
 /** AbortController 实现 */

@@ -317,6 +317,7 @@ export interface PlayerApi {
       songId: string;
       playIndex: number;
       level: string;
+      quality?: string;
       extId: string;
       albumId: string;
       mediaId: string;
@@ -328,6 +329,8 @@ export interface PlayerApi {
     }[];
     resolve: {
       cookie: string;
+      allowTrialPlay?: boolean;
+      configs?: Record<string, string>;
       sessions?: {
         kugou?: Record<string, string>;
         qqmusic?: Record<string, string>;

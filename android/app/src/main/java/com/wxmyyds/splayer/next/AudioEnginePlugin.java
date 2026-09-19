@@ -17,6 +17,8 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,7 +38,9 @@ import org.json.JSONObject;
  *   handleAudioBecomingNoisy），不在外层重复申请焦点，避免路由切换时双重避让互卡
  * - 通知栏/锁屏/MediaSession 由 MediaSessionPlugin 独占（含前台服务）
  */
-@CapacitorPlugin(name = "AudioEngine")
+@CapacitorPlugin(
+        name = "AudioEngine",
+        permissions = {@Permission(strings = {android.Manifest.permission.RECORD_AUDIO}, alias = "visualizer")})
 public class AudioEnginePlugin extends Plugin {
 
     private static final String TAG = "AudioEngine";
@@ -57,7 +61,9 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     private static AudioEnginePlugin sInstance;
-    private ExoPlayer player;
+    // 进程级持有：Activity 销毁（划掉任务）不应释放——FGS 仍在保活，释放即后台播放中断、
+    // 通知成僵屍；重进 App 时复用同一实例。与 MediaSessionPlugin 的静态 session 同一策略
+    private static ExoPlayer player;
     private Handler mainHandler;
 
     // Audio effects
@@ -192,18 +198,34 @@ public class AudioEnginePlugin extends Plugin {
     }
 
     private void initPlayer() {
+        if (player != null) {
+            // 进程未被回收的重进：复用现有 player，旧监听器仍指向已销毁的插件实例，
+            // 事件桥/队列消费都须重绑到当前实例；状态经新监听器的 onPlaybackStateChanged 回流
+            if (playerListener != null) player.removeListener(playerListener);
+            playerListener = createPlayerListener();
+            player.addListener(playerListener);
+            startPositionUpdates();
+            return;
+        }
         AudioAttributes attrs = new AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build();
-        player = new ExoPlayer.Builder(getContext())
+        player = new ExoPlayer.Builder(getContext().getApplicationContext())
                 .setAudioAttributes(attrs, true)
                 .setHandleAudioBecomingNoisy(true)
                 // WAKE_MODE_NETWORK 同时锁 CPU + WiFi（参照 SFA PlaybackManager）：
                 // Doze 会断网，LOCAL 只锁 CPU 时 ENDED 后 prepare 拉不到流，锁屏切歌死链
                 .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build();
-        player.addListener(new Player.Listener() {
+        playerListener = createPlayerListener();
+        player.addListener(playerListener);
+    }
+
+    private Player.Listener playerListener;
+
+    private Player.Listener createPlayerListener() {
+        return new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int state) {
                 Log.i(TAG, "state=" + state);
@@ -272,6 +294,8 @@ public class AudioEnginePlugin extends Plugin {
                 // AUTO = 自动连播，SEEK = 锁屏播控原生切换；同曲过渡（单曲循环/曲内拖动）不重复同步
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
                         && reason != Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) return;
+                // 旧曲末尾位置不再泄漏给新曲的首个快照（200ms 后首个 position 事件接手）
+                currentPosition = 0;
                 if (mediaItem.mediaId != null && mediaItem.mediaId.equals(lastTransitionMediaId)) return;
                 lastTransitionMediaId = mediaItem.mediaId;
                 // 播放列表过渡（对齐 SFA 原生自治切歌）：下一首早已预缓冲，
@@ -295,7 +319,6 @@ public class AudioEnginePlugin extends Plugin {
                 emitEvent("requestNextUrl", null);
             }
         });
-        startPositionUpdates();
     }
 
     private void startPositionUpdates() {
@@ -486,6 +509,7 @@ public class AudioEnginePlugin extends Plugin {
                     entry.put("songId", raw.optString("songId", ""));
                     entry.put("playIndex", raw.optInt("playIndex", -1));
                     entry.put("level", raw.optString("level", "exhigh"));
+                    entry.put("quality", raw.optString("quality", ""));
                     entry.put("extId", raw.optString("extId", ""));
                     entry.put("albumId", raw.optString("albumId", ""));
                     entry.put("mediaId", raw.optString("mediaId", ""));
@@ -520,6 +544,8 @@ public class AudioEnginePlugin extends Plugin {
             req.put("level", entry.optString("level", "exhigh"));
             String cookie = ctx.optString("cookie", "");
             if (!cookie.isEmpty()) req.put("cookie", cookie);
+            String quality = entry.optString("quality", "");
+            if (!quality.isEmpty()) req.put("quality", quality);
             String extId = entry.optString("extId", "");
             if (!extId.isEmpty()) req.put("extId", extId);
             String albumId = entry.optString("albumId", "");
@@ -532,9 +558,17 @@ public class AudioEnginePlugin extends Plugin {
             if (result == null) {
                 throw new IOException("engine resolve unavailable or failed");
             }
-            String url = new org.json.JSONObject(result).optString("url", null);
+            org.json.JSONObject res = new org.json.JSONObject(result);
+            String url = res.optString("url", null);
             if (url == null) {
-                throw new IOException("engine resolve missing url");
+                // 引擎错误原文透传（如 AbortSignal/subtle 缺失的 TypeError），否则只剩含糊的 missing url
+                String err = res.optString("error", "");
+                throw new IOException(
+                        err.isEmpty() ? "engine resolve missing url" : "engine resolve: " + err);
+            }
+            // 试听片段尊重 JS 侧开关：禁用时报失败走重试/JS 链（对齐 audioSource 的跳过语义）
+            if (res.optBoolean("trial", false) && !ctx.optBoolean("allowTrialPlay", true)) {
+                throw new IOException("netease trial disabled");
             }
             return url;
         } catch (IOException e) {
@@ -555,8 +589,17 @@ public class AudioEnginePlugin extends Plugin {
             int current = player.getCurrentMediaItemIndex();
             if (current >= 0 && current < player.getMediaItemCount() - 1) return false; // 已有预缓冲的下一项
         }
-        final JSObject entry = pendingQueue.poll();
-        if (entry == null) return false;
+        final JSObject polled = pendingQueue.poll();
+        if (polled == null) return false;
+        // 已挂载条目跳过：整队重推后上一轮队首常仍在播放列表（含已过渡为当前曲），
+        // 再解析会重复挂载同曲——resolve 后的 dedup 扫描跳过当前曲，拦不住这种形态
+        JSObject iter = polled;
+        while (iter != null && isTrackMounted(iter.optString("trackId", ""))) {
+            Log.i(TAG, "queueSkip mounted trackId=" + iter.optString("trackId"));
+            iter = pendingQueue.poll();
+        }
+        if (iter == null) return false;
+        final JSObject entry = iter;
         final String trackId = entry.getString("trackId", "");
         final String songId = entry.getString("songId", "");
         final String level = entry.getString("level", "exhigh");
@@ -615,6 +658,8 @@ public class AudioEnginePlugin extends Plugin {
                                 () -> {
                                     resolveFails++;
                                     if (resolveFails < 3) {
+                                        // 弱网重试总时长可超单次唤醒锁预算（30s < 3×25s），ENDED 场景续借
+                                        if (fromEnded) acquireSwitchWakeLock();
                                         maybeResolveNext(fromEnded);
                                     } else if (fromEnded) {
                                         // 仅 ENDED 场景回落 JS 链；播放中预填失败只能等 nudge 重试，
@@ -631,6 +676,15 @@ public class AudioEnginePlugin extends Plugin {
     private static long readLongFrom(JSObject obj, String key) {
         Object value = obj.opt(key);
         return value instanceof Number ? ((Number) value).longValue() : 0L;
+    }
+
+    /** trackId 是否已在播放列表中（含当前曲） */
+    private boolean isTrackMounted(String trackId) {
+        if (trackId.isEmpty() || player == null) return false;
+        for (int i = 0; i < player.getMediaItemCount(); i++) {
+            if (trackId.equals(player.getMediaItemAt(i).mediaId)) return true;
+        }
+        return false;
     }
 
     /** 循环模式：仅单曲循环由 ExoPlayer 原生接管（锁屏下也能无缝重放）；ALL 的回绕由 JS 链处理 */
@@ -816,11 +870,42 @@ public class AudioEnginePlugin extends Plugin {
     @PluginMethod
     public void setFftEnabled(PluginCall call) {
         fftEnabled = call.getBoolean("enabled", false);
+        // Visualizer 构造要求 RECORD_AUDIO 运行时已授权：未授权时走系统弹窗，
+        // 授权结果在 onFftPermissionResult 续接；拒绝则频谱链路降级（无报错）
+        if (fftEnabled && !hasRecordAudio()) {
+            try {
+                requestPermissionForAlias("visualizer", call, "onFftPermissionResult");
+            } catch (Exception e) {
+                Log.w(TAG, "visualizer permission request failed", e);
+                mainHandler.post(() -> {
+                    releaseVisualizer();
+                    call.resolve();
+                });
+            }
+            return;
+        }
         mainHandler.post(() -> {
             if (fftEnabled && isPlaying) {
                 initVisualizer();
             } else {
                 releaseVisualizer();
+            }
+            call.resolve();
+        });
+    }
+
+    /** Visualizer 需要 RECORD_AUDIO 运行时授权（minSdk 23，可直接 checkSelfPermission） */
+    private boolean hasRecordAudio() {
+        return getContext().checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    @PermissionCallback
+    private void onFftPermissionResult(PluginCall call) {
+        boolean granted = hasRecordAudio();
+        mainHandler.post(() -> {
+            if (fftEnabled && granted && isPlaying) {
+                initVisualizer();
             }
             call.resolve();
         });
@@ -875,9 +960,10 @@ public class AudioEnginePlugin extends Plugin {
     // Audio effects init/release
     private void initAudioEffects() {
         if (effectsAttached) return;
-        effectsAttached = true;
         int audioSessionId = player.getAudioSessionId();
+        // AudioTrack 尚未创建时 sessionId==0：不置闩，等下一个 READY 再试
         if (audioSessionId == 0) return;
+        effectsAttached = true;
         try {
             equalizer = new Equalizer(0, audioSessionId);
         } catch (Exception ignored) {}
@@ -960,10 +1046,8 @@ public class AudioEnginePlugin extends Plugin {
         pendingQueue.clear();
         resolveCtx = null;
         mainHandler.removeCallbacksAndMessages(null);
-        if (player != null) {
-            player.release();
-            player = null;
-        }
+        // player 不释放：FGS 保活期间 WebView 死亡不应打断后台播放（见字段声明处注释）；
+        // 进程最终被杀时由系统回收。仅清掉指向本插件实例的引用
         releaseAudioEffects();
         releaseVisualizer();
         releaseSwitchWakeLock();

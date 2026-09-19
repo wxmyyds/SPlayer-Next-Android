@@ -121,10 +121,12 @@ watch(
             </template>
             {{ t("common.playAll") }}
           </SButton>
+          <!-- Android 桥未实现文件选择器（pickSongs 返回 undefined），隐藏上传入口 -->
           <SButton
+            v-if="!isAndroid"
             variant="secondary"
             round
-            :size="isAndroid ? 'small' : 'medium'"
+            size="medium"
             :disabled="!user.isLoggedIn"
             @click="uploadDialogOpen = true"
           >

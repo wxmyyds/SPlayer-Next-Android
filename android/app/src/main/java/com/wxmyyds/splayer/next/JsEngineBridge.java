@@ -26,6 +26,8 @@ import okio.ByteString;
 public class JsEngineBridge {
     private static final String TAG = "JsEngine";
     private static final String STORE_NAME = "splayer-engine-storage";
+    /** 引擎响应体上限（对齐 NativeHttpPlugin 的 8MB 限长） */
+    private static final long MAX_ENGINE_BODY = 8L * 1024 * 1024;
 
     private static volatile Context appContext;
     private static final ConcurrentHashMap<String, Call> calls = new ConcurrentHashMap<>();
@@ -77,9 +79,17 @@ public class JsEngineBridge {
                 String key = keys.next();
                 builder.header(key, headers.getString(key));
             }
-            byte[] bodyBytes = bodyB64.isEmpty()
-                ? null
-                : Base64.decode(bodyB64, Base64.DEFAULT);
+            // 与 NativeHttpPlugin 对齐：关闭透明解压，原始字节交 JS（假 gzip 风控）
+            builder.header("Accept-Encoding", "identity");
+            byte[] bodyBytes;
+            if (bodyB64.isEmpty()) {
+                bodyBytes = null;
+            } else if (req.optBoolean("bodyIsBase64", false)) {
+                bodyBytes = Base64.decode(bodyB64, Base64.NO_WRAP);
+            } else {
+                // vendor 的 form/JSON body 是原始字符串，不能当 base64 解
+                bodyBytes = bodyB64.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            }
             RequestBody requestBody = null;
             if (!method.equals("GET") && !method.equals("HEAD")) {
                 requestBody = (bodyBytes != null)
@@ -91,6 +101,10 @@ public class JsEngineBridge {
             if (!requestId.isEmpty()) calls.put(requestId, call);
             try {
                 Response resp = call.execute();
+                long bodyLen = resp.body() != null ? resp.body().contentLength() : 0;
+                if (bodyLen > MAX_ENGINE_BODY) {
+                    throw new IOException("response too large: " + bodyLen);
+                }
                 byte[] bytes = resp.body().bytes();
                 JSObject headersOut = new JSObject();
                 for (String name : resp.headers().names()) {
@@ -114,8 +128,19 @@ public class JsEngineBridge {
             }
         } catch (Exception e) {
             Log.w(TAG, "http failed: " + e.getMessage());
-            return "{\"status\":0,\"url\":\"\",\"headers\":{},\"setCookies\":[],\"bodyBase64\":\"\",\"error\":\""
-                + e.getMessage() + "\"}";
+            // e.getMessage() 可能含引号/反斜杠，手拼 JSON 会产出非法串放大为解析失败
+            try {
+                return new org.json.JSONObject()
+                        .put("status", 0)
+                        .put("url", "")
+                        .put("headers", new org.json.JSONObject())
+                        .put("setCookies", new org.json.JSONArray())
+                        .put("bodyBase64", "")
+                        .put("error", String.valueOf(e.getMessage()))
+                        .toString();
+            } catch (Exception ignored) {
+                return "{\"status\":0,\"url\":\"\",\"headers\":{},\"setCookies\":[],\"bodyBase64\":\"\"}";
+            }
         }
     }
 
