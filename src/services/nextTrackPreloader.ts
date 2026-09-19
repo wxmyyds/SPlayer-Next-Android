@@ -59,6 +59,15 @@ const pushNativeWindow = (entries: (WindowEntry | null | undefined)[]): void => 
     .catch((err) => console.error("[nextPreload] setNextResources failed:", err));
 };
 
+/**
+ * 组装原生窗口：cachedEntry 打头，尾候选按曲目序排列——
+ * tailEntries 按 resolve 完成序追加，直接推窗会让锁屏连播顺序错乱
+ */
+const buildNativeWindow = (): (WindowEntry | null | undefined)[] => [
+  cachedEntry,
+  ...[...tailEntries].sort((a, b) => a.index - b.index),
+];
+
 let currentToken = 0;
 let cachedResult: NextTrackPreloadResult | null = null;
 let cachedEntry: WindowEntry | null = null;
@@ -278,7 +287,7 @@ export const scheduleNextTrackPreload = (): void => {
   // 上下文指纹一致且已有缓存：只重推窗口（可能被 invalidate 清空）
   if (cachedResult && cachedResult.contextKey === contextKey) {
     if (cachedResult.trackId === candidateTrack.id) {
-      pushNativeWindow([cachedEntry, ...tailEntries]);
+      pushNativeWindow(buildNativeWindow());
     }
     return;
   }
@@ -308,7 +317,7 @@ export const scheduleNextTrackPreload = (): void => {
       };
       cachedResult = result;
       cachedEntry = { result, track: candidateTrack, index: candidateResult.index };
-      pushNativeWindow([cachedEntry, ...tailEntries]);
+      pushNativeWindow(buildNativeWindow());
     } catch (err) {
       console.warn("[nextPreload] Preload task failed silently:", err);
       if (token === currentToken) {
@@ -330,7 +339,7 @@ export const scheduleNextTrackPreload = (): void => {
       });
       // 首候选未定论（cachedResult 空）时不推窗口：窗口 wipe 会清掉原生队列已自解
       // 挂载的队首曲且补不回来；等首候选有结果后随窗口一起补齐
-      if (cachedResult) pushNativeWindow([cachedEntry, ...tailEntries]);
+      if (cachedResult) pushNativeWindow(buildNativeWindow());
     })();
   }
 };
