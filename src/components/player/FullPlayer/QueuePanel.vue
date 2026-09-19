@@ -8,8 +8,6 @@ import { isAndroid } from "@/utils/platform";
 const isPortrait = useMediaQuery("(orientation: portrait)");
 const stackedLayout = computed(() => isAndroid && isPortrait.value);
 
-defineEmits<{ close: [] }>();
-
 const { t } = useI18n();
 const listRef = shallowRef<SVirtualListExposed | null>(null);
 const {
@@ -23,10 +21,65 @@ const {
   clearAll,
   scrollToCurrent,
 } = useQueuePanel({ listRef });
+
+/** 下拉跟手：拖拽中位移直接映射，松手按位移/速度决定关闭或回弹 */
+const emit = defineEmits<{ close: [] }>();
+const dragY = ref(0);
+const dragging = ref(false);
+let dragStartY = 0;
+let dragStartT = 0;
+
+const panelStyle = computed(() => {
+  if (!stackedLayout.value) return undefined;
+  return dragging.value
+    ? { transform: `translateY(${dragY.value}px)`, transition: "none" }
+    : { transition: "transform 300ms cubic-bezier(0.32,0.72,0,1)" };
+});
+
+const touchY = (e: TouchEvent) => e.touches[0]?.clientY ?? 0;
+
+const onDragStart = (e: TouchEvent) => {
+  dragStartY = touchY(e);
+  dragStartT = performance.now();
+  dragging.value = true;
+};
+
+const onDragMove = (e: TouchEvent) => {
+  if (!dragging.value) return;
+  dragY.value = Math.max(0, touchY(e) - dragStartY);
+};
+
+const onDragEnd = () => {
+  if (!dragging.value) return;
+  const elapsed = Math.max(1, performance.now() - dragStartT);
+  const close = dragY.value > 96 || dragY.value / elapsed > 0.5;
+  dragging.value = false;
+  dragY.value = 0;
+  if (close) emit("close");
+};
 </script>
 
 <template>
-  <div class="flex flex-col h-full text-cover">
+  <div
+    class="flex flex-col h-full text-cover"
+    :class="
+      stackedLayout
+        ? 'rounded-t-3xl bg-black/45 backdrop-blur-2xl border-t border-white/10 overflow-hidden px-4'
+        : ''
+    "
+    :style="panelStyle"
+  >
+    <!-- 下拉手柄：仅手柄区响应拖拽，避免与列表滚动/按钮点击冲突 -->
+    <div
+      v-if="stackedLayout"
+      class="shrink-0 flex items-center justify-center h-7 touch-none select-none"
+      @touchstart="onDragStart"
+      @touchmove="onDragMove"
+      @touchend="onDragEnd"
+      @touchcancel="onDragEnd"
+    >
+      <div class="w-10 h-1 rounded-full bg-cover/30" />
+    </div>
     <div
       class="shrink-0 flex items-start justify-between gap-4 pb-4"
       :class="stackedLayout ? 'pl-0 pr-0' : 'pl-1 pr-20'"
@@ -69,6 +122,7 @@ const {
     <div
       v-if="queueLength > 0"
       class="flex-1 min-h-0"
+      :class="stackedLayout ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : ''"
       :style="{
         maskImage:
           'linear-gradient(180deg, transparent 0px, #000 32px, #000 calc(100% - 32px), transparent 100%)',

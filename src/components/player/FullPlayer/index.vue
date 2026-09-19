@@ -852,17 +852,38 @@ const toggleLyric = (): void => {
             />
           </div>
           <!-- 播放队列 -->
+          <!-- Android 竖屏：底部上滑面板 + 轻纱背景（点纱即关），替代整屏黑幕 -->
+          <template v-if="stackedLayout">
+            <Transition
+              enter-active-class="transition-opacity duration-250 ease-out"
+              enter-from-class="opacity-0"
+              leave-active-class="transition-opacity duration-200 ease-out"
+              leave-to-class="opacity-0"
+            >
+              <div
+                v-if="status.fullQueueOpen"
+                class="absolute inset-0 z-20 bg-black/30"
+                @click="status.fullQueueOpen = false"
+              />
+            </Transition>
+            <Transition
+              enter-active-class="transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+              enter-from-class="translate-y-full"
+              leave-active-class="transition-transform duration-250 ease-[cubic-bezier(0.32,0.72,0,1)]"
+              leave-to-class="translate-y-full"
+            >
+              <div v-if="status.fullQueueOpen" class="absolute inset-x-0 bottom-0 z-30 h-[82vh]">
+                <QueuePanel @close="status.fullQueueOpen = false" />
+              </div>
+            </Transition>
+          </template>
+          <!-- 桌面/横屏：右侧抽屉 -->
           <div
-            class="absolute flex items-center"
-            :class="[
-              status.fullQueueOpen
-                ? stackedLayout
-                  ? 'inset-0 z-20 p-4 pt-[calc(4rem+env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-black/60 backdrop-blur-xl'
-                  : 'inset-y-0 right-0 pl-4 py-6'
-                : 'inset-y-0 right-0 pl-4 py-6 pointer-events-none',
-            ]"
+            v-else
+            class="absolute inset-y-0 right-0 flex items-center"
+            :class="status.fullQueueOpen ? 'pl-4 py-6' : 'pl-4 py-6 pointer-events-none'"
             :style="
-              stackedLayout || landscapeLayout
+              landscapeLayout
                 ? { width: '100%' }
                 : { width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }
             "
