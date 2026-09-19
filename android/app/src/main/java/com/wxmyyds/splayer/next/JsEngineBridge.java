@@ -148,10 +148,10 @@ public class JsEngineBridge {
                         .put("headers", new org.json.JSONObject())
                         .put("setCookies", new org.json.JSONArray())
                         .put("bodyBase64", "")
-                        .put("error", String.valueOf(e.getMessage()))
+                        .put("error", e.getMessage() != null ? e.getMessage() : e.toString())
                         .toString();
             } catch (Exception ignored) {
-                return "{\"status\":0,\"url\":\"\",\"headers\":{},\"setCookies\":[],\"bodyBase64\":\"\"}";
+                return "{\"status\":0,\"url\":\"\",\"headers\":{},\"setCookies\":[],\"bodyBase64\":\"\",\"error\":\"unknown\"}";
             }
         }
     }

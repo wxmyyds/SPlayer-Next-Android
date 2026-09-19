@@ -211,8 +211,15 @@ fn inflate(b64_data: &str, format: &str) -> Result<String, String> {
         "deflate-raw" => Box::new(flate2::read::DeflateDecoder::new(&data[..])),
         other => return Err(format!("unsupported format: {other}")),
     };
+    // 输出上限：8MB 输入可展开数十倍，quickjs 内存限制只管 JS 堆，
+    // Rust Vec 在原生堆，无界会直接杀进程
+    const MAX_INFLATED: u64 = 32 << 20;
     let mut out = Vec::new();
-    std::io::Read::read_to_end(&mut decoder, &mut out).map_err(|e| e.to_string())?;
+    let mut limited = std::io::Read::take(decoder, MAX_INFLATED);
+    std::io::Read::read_to_end(&mut limited, &mut out).map_err(|e| e.to_string())?;
+    if out.len() as u64 >= MAX_INFLATED {
+        return Err("inflated too large".to_string());
+    }
     Ok(B64.encode(&out))
 }
 

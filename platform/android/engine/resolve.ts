@@ -15,8 +15,11 @@ import type { QualityLevel } from "../../../src/utils/quality";
 
 /** kugou 音质裁剪（对齐 src/apis/song/kugou.ts 的 clampQuality；两侧均为 QualityLevel 字符串） */
 const QUALITY_ORDER: QualityLevel[] = ["lq", "sq", "hq", "lossless", "hi-res"];
-const clampQuality = (requested: QualityLevel, available: QualityLevel): QualityLevel =>
-  QUALITY_ORDER[Math.min(QUALITY_ORDER.indexOf(requested), QUALITY_ORDER.indexOf(available))];
+const clampQuality = (requested: QualityLevel, available: QualityLevel): QualityLevel => {
+  // 跨版本遗留脏值 indexOf 为 -1，会静默落到 undefined level（引擎侧无词表校验）
+  const req = QUALITY_ORDER.indexOf(requested) < 0 ? "hq" : requested;
+  return QUALITY_ORDER[Math.min(QUALITY_ORDER.indexOf(req), QUALITY_ORDER.indexOf(available))];
+};
 
 /** 引擎解析请求 */
 export interface ResolveRequest {
