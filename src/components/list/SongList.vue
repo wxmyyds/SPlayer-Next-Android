@@ -62,6 +62,8 @@ const props = withDefaults(
     hasMore?: boolean;
     /** 触底加载中 */
     loadingMore?: boolean;
+    /** 虚拟列表内容顶部让位（px），供悬浮头部占位 */
+    paddingTop?: number;
   }>(),
   {
     searchQuery: "",
@@ -77,6 +79,7 @@ const props = withDefaults(
     canRemove: true,
     hasMore: false,
     loadingMore: false,
+    paddingTop: 0,
   },
 );
 
@@ -321,6 +324,7 @@ defineExpose({
         ref="virtualListRef"
         :items="sortedItems"
         :item-height="88"
+        :padding-top="paddingTop"
         :padding-bottom="isFloatingPlayerBar ? PLAYER_BAR_GAP : 80"
         :get-item-key="(item: Track) => item.id"
         item-fixed

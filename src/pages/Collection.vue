@@ -41,27 +41,33 @@ const error = ref("");
 /** 取消当次加载 */
 let loadAbort: AbortController | null = null;
 
-/** 头部整体隐藏：下滑超过阈值后完全收起，回到顶部附近再出现 */
-const headerHidden = ref(false);
-/** 隐藏阈值 / 回显阈值（px，回滞避免临界抖动） */
-const HEADER_HIDE_AT = 140;
-const HEADER_SHOW_AT = 40;
+/** 头部悬浮层收起：随列表滚动连续映射（跟手），纯 transform 无布局挤压 */
+const headerRef = ref<HTMLElement | null>(null);
+const { height: headerHeight } = useElementSize(headerRef);
+/** 收起行程（px）：滚动 0→行程 对应进度 0→1 */
+const HEADER_COLLAPSE_AT = 140;
+const listScrollTop = ref(0);
+const collapseProgress = computed(() =>
+  Math.min(1, Math.max(0, listScrollTop.value / HEADER_COLLAPSE_AT)),
+);
+const headerStyle = computed(() => ({
+  transform: `translateY(${collapseProgress.value * -100}%)`,
+  opacity: `${1 - collapseProgress.value}`,
+  pointerEvents: collapseProgress.value >= 1 ? ("none" as const) : ("auto" as const),
+}));
+/** 列表内容顶部让位 = 头部高度 + 呼吸间距 */
+const headerPad = computed(() => Math.ceil(headerHeight.value) + 8);
 /** 简介弹窗 */
 const descriptionOpen = ref(false);
 
-/** 下滑藏头、回顶显头（回滞阈值防抖） */
+/** 列表滚动 → 头部收起进度 */
 const handleListScroll = (event: Event) => {
-  const top = (event.target as HTMLElement).scrollTop;
-  if (!headerHidden.value && top > HEADER_HIDE_AT) {
-    headerHidden.value = true;
-  } else if (headerHidden.value && top < HEADER_SHOW_AT) {
-    headerHidden.value = false;
-  }
+  listScrollTop.value = (event.target as HTMLElement).scrollTop;
 };
 
 /** 加载数据 */
 const loadCollection = async (): Promise<void> => {
-  headerHidden.value = false;
+  listScrollTop.value = 0;
   loadAbort?.abort();
   const myAbort = new AbortController();
   loadAbort = myAbort;
@@ -305,15 +311,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
-    <!-- 头部信息：下滑整体收起，回到顶部再展开 -->
+  <div class="relative flex flex-col h-full">
+    <!-- 头部信息：悬浮层随滚动连续上滑收起（纯 transform），实底避免行内容穿帮 -->
     <div
       v-if="collection"
-      class="shrink-0 overflow-hidden transition-[max-height,opacity,padding] duration-300"
-      :class="[
-        isAndroid ? 'px-3' : 'px-5',
-        headerHidden ? 'max-h-0 opacity-0 pb-0' : 'max-h-[480px] opacity-100 pb-2',
-      ]"
+      ref="headerRef"
+      class="absolute inset-x-0 top-0 z-10 bg-surface pb-2"
+      :class="isAndroid ? 'px-3' : 'px-5'"
+      :style="headerStyle"
     >
       <div class="flex mt-2" :class="isAndroid ? 'gap-3' : 'gap-5'">
         <!-- 封面 -->
@@ -567,6 +572,7 @@ onBeforeUnmount(() => {
         <SongList
           ref="songListRef"
           :items="collection.tracks"
+          :padding-top="headerPad"
           :search-query="searchQuery"
           :show-album="type !== 'album'"
           :show-size="source === 'local'"
@@ -600,7 +606,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <!-- 空状态 -->
-      <div v-else-if="collection" key="empty" class="flex-1 flex items-center justify-center">
+      <div
+        v-else-if="collection"
+        key="empty"
+        class="flex-1 flex items-center justify-center"
+        :style="{ paddingTop: `${headerPad}px` }"
+      >
         <div class="text-center text-on-surface-variant/50">
           <IconLucideMusic class="size-12 mx-auto mb-3 opacity-30" />
           <div class="text-sm">{{ t("collection.empty") }}</div>
