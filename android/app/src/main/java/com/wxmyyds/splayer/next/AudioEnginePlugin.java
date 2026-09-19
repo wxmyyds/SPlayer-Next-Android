@@ -318,7 +318,7 @@ public class AudioEnginePlugin extends Plugin {
                 // 立刻请求 JS 补挂新的下一首（WebView 冻结时事件排队，解锁后即补）
                 emitEvent("requestNextUrl", null);
             }
-        });
+        };
     }
 
     private void startPositionUpdates() {
