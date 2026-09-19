@@ -37,6 +37,10 @@ public class JsEngineBridge {
             .writeTimeout(20, TimeUnit.SECONDS)
             .build();
 
+    /** redirect=manual 专用：返回跳转响应本身（QQ 登录取 Location/p_skey） */
+    private static final OkHttpClient NO_REDIRECT_CLIENT =
+        CLIENT.newBuilder().followRedirects(false).followSslRedirects(false).build();
+
     /** 注入应用上下文（App 启动时调用一次） */
     public static void init(Context context) {
         appContext = context.getApplicationContext();
@@ -67,9 +71,7 @@ public class JsEngineBridge {
             String bodyB64 = req.getString("body", "");
             String redirect = req.optString("redirect", "follow");
 
-            Request.Builder builder = new Request.Builder().url(url)
-                // redirect=manual 返回跳转响应本身（QQ 登录取 Location/p_skey），与 WebView 版一致
-                .followRedirects(!"manual".equalsIgnoreCase(redirect));
+            Request.Builder builder = new Request.Builder().url(url);
             java.util.Iterator<String> keys = headers.keys();
             while (keys.hasNext()) {
                 String key = keys.next();
@@ -84,7 +86,8 @@ public class JsEngineBridge {
                     ? RequestBody.create(bodyBytes, MediaType.parse("application/octet-stream"))
                     : RequestBody.create(new byte[0], null);
             }
-            Call call = CLIENT.newCall(builder.method(method, requestBody).build());
+            OkHttpClient httpClient = "manual".equalsIgnoreCase(redirect) ? NO_REDIRECT_CLIENT : CLIENT;
+            Call call = httpClient.newCall(builder.method(method, requestBody).build());
             if (!requestId.isEmpty()) calls.put(requestId, call);
             try {
                 Response resp = call.execute();
