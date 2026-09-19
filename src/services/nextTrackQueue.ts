@@ -31,8 +31,9 @@ export const pushNativeQueue = (candidates: CandidateResult[]): void => {
   }
   const songLevel = useSettingsStore().player.songLevel;
   // netease 用自身档位词表；kugou/qq 沿用原始 QualityLevel（引擎侧 kugou 按曲目裁剪）
-  // ?? 兑跨版本遗留非法值兜底（JSON 序列化丢键会静默落到 optString 默认档）
-  const level = NETEASE_LEVEL[songLevel] ?? "hq";
+  // ?? 兑跨版本遗留非法值兜底（JSON 序列化丢键会静默落到 optString 默认档）；
+  // 兜底值必须是网易 level 词表内的值，"hq" 是项目档位词，服务端不认
+  const level = NETEASE_LEVEL[songLevel] ?? "exhigh";
   // 引擎可解析的音源；遇到不支持的音源在此断开（其后的曲目已不可达，预解析窗口兜底）
   const firstUnsupported = candidates.findIndex(
     ({ track }) =>

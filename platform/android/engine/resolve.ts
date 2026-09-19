@@ -104,7 +104,9 @@ const resolveQQMusic = async (req: ResolveRequest): Promise<ResolveResponse> => 
   })) as { data?: Array<{ url?: string }> } | undefined;
   const first = body?.data?.[0];
   if (!first?.url) {
-    return { ok: false, error: "no url" };
+    // 带 code：Java/logcat 能区分 VIP/版权/网络（对齐 netease/kugou 的可诊断性）
+    const code = (body as { code?: unknown } | undefined)?.code;
+    return { ok: false, error: `no url (code=${code ?? "?"})` };
   }
   return { ok: true, url: first.url };
 };

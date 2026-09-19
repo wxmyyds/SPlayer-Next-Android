@@ -75,6 +75,10 @@ export const callQQMusic = async (name: string, params: QMParams = {}): Promise<
   if (hit !== undefined) return hit;
 
   const value = await fn(params);
+  // 非 200 的业务错误对象（如歌词模块的 {code,message}）不能缓存，否则瞬时失败被冻结 2 分钟
+  // （对齐 kugou；QQ 模块成功返回包装为 code:200，无 code 字段的数据对象不受影响）
+  const code = (value as { code?: unknown } | undefined)?.code;
+  if (typeof code === "number" && code !== 200) return value;
   cacheSet(key, value);
   return value;
 };
