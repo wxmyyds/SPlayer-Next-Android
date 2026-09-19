@@ -19,8 +19,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.io.IOException;
 import org.json.JSONArray;
@@ -95,13 +94,12 @@ public class AudioEnginePlugin extends Plugin {
      * 当前曲播放时 ExoPlayer 自动预缓冲下一首字节，ENDED 瞬间零网络零 WebView 依赖直接过渡。
      * AUTO 过渡后用媒体 ID 反查元数据刷新通知栏并回传 JS 同步。
      */
-    private final Map<String, JSObject> pendingMeta = Collections.synchronizedMap(
-            new LinkedHashMap<String, JSObject>(32, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, JSObject> eldest) {
-                    return size() > 32;
-                }
-            });
+    /**
+     * 过渡事件元数据：键集 = 已挂载播放列表的曲目（只增不减，与 player 自身媒体项
+     * 同比例，load/stop 清空）。不做 LRU 驱逐——锁屏 PREV 可回跳任意深度，驱逐会在
+     * 超过容量后重新打开“回跳旧曲无 meta 失同步”的洞。全部访问在主线程收敛。
+     */
+    private final Map<String, JSObject> pendingMeta = new HashMap<>();
     /** 原生自治切歌队列（SFA PlaybackQueue 等价）：JS 推入的元数据条目，ENDED/预填时原生逐条自解 URL */
     private final java.util.ArrayDeque<JSObject> pendingQueue = new java.util.ArrayDeque<>();
     /** eapi 解析上下文（path/header/cookie/userAgent），随队列一起由 JS 下发 */

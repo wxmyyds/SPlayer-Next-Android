@@ -588,10 +588,13 @@ export const seek = async (posMs: number): Promise<void> => {
 export const markSeek = (posMs: number): void => {
   const status = useStatusStore();
   if (status.trackLoading) return;
+  // 与 seek() 同一钳制：锁屏/车机可能发越界位置，seekTarget 悬挂会冻结暂停态进度
+  const target =
+    status.duration > 0 ? Math.max(0, Math.min(posMs, status.duration)) : Math.max(0, posMs);
   playback.setSeeking(true);
-  status.position = posMs;
-  playback.setCurrentTime(posMs);
-  seekTarget = posMs;
+  status.position = target;
+  playback.setCurrentTime(target);
+  seekTarget = target;
 };
 
 /**
@@ -1206,9 +1209,10 @@ export const initPlayer = async (): Promise<void> => {
   // 恢复上次的音量和播放模式到主进程
   await window.api.player.setVolume(status.volume);
   // 重放变速/变调：FGS 续播复用原生 player 时参数仍在而插件字段已重置，
-  // 或进程重建后原生回默认值而持久化状态有值；桌面两端均为默认值，重放为无害幂等
-  await window.api.player.setSpeed(status.speed);
+  // 或进程重建后原生回默认值而持久化状态有值；桌面两端均为默认值，重放为无害幂等。
+  // 先定变调模式再定速率：顺序反了会让 pitchSync=false 的真实 pitch 瞬时跌回 1.0
   await window.api.player.setPitchSync(status.pitchSync);
+  await window.api.player.setSpeed(status.speed);
   syncPlayMode();
   // 应用渐入渐出配置
   const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;
