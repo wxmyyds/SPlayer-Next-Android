@@ -65,6 +65,7 @@ public class JsEngineBridge {
                 ? req.getJSONObject("headers")
                 : new org.json.JSONObject();
             String bodyB64 = req.getString("body", "");
+            String redirect = req.optString("redirect", "follow");
 
             Request.Builder builder = new Request.Builder().url(url)
                 // redirect=manual 返回跳转响应本身（QQ 登录取 Location/p_skey），与 WebView 版一致
